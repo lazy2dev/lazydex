@@ -190,11 +190,7 @@ jobs:
         with:
           tag_name: ${{ needs.prepare-build.outputs.VERSION_TAG }}
           name: LazyDex ${{ needs.prepare-build.outputs.VERSION_TAG }}
-          body: |
-            <!-->
-            > [!TIP]
-            >
-            > ### If you are unsure which version to download then go with `lazydex-${{ needs.prepare-build.outputs.VERSION_TAG }}.apk`
+          body: ""
           files: |
             lazydex-${{ needs.prepare-build.outputs.VERSION_TAG }}.apk
           draft: true
