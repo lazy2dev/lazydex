@@ -211,7 +211,11 @@ jobs:
 
             6. Omit any section with zero items.
 
+            7. Start with a brief 1-sentence summary of what this release does and why.
+
             ## Output format
+
+            <1-sentence summary>
 
             ✨ **New**
             - <Verb> <what> (@user)
