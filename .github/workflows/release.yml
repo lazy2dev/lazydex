@@ -195,15 +195,15 @@ jobs:
 
             ## Rules
 
-            1. Categorize every commit into ONE of these sections (in this order):
-               - ✨ **New Features** — feat:, add, new, implement, support
-               - ⚙️ **Changes** — chore:, refactor:, migrate, rename, config, build system, CI/CD
-               - 🚀 **Improvements** — enhance, optimize, improve, better, update, redesign
-               - 🧩 **Fixes** — fix:, resolve, correct, patch, hotfix
+            1. Categorize every commit into ONE of these sections (output in this order):
+               - ✨ **New** — Added, Introduced, Implemented, Created (brand-new additions)
+               - 🧩 **Fixes** — Fixed, Resolved, Corrected, Patched (bug fixes)
+               - ⚙️ **Changes** — Changed, Renamed, Updated, Switched, Removed, Configured, Migrated, Refactored (modifications to existing)
+               - 🚀 **Improvements** — Improved, Enhanced, Optimized (enhancements to existing features)
 
-            2. Each bullet starts with past-tense verb: Added, Fixed, Improved, Switched, Introduced, Removed, Updated, Renamed, Migrated, Changed.
+            2. Each bullet starts with a past-tense verb listed above for its section.
 
-            3. End every bullet with author attribution: `(@user)`.
+            3. End every bullet with author attribution: (@user).
 
             4. Merge similar commits by same author. Remove noise (typo fixes, formatting, merge commits, wip/tmp).
 
@@ -213,17 +213,17 @@ jobs:
 
             ## Output format
 
-            ✨ **New Features**
+            ✨ **New**
             - <Verb> <what> (@user)
+
+            🧩 **Fixes**
+            - Fixed <what> (@user)
 
             ⚙️ **Changes**
             - <Verb> <what> (@user)
 
             🚀 **Improvements**
             - <Verb> <what> (@user)
-
-            🧩 **Fixes**
-            - Fixed <what> (@user)
 
             ## Raw commits
 
