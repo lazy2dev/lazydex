@@ -44,7 +44,7 @@ class MainShellTest {
 
         // Click on Statistics tab
         composeTestRule.onNodeWithContentDescription("Statistics").performClick()
-        composeTestRule.onNodeWithText("Statistics Screen Placeholder").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Statistics").assertIsDisplayed()
 
         // Click on More tab
         composeTestRule.onNodeWithContentDescription("More").performClick()

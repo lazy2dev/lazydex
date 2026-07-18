@@ -19,8 +19,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import app.lazydex.ui.home.HomeScreen
-import app.lazydex.ui.home.StatisticsScreen
+import app.lazydex.ui.dex.DexScreen
+import app.lazydex.ui.statistics.StatisticsScreen
 
 enum class ShellTab {
     DEX, STATISTICS, MORE
@@ -82,7 +82,7 @@ fun MainShellScreen(
         ) {
             when (currentTab) {
                 ShellTab.DEX -> {
-                    HomeScreen(
+                    DexScreen(
                         onNavigateToAddItem = onNavigateToAddItem,
                         onNavigateToEditItem = onNavigateToEditItem,
                         onNavigateToSettings = onNavigateToSettings,

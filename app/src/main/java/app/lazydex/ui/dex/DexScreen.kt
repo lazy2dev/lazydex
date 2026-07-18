@@ -1,8 +1,9 @@
-package app.lazydex.ui.home
+package app.lazydex.ui.dex
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,13 +12,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -34,8 +40,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,29 +49,28 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.lazydex.domain.model.StatusFilter
 import app.lazydex.ui.components.EmptyState
-import app.lazydex.ui.components.FilterBottomSheet
+import app.lazydex.ui.components.LibraryBottomSheet
 import app.lazydex.ui.components.MediaCard
-import app.lazydex.ui.components.SortBottomSheet
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(
+fun DexScreen(
     onNavigateToAddItem: () -> Unit,
     onNavigateToEditItem: (String) -> Unit,
     onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: HomeViewModel = koinViewModel()
+    viewModel: DexViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
-    var showFilterSheet by remember { mutableStateOf(false) }
-    var showSortSheet by remember { mutableStateOf(false) }
+    var showLibrarySheet by rememberSaveable { mutableStateOf(false) }
+    var librarySheetTab by rememberSaveable { mutableStateOf(0) }
+    var isGridView by rememberSaveable { mutableStateOf(true) } // Default to grid
 
-    val filterSheetState = rememberModalBottomSheetState()
-    val sortSheetState = rememberModalBottomSheetState()
+    val librarySheetState = rememberModalBottomSheetState()
 
     Scaffold(
         topBar = {
@@ -78,7 +83,16 @@ fun HomeScreen(
                     )
                 },
                 actions = {
-                    IconButton(onClick = { showFilterSheet = true }) {
+                    IconButton(onClick = { isGridView = !isGridView }) {
+                        Icon(
+                            imageVector = if (isGridView) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
+                            contentDescription = "Toggle list/grid layout"
+                        )
+                    }
+                    IconButton(onClick = {
+                        librarySheetTab = 0
+                        showLibrarySheet = true
+                    }) {
                         Icon(
                             imageVector = Icons.Default.FilterList,
                             contentDescription = "Filter items",
@@ -89,9 +103,12 @@ fun HomeScreen(
                             }
                         )
                     }
-                    IconButton(onClick = { showSortSheet = true }) {
+                    IconButton(onClick = {
+                        librarySheetTab = 1
+                        showLibrarySheet = true
+                    }) {
                         Icon(
-                            imageVector = Icons.Default.Sort,
+                            imageVector = Icons.AutoMirrored.Filled.Sort,
                             contentDescription = "Sort items"
                         )
                     }
@@ -171,7 +188,7 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Main List Content
+            // Main List/Grid Content
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -199,17 +216,37 @@ fun HomeScreen(
                         )
                     }
                     else -> {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            items(
-                                items = uiState.items,
-                                key = { it.id }
-                            ) { item ->
-                                MediaCard(
-                                    item = item,
-                                    onClick = { onNavigateToEditItem(item.id) }
-                                )
+                        if (isGridView) {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(3),
+                                contentPadding = PaddingValues(4.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(
+                                    items = uiState.items,
+                                    key = { it.id }
+                                ) { item ->
+                                    MediaCard(
+                                        item = item,
+                                        onClick = { onNavigateToEditItem(item.id) },
+                                        isGridView = true
+                                    )
+                                }
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(
+                                    items = uiState.items,
+                                    key = { it.id }
+                                ) { item ->
+                                    MediaCard(
+                                        item = item,
+                                        onClick = { onNavigateToEditItem(item.id) },
+                                        isGridView = false
+                                    )
+                                }
                             }
                         }
                     }
@@ -218,39 +255,29 @@ fun HomeScreen(
         }
     }
 
-    // Modal Bottom Sheets
-    if (showFilterSheet) {
-        FilterBottomSheet(
+    // Modal Bottom Sheet
+    if (showLibrarySheet) {
+        LibraryBottomSheet(
             selectedCategory = uiState.selectedCategory,
             selectedStatus = uiState.selectedStatus,
-            onCategorySelected = { cat -> viewModel.selectCategory(cat) },
-            onStatusSelected = { stat -> viewModel.selectStatus(stat) },
-            onClearFilters = { viewModel.clearFilters() },
-            onDismissRequest = {
-                coroutineScope.launch { filterSheetState.hide() }.invokeOnCompletion {
-                    if (!filterSheetState.isVisible) {
-                        showFilterSheet = false
-                    }
-                }
-            },
-            sheetState = filterSheetState
-        )
-    }
-
-    if (showSortSheet) {
-        SortBottomSheet(
             selectedField = uiState.sortField,
             selectedDirection = uiState.sortDirection,
+            isGridView = isGridView,
+            onCategorySelected = { cat -> viewModel.selectCategory(cat) },
+            onStatusSelected = { stat -> viewModel.selectStatus(stat) },
             onFieldSelected = { field -> viewModel.selectSortField(field) },
             onDirectionSelected = { dir -> viewModel.selectSortDirection(dir) },
+            onLayoutToggled = { grid -> isGridView = grid },
+            onClearFilters = { viewModel.clearFilters() },
             onDismissRequest = {
-                coroutineScope.launch { sortSheetState.hide() }.invokeOnCompletion {
-                    if (!sortSheetState.isVisible) {
-                        showSortSheet = false
+                coroutineScope.launch { librarySheetState.hide() }.invokeOnCompletion {
+                    if (!librarySheetState.isVisible) {
+                        showLibrarySheet = false
                     }
                 }
             },
-            sheetState = sortSheetState
+            sheetState = librarySheetState,
+            initialTab = librarySheetTab
         )
     }
 }

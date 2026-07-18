@@ -10,9 +10,9 @@ import app.lazydex.domain.repository.MediaRepository
 import app.lazydex.scraper.MetadataScraper
 import app.lazydex.scraper.SafeDns
 import app.lazydex.ui.addedit.UnifiedAddEditViewModel
-import app.lazydex.ui.home.HomeViewModel
-import app.lazydex.ui.home.StatisticsViewModel
+import app.lazydex.ui.dex.DexViewModel
 import app.lazydex.ui.settings.SettingsViewModel
+import app.lazydex.ui.statistics.StatisticsViewModel
 import okhttp3.OkHttpClient
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
@@ -75,7 +75,7 @@ val storageModule = module {
 }
 
 val viewModelModule = module {
-    viewModel { HomeViewModel(get()) }
+    viewModel { DexViewModel(get()) }
     viewModel { StatisticsViewModel(get()) }
     viewModel {
         UnifiedAddEditViewModel(

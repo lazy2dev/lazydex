@@ -1,4 +1,4 @@
-package app.lazydex.ui.home
+package app.lazydex.ui.statistics
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

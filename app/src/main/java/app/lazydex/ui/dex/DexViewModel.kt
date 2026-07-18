@@ -1,4 +1,4 @@
-package app.lazydex.ui.home
+package app.lazydex.ui.dex
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 
-data class HomeUiState(
+data class DexUiState(
     val items: List<MediaItem> = emptyList(),
     val selectedCategory: MediaCategory? = null,
     val selectedStatus: StatusFilter = StatusFilter.ALL,
@@ -26,7 +26,7 @@ data class HomeUiState(
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class HomeViewModel(
+class DexViewModel(
     private val repository: MediaRepository
 ) : ViewModel() {
 
@@ -36,7 +36,7 @@ class HomeViewModel(
     private val sortDirection = MutableStateFlow<SortDirection>(SortDirection.DESCENDING)
     private val isLoading = MutableStateFlow(true)
 
-    val uiState: StateFlow<HomeUiState> = combine(
+    val uiState: StateFlow<DexUiState> = combine(
         selectedCategory,
         selectedStatus,
         sortField,
@@ -48,7 +48,7 @@ class HomeViewModel(
         }
     ) { category, status, field, direction, items ->
         val sorted = sortItems(items, field, direction)
-        HomeUiState(
+        DexUiState(
             items = sorted,
             selectedCategory = category,
             selectedStatus = status,
@@ -59,7 +59,7 @@ class HomeViewModel(
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = HomeUiState()
+        initialValue = DexUiState()
     )
 
     fun selectCategory(category: MediaCategory?) {
