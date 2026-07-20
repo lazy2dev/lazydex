@@ -10,7 +10,6 @@ import app.lazydex.ui.addedit.UnifiedAddEditScreen
 import app.lazydex.ui.settings.AboutScreen
 import app.lazydex.ui.settings.AppearanceScreen
 import app.lazydex.ui.settings.DataAndStorageScreen
-import app.lazydex.ui.settings.SettingsScreen
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -18,9 +17,6 @@ object MainShellRoute
 
 @Serializable
 data class AddEditRoute(val itemId: String? = null)
-
-@Serializable
-object SettingsRoute
 
 @Serializable
 object AppearanceRoute
@@ -49,8 +45,14 @@ fun LazyDexNavGraph(
                 onNavigateToEditItem = { itemId ->
                     navController.navigate(AddEditRoute(itemId = itemId))
                 },
-                onNavigateToSettings = {
-                    navController.navigate(SettingsRoute)
+                onNavigateToAppearance = {
+                    navController.navigate(AppearanceRoute)
+                },
+                onNavigateToDataAndStorage = {
+                    navController.navigate(DataAndStorageRoute)
+                },
+                onNavigateToAbout = {
+                    navController.navigate(AboutRoute)
                 }
             )
         }
@@ -60,22 +62,6 @@ fun LazyDexNavGraph(
                 itemId = route.itemId,
                 onBack = {
                     navController.popBackStack()
-                }
-            )
-        }
-        composable<SettingsRoute> {
-            SettingsScreen(
-                onBack = {
-                    navController.popBackStack()
-                },
-                onNavigateToAppearance = {
-                    navController.navigate(AppearanceRoute)
-                },
-                onNavigateToDataAndStorage = {
-                    navController.navigate(DataAndStorageRoute)
-                },
-                onNavigateToAbout = {
-                    navController.navigate(AboutRoute)
                 }
             )
         }

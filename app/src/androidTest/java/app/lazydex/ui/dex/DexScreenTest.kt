@@ -32,19 +32,12 @@ class DexScreenTest {
         composeTestRule.setContent {
             DexScreen(
                 onNavigateToAddItem = {},
-                onNavigateToEditItem = {},
-                onNavigateToSettings = {}
+                onNavigateToEditItem = {}
             )
         }
 
-        // Verify title and main buttons exist
-        composeTestRule.onNodeWithText("LazyDex").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Toggle list/grid layout").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Filter items").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Sort items").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Settings").assertIsDisplayed()
-        
-        // Assert toggle click switches view layout
-        composeTestRule.onNodeWithContentDescription("Toggle list/grid layout").performClick()
+        composeTestRule.onNodeWithText("Dex").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Filter and sort items").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Add new tracker").assertIsDisplayed()
     }
 }

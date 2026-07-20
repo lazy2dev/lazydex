@@ -25,6 +25,23 @@ Local-only Android media tracker for tracking consumption progress across Novels
 - Dark theme (default) with WTR-LAB-inspired color palette, AMOLED mode, dynamic color (Monet)
 - Settings screen (export, import, theme, auto-backup, about)
 
+### Knowledge Graph (graphify)
+
+This project uses [graphify](https://github.com/safishamsi/graphify) to build a persistent knowledge graph of the entire codebase + .agents docs.
+
+- **Run after any code/doc change:** `/graphify` — rebuilds graph, regenerates HTML + report
+- **Incremental update:** `/graphify --update` — re-extracts only changed files (much cheaper)
+- **Ask questions via graph:** `/graphify query "how does X connect to Y"`
+- **Explore paths:** `/graphify path "di Modules" "LazyDexDatabase"`
+- **Explain a node:** `/graphify explain "MediaItem"`
+
+Outputs land in `graphify-out/`:
+- `graph.html` — interactive visualization (open in browser, no server needed)
+- `GRAPH_REPORT.md` — audit report with god nodes, communities, surprising connections
+- `graph.json` — raw graph data for programmatic access
+
+The graph is your map of the codebase. Run `/graphify` before starting any task to understand what you're touching, and run `/graphify --update` after making changes to keep the map fresh. The graph is **persistent** — relationships survive across sessions, so you can ask questions weeks later without re-reading files.
+
 ### Non-Goals
 - No user accounts
 - No cloud sync

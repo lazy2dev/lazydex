@@ -33,25 +33,25 @@ class MainShellTest {
     fun testTabNavigation() {
         composeTestRule.setContent {
             MainShellScreen(
-                onNavigateToSettings = {},
+                onNavigateToAppearance = {},
+                onNavigateToDataAndStorage = {},
+                onNavigateToAbout = {},
                 onNavigateToAddItem = {},
                 onNavigateToEditItem = {}
             )
         }
 
-        // Initially we are on DEX tab, assert LazyDex title is shown
-        composeTestRule.onNodeWithText("LazyDex").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Dex").assertIsDisplayed()
 
-        // Click on Statistics tab
         composeTestRule.onNodeWithContentDescription("Statistics").performClick()
         composeTestRule.onNodeWithText("Statistics").assertIsDisplayed()
 
-        // Click on More tab
-        composeTestRule.onNodeWithContentDescription("More").performClick()
-        composeTestRule.onNodeWithText("More Screen Placeholder").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Settings").performClick()
+        composeTestRule.onNodeWithText("Appearance").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Data and storage").assertIsDisplayed()
+        composeTestRule.onNodeWithText("About").assertIsDisplayed()
 
-        // Click back to Dex tab
         composeTestRule.onNodeWithContentDescription("Dex").performClick()
-        composeTestRule.onNodeWithText("LazyDex").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Dex").assertIsDisplayed()
     }
 }

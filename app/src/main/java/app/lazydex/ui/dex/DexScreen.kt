@@ -22,12 +22,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -63,7 +59,6 @@ import org.koin.androidx.compose.koinViewModel
 fun DexScreen(
     onNavigateToAddItem: () -> Unit,
     onNavigateToEditItem: (String) -> Unit,
-    onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: DexViewModel = koinViewModel()
 ) {
@@ -73,8 +68,6 @@ fun DexScreen(
     var showLibrarySheet by rememberSaveable { mutableStateOf(false) }
     var librarySheetTab by rememberSaveable { mutableStateOf(0) }
     var isGridView by rememberSaveable { mutableStateOf(true) } // Default to grid
-    var showOverflowMenu by rememberSaveable { mutableStateOf(false) }
-
     val librarySheetState = rememberModalBottomSheetState()
 
     Scaffold(
@@ -126,32 +119,7 @@ fun DexScreen(
                             }
                         )
                     }
-                    Box {
-                        IconButton(onClick = { showOverflowMenu = true }) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "More options"
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = showOverflowMenu,
-                            onDismissRequest = { showOverflowMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Settings") },
-                                onClick = {
-                                    showOverflowMenu = false
-                                    onNavigateToSettings()
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = null
-                                    )
-                                }
-                            )
-                        }
-                    }
+
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
