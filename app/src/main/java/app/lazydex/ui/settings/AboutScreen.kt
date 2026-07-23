@@ -157,12 +157,6 @@ fun AboutScreen(
                         val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/lazy2dev/lazydex/commits"))
                         context.startActivity(browserIntent)
                     }
-                    AboutLinkItem(title = "What's coming (soon)") {
-                        // Action placeholder
-                    }
-                    AboutLinkItem(title = "Help translate") {
-                        // Action placeholder
-                    }
                     AboutLinkItem(title = "Open source licenses") {
                         showLicensesDialog = true
                     }
