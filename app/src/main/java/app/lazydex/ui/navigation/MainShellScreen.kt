@@ -51,6 +51,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.statusBarsPadding
 import app.lazydex.BuildConfig
 import app.lazydex.domain.model.MediaCategory
 import app.lazydex.ui.browser.BrowserScreen
@@ -159,12 +162,14 @@ fun MainShellScreen(
                 )
             }
         },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier
     ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
         ) {
             when (currentTab) {
                 ShellTab.DEX -> {
@@ -210,9 +215,10 @@ private fun SettingsTabContent(
 ) {
     Column(
         modifier = modifier
+            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
     ) {
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         Box(
             modifier = Modifier.fillMaxWidth(),
