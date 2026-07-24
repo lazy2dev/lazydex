@@ -8,12 +8,14 @@ import app.lazydex.domain.model.SortDirection
 import app.lazydex.domain.model.SortField
 import app.lazydex.domain.model.StatusFilter
 import app.lazydex.domain.repository.MediaRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -165,7 +167,8 @@ class DexViewModel(
             perStatusCounts = fs.perStatusCounts,
             isLoading = false
         )
-    }.combine(repository.observeCount()) { state, count -> state.copy(totalCount = count) }
+    }.flowOn(Dispatchers.Default)
+    .combine(repository.observeCount()) { state, count -> state.copy(totalCount = count) }
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DexUiState())
 
     fun selectCategory(category: MediaCategory?) {

@@ -69,6 +69,7 @@ fun MediaCard(
                 // Background cover image
                 CoverImage(
                     coverImagePath = item.coverImagePath,
+                    coverImageUrl = item.coverImageUrl,
                     title = item.title,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -158,6 +159,7 @@ fun MediaCard(
             ) {
                 CoverImage(
                     coverImagePath = item.coverImagePath,
+                    coverImageUrl = item.coverImageUrl,
                     title = item.title,
                     modifier = Modifier
                         .size(width = 70.dp, height = 95.dp)

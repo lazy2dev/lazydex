@@ -248,6 +248,146 @@ fun DataAndStorageScreen(
                                 Text("Disconnect", fontSize = 13.sp)
                             }
                         }
+
+                        // MALSync-style Real-time Progress Display
+                        when (val syncState = state.syncProgressState) {
+                            is app.lazydex.data.anilist.SyncProgressState.Fetching -> {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                androidx.compose.material3.Surface(
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            androidx.compose.material3.CircularProgressIndicator(
+                                                modifier = Modifier.size(16.dp),
+                                                strokeWidth = 2.dp
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "Fetching ${syncState.type} (Page ${syncState.page})...",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        if (syncState.itemsFetched > 0) {
+                                            Text(
+                                                text = "${syncState.itemsFetched} remote items retrieved",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(top = 4.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            is app.lazydex.data.anilist.SyncProgressState.Analyzing -> {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                androidx.compose.material3.Surface(
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        androidx.compose.material3.CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Analyzing ${syncState.totalRemoteItems} remote items against database...",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                            is app.lazydex.data.anilist.SyncProgressState.Syncing -> {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                androidx.compose.material3.Surface(
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = "Syncing items...",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = "${syncState.current} / ${syncState.total}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        LinearProgressIndicator(
+                                            progress = { if (syncState.total > 0) syncState.current.toFloat() / syncState.total.toFloat() else 0f },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        Text(
+                                            text = syncState.currentItemTitle,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            maxLines = 1,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                            is app.lazydex.data.anilist.SyncProgressState.Completed -> {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                androidx.compose.material3.Surface(
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                                    color = androidx.compose.ui.graphics.Color(0xFF1B5E20).copy(alpha = 0.2f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "Sync complete: ${syncState.report.importedCount} new items imported, ${syncState.report.updatedCount} items updated",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = androidx.compose.ui.graphics.Color(0xFF4CAF50),
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.padding(12.dp)
+                                    )
+                                }
+                            }
+                            is app.lazydex.data.anilist.SyncProgressState.Error -> {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                androidx.compose.material3.Surface(
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "Sync Error: ${syncState.message}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                        modifier = Modifier.padding(12.dp)
+                                    )
+                                }
+                            }
+                            else -> {}
+                        }
+
+                        // MALSync Persistent Report Card
+                        state.syncReport?.let { report ->
+                            Spacer(modifier = Modifier.height(10.dp))
+                            app.lazydex.ui.components.SyncReportCard(
+                                report = report,
+                                onDismiss = { viewModel.dismissSyncReport() }
+                            )
+                        }
                     } else {
                         Button(
                             onClick = {

@@ -12,7 +12,7 @@ import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.security.KeyStore
 
-class AnilistTokenStore(private val context: Context) {
+open class AnilistTokenStore(private val context: Context) {
 
     private val mutex = Mutex()
     private var prefs: SharedPreferences? = null
@@ -30,23 +30,26 @@ class AnilistTokenStore(private val context: Context) {
         private const val MASTER_KEY_ALIAS = "_ দাবি_master_key_"
     }
 
-    private suspend fun getPrefs(): SharedPreferences = mutex.withLock {
-        prefs?.let { return@withLock it }
+    private suspend fun getPrefs(): SharedPreferences {
+        prefs?.let { return it }
+        return mutex.withLock {
+            prefs?.let { return@withLock it }
 
-        val loaded = try {
-            createEncryptedPrefs(context)
-        } catch (e: Exception) {
-            Log.e(TAG, "EncryptedSharedPreferences creation failed. Purging keystore & files...", e)
-            purgeKeystoreAndFiles(context)
-            try {
+            val loaded = try {
                 createEncryptedPrefs(context)
-            } catch (e2: Exception) {
-                Log.e(TAG, "Second EncryptedSharedPreferences attempt failed. Falling back to Base64 SharedPreferences", e2)
-                createBase64FallbackPrefs(context)
+            } catch (e: Exception) {
+                Log.e(TAG, "EncryptedSharedPreferences creation failed. Purging keystore & files...", e)
+                purgeKeystoreAndFiles(context)
+                try {
+                    createEncryptedPrefs(context)
+                } catch (e2: Exception) {
+                    Log.e(TAG, "Second EncryptedSharedPreferences attempt failed. Falling back to Base64 SharedPreferences", e2)
+                    createBase64FallbackPrefs(context)
+                }
             }
+            prefs = loaded
+            loaded
         }
-        prefs = loaded
-        loaded
     }
 
     private fun createEncryptedPrefs(context: Context): SharedPreferences {
@@ -87,7 +90,7 @@ class AnilistTokenStore(private val context: Context) {
         return Base64SharedPreferencesWrapper(rawPrefs)
     }
 
-    suspend fun saveToken(accessToken: String, expiresInSeconds: Long) {
+    open suspend fun saveToken(accessToken: String, expiresInSeconds: Long) {
         val prefs = getPrefs()
         val expirationTime = System.currentTimeMillis() + (expiresInSeconds * 1000L)
         prefs.edit()
@@ -96,20 +99,20 @@ class AnilistTokenStore(private val context: Context) {
             .apply()
     }
 
-    suspend fun getAccessToken(): String? {
+    open suspend fun getAccessToken(): String? {
         return getPrefs().getString(KEY_ACCESS_TOKEN, null)
     }
 
-    suspend fun getTokenExpiration(): Long {
+    open suspend fun getTokenExpiration(): Long {
         return getPrefs().getLong(KEY_EXPIRATION_TIME, 0L)
     }
 
-    suspend fun isTokenExpired(): Boolean {
+    open suspend fun isTokenExpired(): Boolean {
         val exp = getTokenExpiration()
         return exp > 0 && System.currentTimeMillis() > exp
     }
 
-    suspend fun saveUserInfo(userId: Long, username: String, scoreFormat: ScoreFormat) {
+    open suspend fun saveUserInfo(userId: Long, username: String, scoreFormat: ScoreFormat) {
         getPrefs().edit()
             .putLong(KEY_USER_ID, userId)
             .putString(KEY_USER_NAME, username)
@@ -117,24 +120,24 @@ class AnilistTokenStore(private val context: Context) {
             .apply()
     }
 
-    suspend fun getUserId(): Long {
+    open suspend fun getUserId(): Long {
         return getPrefs().getLong(KEY_USER_ID, 0L)
     }
 
-    suspend fun getUsername(): String? {
+    open suspend fun getUsername(): String? {
         return getPrefs().getString(KEY_USER_NAME, null)
     }
 
-    suspend fun getScoreFormat(): ScoreFormat {
+    open suspend fun getScoreFormat(): ScoreFormat {
         val name = getPrefs().getString(KEY_SCORE_FORMAT, null)
         return ScoreFormat.fromString(name)
     }
 
-    suspend fun saveScoreFormat(scoreFormat: ScoreFormat) {
+    open suspend fun saveScoreFormat(scoreFormat: ScoreFormat) {
         getPrefs().edit().putString(KEY_SCORE_FORMAT, scoreFormat.name).apply()
     }
 
-    suspend fun addOAuthState(state: String) {
+    open suspend fun addOAuthState(state: String) {
         val prefs = getPrefs()
         val currentStates = prefs.getStringSet(KEY_OAUTH_STATES, emptySet())?.toMutableSet() ?: mutableSetOf()
         if (currentStates.size >= 5) {
@@ -144,7 +147,7 @@ class AnilistTokenStore(private val context: Context) {
         prefs.edit().putStringSet(KEY_OAUTH_STATES, currentStates).commit()
     }
 
-    suspend fun validateAndConsumeState(state: String): Boolean {
+    open suspend fun validateAndConsumeState(state: String): Boolean {
         val prefs = getPrefs()
         val currentStates = prefs.getStringSet(KEY_OAUTH_STATES, emptySet())?.toMutableSet() ?: mutableSetOf()
         if (currentStates.contains(state)) {
@@ -155,7 +158,7 @@ class AnilistTokenStore(private val context: Context) {
         return false
     }
 
-    suspend fun clearToken() {
+    open suspend fun clearToken() {
         getPrefs().edit()
             .remove(KEY_ACCESS_TOKEN)
             .remove(KEY_EXPIRATION_TIME)
@@ -164,7 +167,7 @@ class AnilistTokenStore(private val context: Context) {
             .apply()
     }
 
-    suspend fun isLoggedIn(): Boolean {
+    open suspend fun isLoggedIn(): Boolean {
         val token = getAccessToken()
         return !token.isNullOrBlank() && !isTokenExpired()
     }

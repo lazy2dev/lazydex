@@ -26,15 +26,19 @@ import java.io.File
 fun CoverImage(
     coverImagePath: String,
     title: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    coverImageUrl: String? = null
 ) {
-    val fileExists = remember(coverImagePath) {
-        coverImagePath.isNotEmpty() && File(coverImagePath).exists()
+    val imageModel: Any? = remember(coverImagePath, coverImageUrl) {
+        when {
+            coverImagePath.isNotBlank() -> File(coverImagePath)
+            !coverImageUrl.isNullOrBlank() -> coverImageUrl
+            else -> null
+        }
     }
-    
-    var hasError by remember(coverImagePath) { mutableStateOf(!fileExists) }
 
-    // Initials fallback calculation
+    var hasError by remember(imageModel) { mutableStateOf(imageModel == null) }
+
     val initials = remember(title) {
         val parts = title.trim().split(Regex("\\s+"))
         val firstChar = parts.firstOrNull()?.firstOrNull()?.toString() ?: ""
@@ -42,7 +46,6 @@ fun CoverImage(
         (firstChar + secondChar).uppercase().ifEmpty { "?" }
     }
 
-    // Modern linear gradient for fallback
     val fallbackGradient = remember {
         Brush.linearGradient(
             colors = listOf(Color(0xFF2C3E50), Color(0xFF000000))
@@ -54,9 +57,9 @@ fun CoverImage(
             .clip(RoundedCornerShape(6.dp))
             .background(fallbackGradient)
     ) {
-        if (!hasError && coverImagePath.isNotEmpty()) {
+        if (!hasError && imageModel != null) {
             AsyncImage(
-                model = File(coverImagePath),
+                model = imageModel,
                 contentDescription = "Cover for $title",
                 contentScale = ContentScale.Crop,
                 onError = { hasError = true },
@@ -64,7 +67,6 @@ fun CoverImage(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            // Initials Fallback UI
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.fillMaxSize()

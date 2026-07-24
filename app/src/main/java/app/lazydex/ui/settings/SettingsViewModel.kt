@@ -22,6 +22,9 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
 
+import app.lazydex.data.anilist.AnilistSyncReport
+import app.lazydex.data.anilist.SyncProgressState
+
 data class SettingsUiState(
     val themeMode: String = "DARK",
     val amoledMode: Boolean = false,
@@ -38,6 +41,8 @@ data class SettingsUiState(
     val anilistUsername: String? = null,
     val scoreFormat: ScoreFormat = ScoreFormat.POINT_5,
     val isSyncing: Boolean = false,
+    val syncProgressState: SyncProgressState = SyncProgressState.Idle,
+    val syncReport: AnilistSyncReport? = null,
     val pendingResolutionItems: List<MediaItemEntity> = emptyList()
 )
 
@@ -104,26 +109,57 @@ class SettingsViewModel(
         viewModelScope.launch {
             tokenStore.clearToken()
             refreshAnilistState()
-            _uiState.value = _uiState.value.copy(successMsg = "Disconnected from AniList")
+            _uiState.value = _uiState.value.copy(
+                successMsg = "Disconnected from AniList",
+                syncProgressState = SyncProgressState.Idle,
+                syncReport = null
+            )
         }
     }
 
     fun performManualSync() {
-        _uiState.value = _uiState.value.copy(isSyncing = true, errorMsg = null, successMsg = null)
+        _uiState.value = _uiState.value.copy(
+            isSyncing = true,
+            errorMsg = null,
+            successMsg = null,
+            syncProgressState = SyncProgressState.Fetching("Initializing", 0, 0)
+        )
         viewModelScope.launch {
             try {
-                syncManager.performFullSync()
-                _uiState.value = _uiState.value.copy(
-                    isSyncing = false,
-                    successMsg = "AniList sync completed"
-                )
+                syncManager.performFullSyncFlow().collect { state ->
+                    _uiState.value = _uiState.value.copy(syncProgressState = state)
+                    when (state) {
+                        is SyncProgressState.Completed -> {
+                            val msg = "AniList sync completed: ${state.report.importedCount} imported, ${state.report.updatedCount} updated"
+                            _uiState.value = _uiState.value.copy(
+                                isSyncing = false,
+                                syncReport = state.report,
+                                successMsg = msg
+                            )
+                        }
+                        is SyncProgressState.Error -> {
+                            _uiState.value = _uiState.value.copy(
+                                isSyncing = false,
+                                errorMsg = state.message
+                            )
+                        }
+                        else -> {
+                            _uiState.value = _uiState.value.copy(isSyncing = true)
+                        }
+                    }
+                }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isSyncing = false,
+                    syncProgressState = SyncProgressState.Error(e.message ?: "Sync error"),
                     errorMsg = "Sync failed: ${e.message}"
                 )
             }
         }
+    }
+
+    fun dismissSyncReport() {
+        _uiState.value = _uiState.value.copy(syncReport = null)
     }
 
     fun setScoreFormat(format: ScoreFormat) {
