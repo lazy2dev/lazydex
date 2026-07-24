@@ -184,3 +184,50 @@ Ran `./gradlew test`:
 
 Ran `./gradlew assembleDebug`:
 - **Result**: `BUILD SUCCESSFUL`.
+
+---
+
+## 8. Komikku Extended UI Framework Adaptation & Migration Plan
+
+> **Status**: 🟢 **PHASES 1–3 IMPLEMENTED & VERIFIED**
+> **Goal**: Port Komikku's extended UI framework (`.tmp/komikku`) into LazyDex with 100% visual parity while respecting local-only tracker constraints.
+
+### Phase 1: Theme Engine & Porting Foundations ✅
+- Ported Komikku's 20+ dynamic theme schemes into LazyDex theme system (`AppTheme`, `ThemeMode`, palette generators).
+- Integrated Amoled pure dark mode and Material3 color schemes.
+
+### Phase 2: Direct-Port Komikku Details UI Composables ✅
+- **[KomikkuMangaInfoHeader.kt](file:///e:/lazyman/rockyxwall/02_Codeing/01_Github/lazydex/app/src/main/java/app/lazydex/ui/components/KomikkuMangaInfoHeader.kt)** (from `.tmp/komikku/.../MangaInfoHeader.kt`):
+  - Blurred cover backdrop (`blur(7.dp).alpha(0.25f)` with vertical gradient fade).
+  - Poster cover art (2:3 aspect ratio `100.dp x 150.dp`, 8.dp rounded corners, 6.dp shadow, tap-to-zoom).
+  - `SelectionContainer` title and author subtitle stack.
+  - Category badge, status badge, and star rating.
+  - Action row buttons (`Category`, `Status`, `Tracker`, `Webview`).
+- **[KomikkuNamespaceTags.kt](file:///e:/lazyman/rockyxwall/02_Codeing/01_Github/lazydex/app/src/main/java/app/lazydex/ui/components/KomikkuNamespaceTags.kt)** (from `.tmp/komikku/.../NamespaceTags.kt`):
+  - `FlowRow` chip container supporting namespace-grouped tags (`genre`, `studio`, `author`).
+- **[KomikkuCollapsibleBox.kt](file:///e:/lazyman/rockyxwall/02_Codeing/01_Github/lazydex/app/src/main/java/app/lazydex/ui/components/KomikkuCollapsibleBox.kt)** (from `.tmp/komikku/.../CollapsibleBox.kt`):
+  - Expandable synopsis container with height animation.
+- **[KomikkuMangaNotesSection.kt](file:///e:/lazyman/rockyxwall/02_Codeing/01_Github/lazydex/app/src/main/java/app/lazydex/ui/components/KomikkuMangaNotesSection.kt)** (from `.tmp/komikku/.../MangaNotesSection.kt`):
+  - Clean personal notes section with markdown display.
+- **[KomikkuMangaCoverDialog.kt](file:///e:/lazyman/rockyxwall/02_Codeing/01_Github/lazydex/app/src/main/java/app/lazydex/ui/components/KomikkuMangaCoverDialog.kt)** (from `.tmp/komikku/.../MangaCoverDialog.kt`):
+  - Full-screen cover image zoom preview dialog.
+
+### Phase 3: 1:1 In-Place Presentation & Edit Interaction Model ✅
+- **Clean Presentation Styling**: Screen stays 100% clean with zero boxy `OutlinedTextField` inputs cluttering the screen in both Read Mode and Edit Mode.
+- **Top Bar Controls**:
+  - Read Mode: `← Back` | Title (scrolled alpha) | `[✎ Edit]` button | `⋮ Overflow Menu`.
+  - Edit Mode: `[Cancel]` button | Title (scrolled alpha) | `[Save]` button.
+- **Popup Edit Modals**: Tapping any field in Edit Mode (Title, Author, Progress, Synopsis, Tags, Notes) pops up a clean inline edit dialog modal.
+- **No Duplicate Button Labels**: Action row buttons (`Category`, `Status`, `Tracker`, `Webview`) trigger selection menus cleanly without duplicating badge text.
+- **[TrackerBottomSheet.kt](file:///e:/lazyman/rockyxwall/02_Codeing/01_Github/lazydex/app/src/main/java/app/lazydex/ui/components/TrackerBottomSheet.kt)**: Ported directly from Komikku's `TrackInfoDialogHome`:
+  - 2-grid card container (`surfaceContainerHighest`) with vertical/horizontal dividers for `Status`, `Progress`, `Score`, `Volumes`, and `Visibility`.
+
+### Phase 4: Bulk Selection, FastScroller & Navigation Composables ⏳
+- Integrate Komikku's `VerticalFastScroller` across library lists.
+- Port Komikku's `AdaptiveSheet` and `WheelPicker` for quick category/status selection.
+- Implement multi-selection bulk action toolbar for library grid/list views.
+
+### Phase 5: Final Parity Audit & Release Build ⏳
+- Conduct end-to-end UI parity audit against `.tmp/komikku`.
+- Verify performance, memory footprint, and compile release APK with `./gradlew assembleRelease`.
+

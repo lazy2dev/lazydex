@@ -54,6 +54,7 @@ data class AddEditFormState(
     val showDeleteConfirm: Boolean = false,
     val showDiscardConfirm: Boolean = false,
     val isNew: Boolean = true,
+    val isEditing: Boolean = false,
 
     // Extended Metadata & Tracking
     val anilistListEntryId: Long? = null,
@@ -123,7 +124,8 @@ class UnifiedAddEditViewModel(
     private val itemId: String? = savedStateHandle["itemId"]
     private val initialUrlParam: String? = savedStateHandle["initialUrl"]
 
-    private val _formState = MutableStateFlow(AddEditFormState(isNew = itemId == null))
+    private val isNewItem: Boolean = itemId == null
+    private val _formState = MutableStateFlow(AddEditFormState(isNew = isNewItem, isEditing = isNewItem))
     val formState: StateFlow<AddEditFormState> = _formState.asStateFlow()
 
     private var originalItem: MediaItem? = null
@@ -141,43 +143,62 @@ class UnifiedAddEditViewModel(
                 repository.observeById(id).collect { item ->
                     if (item != null && !_formState.value.isSaving && !_formState.value.isScraping) {
                         originalItem = item
-                        _formState.value = _formState.value.copy(
-                            id = item.id,
-                            category = item.category,
-                            title = item.title,
-                            alternativeTitles = item.alternativeTitles,
-                            sourceUrl = item.sourceUrl ?: "",
-                            coverImagePath = item.coverImagePath,
-                            coverImageUrl = item.coverImageUrl ?: "",
-                            currentProgress = item.currentProgress.toString(),
-                            totalItems = item.totalItems?.toString() ?: "",
-                            userStatus = item.userStatus,
-                            rating = item.rating,
-                            notes = item.notes,
-                            genres = item.genres,
-                            tags = item.tags,
-                            author = item.author,
-                            description = item.description,
-                            startDate = item.startDate,
-                            endDate = item.endDate,
-                            isNew = false,
-                            anilistListEntryId = item.anilistListEntryId,
-                            isPrivate = item.isPrivate,
-                            mediaFormat = item.mediaFormat?.name ?: item.rawFormat ?: "",
-                            rawFormat = item.rawFormat ?: "",
-                            publishingStatus = item.publishingStatus ?: "",
-                            season = item.season ?: "",
-                            totalVolumes = item.totalVolumes?.toString() ?: "",
-                            progressVolumes = item.progressVolumes.toString(),
-                            durationMinutes = item.durationMinutes?.toString() ?: "",
-                            sourceMaterial = item.sourceMaterial ?: "",
-                            isAdult = item.isAdult,
-                            isDoujin = item.isDoujin,
-                            syncPendingAction = item.syncPendingAction
-                        )
+                        if (!_formState.value.isEditing) {
+                            populateFromItem(item)
+                        }
                     }
                 }
             }
+        }
+    }
+
+    private fun populateFromItem(item: MediaItem) {
+        _formState.value = _formState.value.copy(
+            id = item.id,
+            category = item.category,
+            title = item.title,
+            alternativeTitles = item.alternativeTitles,
+            sourceUrl = item.sourceUrl ?: "",
+            coverImagePath = item.coverImagePath,
+            coverImageUrl = item.coverImageUrl ?: "",
+            currentProgress = item.currentProgress.toString(),
+            totalItems = item.totalItems?.toString() ?: "",
+            userStatus = item.userStatus,
+            rating = item.rating,
+            notes = item.notes,
+            genres = item.genres,
+            tags = item.tags,
+            author = item.author,
+            description = item.description,
+            startDate = item.startDate,
+            endDate = item.endDate,
+            isNew = false,
+            anilistListEntryId = item.anilistListEntryId,
+            isPrivate = item.isPrivate,
+            mediaFormat = item.mediaFormat?.name ?: item.rawFormat ?: "",
+            rawFormat = item.rawFormat ?: "",
+            publishingStatus = item.publishingStatus ?: "",
+            season = item.season ?: "",
+            totalVolumes = item.totalVolumes?.toString() ?: "",
+            progressVolumes = item.progressVolumes.toString(),
+            durationMinutes = item.durationMinutes?.toString() ?: "",
+            sourceMaterial = item.sourceMaterial ?: "",
+            isAdult = item.isAdult,
+            isDoujin = item.isDoujin,
+            syncPendingAction = item.syncPendingAction
+        )
+    }
+
+    fun startEditing() {
+        _formState.value = _formState.value.copy(isEditing = true)
+    }
+
+    fun cancelEditing() {
+        if (_formState.value.isNew) {
+            _formState.value = _formState.value.copy(isDone = true)
+        } else {
+            originalItem?.let { populateFromItem(it) }
+            _formState.value = _formState.value.copy(isEditing = false, showDiscardConfirm = false)
         }
     }
 
@@ -448,10 +469,12 @@ class UnifiedAddEditViewModel(
             try {
                 if (state.isNew) {
                     repository.add(item)
+                    _formState.value = _formState.value.copy(isDone = true, isSaving = false)
                 } else {
                     repository.update(item)
+                    originalItem = item
+                    _formState.value = _formState.value.copy(isSaving = false, isEditing = false)
                 }
-                _formState.value = _formState.value.copy(isDone = true)
             } catch (e: DuplicateUrlException) {
                 _formState.value = _formState.value.copy(
                     errorMsg = "A media tracker with this URL already exists.",

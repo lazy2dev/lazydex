@@ -7,8 +7,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -22,10 +24,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -42,8 +43,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SheetState
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -57,6 +58,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.lazydex.data.anilist.ALMedia
@@ -92,6 +95,9 @@ fun TrackerBottomSheet(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var showMenu by remember { mutableStateOf(false) }
+    var showStatusPicker by remember { mutableStateOf(false) }
+    var showProgressPicker by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -101,36 +107,81 @@ fun TrackerBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Header Row
+            // Header Row (Exact Komikku TrackInfoItem style)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF02A9FF)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "AL",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF02A9FF)),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
-                        text = "AniList Tracking",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        text = "AL",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
                     )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Text(
+                    text = title.ifEmpty { "AniList Tracker" },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                if (isBound) {
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Options")
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            if (!sourceUrl.isNullOrBlank()) {
+                                DropdownMenuItem(
+                                    text = { Text("Open in AniList") },
+                                    leadingIcon = { Icon(Icons.Default.OpenInNew, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        try {
+                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(sourceUrl))
+                                            context.startActivity(intent)
+                                        } catch (_: Exception) {}
+                                    }
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text(if (isPrivate) "Make Public" else "Make Private") },
+                                onClick = {
+                                    showMenu = false
+                                    onPrivateChange(!isPrivate)
+                                }
+                            )
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("Unbind Tracker", color = MaterialTheme.colorScheme.error) },
+                                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                onClick = {
+                                    showMenu = false
+                                    onUnbindMedia()
+                                }
+                            )
+                        }
+                    }
                 }
 
                 IconButton(onClick = onDismissRequest) {
@@ -138,10 +189,8 @@ fun TrackerBottomSheet(
                 }
             }
 
-            HorizontalDivider()
-
             if (!isBound) {
-                // UNBOUND STATE: Search & Bind View
+                // UNBOUND STATE: Search & Bind
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
                         text = "Search AniList to bind this entry:",
@@ -149,29 +198,24 @@ fun TrackerBottomSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Row(
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = onSearchQueryChange,
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = onSearchQueryChange,
-                            modifier = Modifier.weight(1f),
-                            placeholder = { Text("Search by title...") },
-                            singleLine = true,
-                            trailingIcon = {
-                                IconButton(onClick = onPerformSearch) {
-                                    Icon(imageVector = Icons.Default.Search, contentDescription = "Search")
-                                }
+                        placeholder = { Text("Search title...") },
+                        singleLine = true,
+                        trailingIcon = {
+                            IconButton(onClick = onPerformSearch) {
+                                Icon(imageVector = Icons.Default.Search, contentDescription = "Search")
                             }
-                        )
-                    }
+                        }
+                    )
 
                     if (isSearching) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(120.dp),
+                                .height(140.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator(modifier = Modifier.size(32.dp))
@@ -191,7 +235,7 @@ fun TrackerBottomSheet(
                                     colors = CardDefaults.cardColors(
                                         containerColor = MaterialTheme.colorScheme.surfaceVariant
                                     ),
-                                    shape = RoundedCornerShape(12.dp)
+                                    shape = RoundedCornerShape(10.dp)
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(10.dp),
@@ -202,11 +246,11 @@ fun TrackerBottomSheet(
                                                 model = coverUrl,
                                                 contentDescription = null,
                                                 modifier = Modifier
-                                                    .size(48.dp, 64.dp)
+                                                    .size(44.dp, 60.dp)
                                                     .clip(RoundedCornerShape(6.dp)),
                                                 contentScale = ContentScale.Crop
                                             )
-                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Spacer(modifier = Modifier.width(10.dp))
                                         }
 
                                         Column(modifier = Modifier.weight(1f)) {
@@ -244,150 +288,119 @@ fun TrackerBottomSheet(
                     }
                 }
             } else {
-                // BOUND STATE: Tracker Item Controls
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    // Status Selector
-                    var statusDropdownExpanded by remember { mutableStateOf(false) }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Status",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-
-                        Box {
-                            OutlinedButton(onClick = { statusDropdownExpanded = true }) {
-                                Text(userStatus.displayName)
-                            }
-
-                            DropdownMenu(
-                                expanded = statusDropdownExpanded,
-                                onDismissRequest = { statusDropdownExpanded = false }
-                            ) {
-                                UserStatus.entries.forEach { status ->
-                                    DropdownMenuItem(
-                                        text = { Text(status.displayName) },
-                                        onClick = {
-                                            onStatusChange(status)
-                                            statusDropdownExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Progress Field
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Progress (Chapters/Episodes)",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-
-                        OutlinedTextField(
-                            value = currentProgress,
-                            onValueChange = onProgressChange,
-                            modifier = Modifier.width(100.dp),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true
-                        )
-                    }
-
-                    // Volume Progress Field
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Volume Progress",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-
-                        OutlinedTextField(
-                            value = progressVolumes,
-                            onValueChange = onProgressVolumesChange,
-                            modifier = Modifier.width(100.dp),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true
-                        )
-                    }
-
-                    // Private Toggle
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Private Entry",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-
-                        Switch(
-                            checked = isPrivate,
-                            onCheckedChange = onPrivateChange
-                        )
-                    }
-
-                    HorizontalDivider()
-
-                    // Action Buttons
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedButton(
-                            onClick = onUnbindMedia,
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Unbind")
-                        }
-
-                        if (!sourceUrl.isNull_or_blank_check()) {
-                            Button(
-                                onClick = {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(sourceUrl))
-                                    context.startActivity(intent)
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.OpenInNew,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
+                // BOUND STATE: Komikku 2-Grid Interactive Card Container (TrackDetailsItem)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                        .padding(6.dp)
+                ) {
+                    Column {
+                        // Grid Row 1: Status | Chapters | Rating
+                        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+                            // Cell 1: Status
+                            Box(modifier = Modifier.weight(1f)) {
+                                TrackGridCell(
+                                    text = userStatus.displayName,
+                                    label = "Status",
+                                    onClick = { showStatusPicker = true }
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Open AniList")
+                                DropdownMenu(
+                                    expanded = showStatusPicker,
+                                    onDismissRequest = { showStatusPicker = false }
+                                ) {
+                                    UserStatus.entries.forEach { status ->
+                                        DropdownMenuItem(
+                                            text = { Text(status.displayName) },
+                                            onClick = {
+                                                onStatusChange(status)
+                                                showStatusPicker = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            VerticalDivider()
+
+                            // Cell 2: Chapters Progress
+                            TrackGridCell(
+                                modifier = Modifier.weight(1f),
+                                text = "Ch. $currentProgress / ${totalItems.ifEmpty { "?" }}",
+                                label = "Progress",
+                                onClick = { showProgressPicker = true }
+                            )
+
+                            VerticalDivider()
+
+                            // Cell 3: Score / Rating
+                            TrackGridCell(
+                                modifier = Modifier.weight(1f),
+                                text = rating?.let { "${it / 20.0} / 5.0" } ?: "Unrated",
+                                label = "Score",
+                                onClick = {}
+                            )
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                        // Grid Row 2: Volume Progress & Options
+                        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+                            TrackGridCell(
+                                modifier = Modifier.weight(1f),
+                                text = if (progressVolumes.isNotBlank()) "Vol. $progressVolumes" else "Vol. 0",
+                                label = "Volumes",
+                                onClick = { showProgressPicker = true }
+                            )
+                            VerticalDivider()
+                            TrackGridCell(
+                                modifier = Modifier.weight(1f),
+                                text = if (isPrivate) "Private 🔒" else "Public 🌐",
+                                label = "Visibility",
+                                onClick = { onPrivateChange(!isPrivate) }
+                            )
+                        }
+                    }
+                }
+
+                if (showProgressPicker) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("Update Progress", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = currentProgress,
+                                    onValueChange = onProgressChange,
+                                    label = { Text("Chapter Progress", fontSize = 11.sp) },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = progressVolumes,
+                                    onValueChange = onProgressVolumesChange,
+                                    label = { Text("Volume Progress", fontSize = 11.sp) },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = { showProgressPicker = false },
+                                modifier = Modifier.align(Alignment.End)
+                            ) {
+                                Text("Done")
                             }
                         }
                     }
@@ -399,4 +412,36 @@ fun TrackerBottomSheet(
     }
 }
 
-private fun String?.isNull_or_blank_check(): Boolean = this == null || this.isBlank()
+@Composable
+private fun TrackGridCell(
+    text: String,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clickable(onClick = onClick)
+            .fillMaxHeight()
+            .padding(vertical = 10.dp, horizontal = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = label,
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+        }
+    }
+}
