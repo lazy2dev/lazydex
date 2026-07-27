@@ -2,7 +2,7 @@
 
 > Extracted from `mihonapp/mihon` GitHub source (main branch, 2026).
 > Purpose: Reference for replicating the same patterns in LazyDex.
-> Main plan: [`index.md`](index.md) | API reference: [`anilist-api-reference.md`](anilist-api-reference.md) | DB migration: [`db-migration.md`](db-migration.md)
+> Main plan: [`v0.0.4.md`](../plans/v0.0.4.md) | API reference: [`anilist-api-reference.md`](anilist-api-reference.md) | DB migration: [`db-migration.md`](db-migration.md)
 
 ---
 
