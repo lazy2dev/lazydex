@@ -1,7 +1,7 @@
 # Database Migration: Room v2 → v3
 
 > Schema changes needed to support AniList sync, REPEATING status, extended metadata (including `progressVolumes`), 0-100 Int rating system, and AniList-style local statistics.
-> Main plan: [`v0.0.4.md`](../plans/v0.0.4.md) | Mihon reference: [`mihon-reference.md`](mihon-reference.md) | API reference: [`anilist-api-reference.md`](anilist-api-reference.md)
+> Main plan: [`v0.0.4.md`](../plans/v0.0.4.md) | Mihon reference: [`mihon-sync.md`](mihon-sync.md) | API reference: [`anilist-api.md`](anilist-api.md)
 
 ---
 
