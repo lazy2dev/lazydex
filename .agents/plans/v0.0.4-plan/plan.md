@@ -1,0 +1,161 @@
+# LazyDex v0.0.4 — AniList OAuth Sync & Extended Metadata Architecture
+
+> **Status**: 📋 **REFERENCE ONLY** — Implemented in `origin/dev` commits `0f7e1a2`..`21688a9`. Code is archived in git history and can be resurrected/referenced after v0.0.3 foundation is complete.
+> **Tagline**: Two-way AniList sync, MALSync page query engine & real-time progress UI, persistent diff sync report card, extended media metadata (format, duration, volumes, status, season), 5-system configurable rating architecture, and Komikku-style details UI.
+> **Prerequisite**: v0.0.3 codebase (solid theme + performance foundation).
+> **Code References**: See Section 9 for exact commit hashes and file paths.
+
+---
+
+## 1. Executive Summary & Core Capabilities
+
+- **Login Flow**: Mihon-style dedicated `TrackLoginActivity` capturing `lazydex://anilist-auth` deep links, parsing URI fragment `#access_token=...`, and validating CSRF `state` parameter before storing credentials in `AnilistTokenStore`.
+- **MALSync Page Query Engine**: Replaced fragile list chunk queries with MALSync's `Page(page: $page, perPage: 100)` query (`userName: $userName`, `type: $type`), streaming paginated ANIME and MANGA entries cleanly using `pageInfo { hasNextPage }`.
+- **Real-Time Step-by-Step UI Progress**: Reactive streaming `SyncProgressState` Flow (`Fetching`, `Analyzing`, `Syncing X/Y`, `Completed`, `Error`), rendering live progress bars, page counts, item fractions (`7 / 15`), and live item titles in `TrackingSettingsScreen` and `DataAndStorageScreen`.
+- **Persistent MALSync Sync Report UI (`SyncReportCard.kt`)**: Displays overview metrics (`Scanned: 1068`, `Imported: 538`, `Updated: 42`) and scrollable per-item field diff cards (`Progress: 5 → 12`, `Status: READING → COMPLETED`) with cover image thumbnails when sync completes.
+- **Cover Photo URL Fallback & Loading**: Fixed Coil image loading in `CoverImage.kt` and `MediaCard.kt` to fall back to `coverImageUrl` when local `coverImagePath` is absent or empty, resolving initial text placeholder issues for online-synced media items.
+- **Off-Main-Thread Grid Performance**: Offloaded list filtering and sorting across 1,000+ items to `Dispatchers.Default` using `flowOn(Dispatchers.Default)` in `DexViewModel.kt`, removing blocking main-thread `File.exists()` I/O calls from Compose layout render loops.
+- **3-Tier Item Matching**: Matches local entries by:
+  1. `anilistListEntryId == entry.id`
+  2. `sourceUrl == "https://anilist.co/anime/$mediaId"` (or `manga/$mediaId`)
+  3. Title + Local `MediaCategory` (using strict `TitleNormalizer` normalization and tie-breaking by `dateAdded DESC` on unlinked items indexed on `Dispatchers.Default`).
+- **Recategorization Unbind**: Automatically unbinds AniList IDs (`anilistListEntryId = null`) if an item is moved to a non-syncable category (`GAME`, live-action `TV`, live-action `MOVIE`).
+- **Conflict Resolution**: Timestamp-based with a **60-Second Clock Skew Buffer**:
+  - If modification timestamps are within 60s of each other: applies deterministic merge (`maxOf(local.currentProgress, remote.progress)`).
+  - Outside 60s buffer: strictly newer timestamp wins.
+- **Remote Deletion Reconciliation**: Bound items missing from AniList remote payload (and not recently edited locally) are flagged with `syncPendingAction = "REMOTE_DELETED_PENDING_RESOLUTION"`, presenting a UI banner in Settings allowing the user to **Unlink (Keep Local)** or **Delete Locally**.
+- **WorkManager Dynamic Delay**: When encountering HTTP 429 rate limits, `AnilistSyncQueueWorker` cancels execution and enqueues a replacement `OneTimeWorkRequest` with `.setInitialDelay(retryAfter, TimeUnit.SECONDS)`.
+- **5-System Configurable Rating Architecture**: Stores score internally in SQLite DB as normalized `Int?` (0–100, `null` = unrated) to prevent float precision drift. Automatically syncs `ScoreFormat` preference (5-Star, 10-Pt, 10-Decimal, 100-Pt, 3-Smiley) with AniList profile on login.
+- **Local Statistics**: Computes total progress, completed items, mean rating, category counts, and read/watch stats.
+
+---
+
+## 2. Architecture & Components
+
+| Layer | File Path | Implementation Detail |
+|-------|-----------|-----------------------|
+| Deep Link Activity | `TrackLoginActivity.kt` | `singleTop` transparent activity handling OAuth redirect, parsing fragment tokens, validating CSRF `state` |
+| Tracker Service | `AnilistSyncManager.kt` | MALSync `Page` paginated fetch, `performFullSyncFlow()` progress emission, `AnilistSyncReport` diff collection, 3-tier matcher, 60s skew conflict resolver |
+| API Client | `AnilistApi.kt` | GraphQL API: `Viewer`, `fetchMediaListPage(userName, type, page)` (`perPage = 100`), `GraphQLError` handling, `SaveMediaListEntry` |
+| Auth Interceptor | `AnilistInterceptor.kt` | Injects Bearer token header, catches HTTP 401, debounces user logout, posts system notifications |
+| Rate Limiter | `AnilistRateLimiter.kt` | Token bucket (85 req/min) with persistent `anilist_rate_limit_reset` timestamp tracking |
+| Token Storage | `AnilistTokenStore.kt` | Mutex-guarded EncryptedSharedPreferences with Keystore corruption recovery and Base64 fallback |
+| Background Sync | `AnilistSyncQueueWorker.kt` | WorkManager worker with dynamic long delay replacement requests |
+| Sync Report UI | `SyncReportCard.kt` | MALSync-style summary card with metrics and per-item diff rows with thumbnails |
+| Cover Image | `CoverImage.kt` | Coil loading supporting local `coverImagePath` with `coverImageUrl` network fallback |
+| Rating Converter | `ScoreConverter.kt` | 0–100 Int ↔ display format conversion for all 5 score systems |
+
+---
+
+## 3. Database Migration: Room v2 → v3
+
+Room Database version incremented from **2 to 3**. Full schema and migration code in [`db-migration.md`](db-migration.md).
+
+Key changes:
+- 13 new columns: `localUpdatedAt`, `lastSyncedAt`, `anilistListEntryId`, `isPrivate`, `mediaFormat`, `rawFormat`, `publishingStatus`, `season`, `totalVolumes`, `progressVolumes`, `durationMinutes`, `sourceMaterial`, `isAdult`, `isDoujin`, `syncPendingAction`
+- `rating` column changed from `Double?` (1.0–5.0) to `Int?` (0–100)
+- Added `REPEATING` to `UserStatus` enum
+- Added `MediaFormat` enum with sub-types
+- Migration reads legacy `score_format` from SharedPreferences to apply correct multiplier
+
+---
+
+## 4. Configurable 5-System Rating Architecture
+
+- **Internal Storage**: `rating: Int?` (0–100)
+- **Formats**: `POINT_100`, `POINT_10_DECIMAL`, `POINT_10`, `POINT_5` (Star), `POINT_3` (Smiley)
+- **Converter**: `ScoreConverter.kt` handles `scoreToDisplay()`, `uiToScoreRaw()`, `snapToFormatInterval()`
+
+---
+
+## 5. Conflict Resolution & Matching Engine
+
+### 60-Second Clock Skew Buffer
+- `< 60s diff`: deterministic merge (`maxOf(local.progress, remote.progress)`)
+- `remote newer`: pull from remote
+- `local newer`: push to remote
+
+### 3-Tier Matcher
+1. `anilistListEntryId` or `sourceUrl`
+2. Normalized title index (computed on `Dispatchers.Default`)
+3. Category match + tie-break by latest `dateAdded`
+
+---
+
+## 6. MALSync Engine & Progress UI
+
+### 6.1 Paginated Query
+```graphql
+query ($userName: String, $type: MediaType, $page: Int) {
+  Page(page: $page, perPage: 100) {
+    pageInfo { hasNextPage }
+    mediaList(userName: $userName, type: $type) { ... }
+  }
+}
+```
+
+### 6.2 Sync Progress States
+`Fetching` → `Analyzing` → `Syncing(X/Y, title)` → `Completed(report)` | `Error(message)`
+
+### 6.3 Sync Report
+`AnilistSyncReport` with `SyncReportItem` per-item field diffs rendered by `SyncReportCard.kt`.
+
+### 6.4 Cover Image & Performance
+- `CoverImage.kt` uses `coverImageUrl` when local `coverImagePath` is empty
+- Grid sorting/filtering offloaded to `Dispatchers.Default`
+
+---
+
+## 7. Verification & Tests
+
+- `AnilistApiTest.kt` — MALSync Page query deserialization, `GraphQLError` parsing
+- `AnilistSyncManagerTest.kt` — `performFullSyncFlow()` state sequence emissions
+- `AnilistSyncConflictTest.kt` — conflict resolution edge cases
+- `ScoreConverterTest.kt` — all 5 format conversions
+- `TitleNormalizerTest.kt` — normalization edge cases
+- `Migration2To3Test.kt` — schema migration with score multiplier
+- `./gradlew test` → `BUILD SUCCESSFUL` (100% Passed)
+- Live hardware test: 1,068 items synced
+
+---
+
+## 8. Komikku Extended UI Framework
+
+### Phase 1: Theme Engine ✅
+- Ported Komikku's dynamic theme schemes into LazyDex
+- Integrated Amoled pure dark mode and Material3 color schemes
+
+### Phase 2: Direct-Port UI Composables ✅
+- `KomikkuMangaInfoHeader.kt` — blurred cover backdrop, poster art, title/author, action row
+- `KomikkuNamespaceTags.kt` — FlowRow chip container with namespace-grouped tags
+- `CollapsibleBox.kt` — expandable synopsis with height animation (aliased as `KomikkuCollapsibleBox`)
+- `KomikkuMangaNotesSection.kt` — personal notes section with markdown
+- `KomikkuMangaCoverDialog.kt` — full-screen cover zoom preview
+
+### Phase 3: Edit Interaction Model ✅
+- Zero `OutlinedTextField` clutter in read mode
+- Popup edit modals for Title, Author, Progress, Synopsis, Tags, Notes
+- `TrackerBottomSheet.kt` — 2-grid card container for Status, Progress, Score, Volumes, Visibility
+
+### Phase 4: Future Items ⏳
+- VerticalFastScroller, AdaptiveSheet, WheelPicker, multi-selection bulk actions
+
+### Phase 5: Parity & Release ⏳
+- End-to-end UI parity audit, performance verification, release APK
+
+---
+
+## 9. Code References (Archived Implementation)
+
+All code was implemented in branch `origin/dev` (v0.0.3 work, now archived in git history):
+
+| Commit | Description | Key Files |
+|--------|-------------|-----------|
+| `0f7e1a2` | Mihon tracking UI + DB migration | `AnilistApi.kt`, `AnilistInterceptor.kt`, `AnilistRateLimiter.kt`, `AnilistSyncManager.kt`, `AnilistSyncQueueWorker.kt`, `AnilistTokenStore.kt`, `TrackLoginActivity.kt`, `ScoreFormat.kt`, `LazyDexDatabase.kt` (Migration2To3), `MediaItemEntity.kt`, `TrackerBottomSheet.kt` |
+| `6789c37` | Fix AniList client ID | `TrackLoginActivity.kt` |
+| `0b14c3f` | Fix auth URL alignment | `TrackLoginActivity.kt`, `AnilistApi.kt` |
+| `a542fe6` | Fix scaffold insets | `UnifiedAddEditScreen.kt` |
+| `5fde693` | Komikku details UI | `KomikkuMangaInfoHeader.kt`, `KomikkuNamespaceTags.kt`, `CollapsibleBox.kt`, `KomikkuMangaNotesSection.kt`, `KomikkuMangaCoverDialog.kt`, `TrackerBottomSheet.kt`, `DotSeparatorText.kt` |
+| `21688a9` | MALSync + sync report + perf | `AnilistApi.kt`, `AnilistSyncManager.kt`, `SyncReportCard.kt`, `CoverImage.kt`, `TrackingSettingsScreen.kt`, `DataAndStorageScreen.kt`, `SettingsViewModel.kt`, `DexViewModel.kt` |
+
+Tests: `AnilistApiTest.kt`, `AnilistSyncManagerTest.kt`, `AnilistSyncConflictTest.kt`, `ScoreConverterTest.kt`, `TitleNormalizerTest.kt`, `Migration2To3Test.kt`
