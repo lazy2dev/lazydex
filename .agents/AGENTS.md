@@ -33,8 +33,9 @@ Local-only Android media tracker for Novels, Anime, Manga, Games, Movies, TV. No
 
 ## Context Routing
 
-- **Design specs**: `.agents/design/` — per-screen specs, components, theme, navigation
-- **Active plans**: `.agents/plans/` — current implementation plans
+- **Design**: `.agents/design/design.md` — design philosophy, color palette, component reference
+- **Plans**: `.agents/plans/` — version plans (v0.0.1 through v0.0.6)
+- **Prompts**: `.agents/prompts/` — reusable AI review/audit prompts
 - **Reference**: `.agents/reference/` — external UI references
 - **Archived**: `.agents/archived/` — completed/superseded docs
 - **Knowledge graph**: `graphify-out/` — run `/graphify` to rebuild
