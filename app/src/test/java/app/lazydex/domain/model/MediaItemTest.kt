@@ -41,4 +41,26 @@ class MediaItemTest {
         assertNull(item.startDate) // Invalid negative timestamp cleared
         assertEquals(1600000000000L, item.endDate)
     }
+
+    @Test
+    fun extraData_storesArbitraryMetadataAndParsesTrackerIds() {
+        val baseItem = MediaItem(
+            id = "test-123",
+            category = MediaCategory.ANIME,
+            title = "Frieren",
+            currentProgress = 28,
+            totalItems = 28,
+            userStatus = UserStatus.COMPLETED,
+            lastUpdated = 100L,
+            dateAdded = 100L
+        )
+
+        val withAniList = baseItem.withExtra("anilist_id", "154587")
+        assertEquals(154587L, withAniList.anilistId)
+        assertEquals("154587", withAniList.getExtra("anilist_id"))
+
+        val withSteam = withAniList.withExtra("steam_id", "1091500")
+        assertEquals(154587L, withSteam.anilistId)
+        assertEquals("1091500", withSteam.getExtra("steam_id"))
+    }
 }

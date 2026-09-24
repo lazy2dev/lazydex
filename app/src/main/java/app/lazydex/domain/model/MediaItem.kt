@@ -23,8 +23,40 @@ data class MediaItem(
     val startDate: Long? = null,
     val endDate: Long? = null,
     val lastUpdated: Long,       // System.currentTimeMillis()
-    val dateAdded: Long          // System.currentTimeMillis() on creation (stable sort)
+    val dateAdded: Long,         // System.currentTimeMillis() on creation (stable sort)
+    val extraData: String = "{}", // Extensible future-proof JSON payload (tracker IDs, custom metadata)
+    val isDeleted: Boolean = false // Soft-delete tombstone for sync
 ) {
+    val anilistId: Long? get() = getExtra("anilist_id")?.toLongOrNull()
+    val malId: Long? get() = getExtra("mal_id")?.toLongOrNull()
+    val simklId: Long? get() = getExtra("simkl_id")?.toLongOrNull()
+
+    fun getExtra(key: String): String? {
+        if (extraData.isBlank() || extraData == "{}") return null
+        return try {
+            val pattern = Regex(""""${Regex.escape(key)}"\s*:\s*"([^"]*)"""")
+            pattern.find(extraData)?.groupValues?.get(1)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun withExtra(key: String, value: String): MediaItem {
+        val currentMap = parseExtraMap().toMutableMap()
+        currentMap[key] = value
+        val json = currentMap.entries.joinToString(
+            prefix = "{",
+            postfix = "}",
+            separator = ","
+        ) { "\"${it.key}\":\"${it.value.replace("\"", "\\\"")}\"" }
+        return copy(extraData = json)
+    }
+
+    private fun parseExtraMap(): Map<String, String> {
+        if (extraData.isBlank() || extraData == "{}") return emptyMap()
+        val regex = Regex(""""([^"]+)"\s*:\s*"([^"]*)"""")
+        return regex.findAll(extraData).associate { it.groupValues[1] to it.groupValues[2] }
+    }
     /**
      * Canonical normalization — run before EVERY write (add, update, import, merge).
      * - Trims whitespace from title, sourceUrl, coverImagePath, coverImageUrl, notes, author, description

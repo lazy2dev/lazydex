@@ -28,12 +28,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.ViewList
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.material3.Text
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.StatusFilter
 import app.lazydex.ui.components.EmptyState
 import app.lazydex.ui.components.FilterSheet
@@ -67,18 +82,61 @@ fun DexScreen(
             uiState.maxRating != null ||
             uiState.dateRangeStart != null
 
+    val categories = remember {
+        listOf(
+            null to "All",
+            MediaCategory.NOVEL to "Novels",
+            MediaCategory.MANGA to "Manga",
+            MediaCategory.ANIME to "Anime",
+            MediaCategory.GAME to "Games",
+            MediaCategory.MOVIE to "Movies",
+            MediaCategory.TV to "TV"
+        )
+    }
+
+    val selectedTabIndex = remember(uiState.selectedCategory) {
+        val idx = categories.indexOfFirst { it.first == uiState.selectedCategory }
+        if (idx >= 0) idx else 0
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Library",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.padding(horizontal = 2.dp)
+                        ) {
+                            Text(
+                                text = "${uiState.totalCount}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                },
+                actions = {
                     StatusDropdown(
                         selectedStatus = uiState.selectedStatus,
                         selectedCategory = uiState.selectedCategory,
                         perStatusCounts = uiState.perStatusCounts,
                         onSelectStatus = { viewModel.selectStatus(it) }
                     )
-                },
-                actions = {
+                    IconButton(onClick = { isGridView = !isGridView }) {
+                        Icon(
+                            imageVector = if (isGridView) Icons.Default.ViewList else Icons.Default.GridView,
+                            contentDescription = "Toggle Grid/List View"
+                        )
+                    }
                     IconButton(onClick = { showFilterSheet = true }) {
                         Icon(
                             imageVector = Icons.Default.FilterList,
@@ -100,6 +158,57 @@ fun DexScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            // Komikku-style Category Tab Row with Item Counts
+            ScrollableTabRow(
+                selectedTabIndex = selectedTabIndex,
+                edgePadding = 12.dp,
+                containerColor = MaterialTheme.colorScheme.background,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                indicator = { tabPositions ->
+                    if (selectedTabIndex < tabPositions.size) {
+                        TabRowDefaults.SecondaryIndicator(
+                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
+                divider = {}
+            ) {
+                categories.forEachIndexed { index, pair ->
+                    val cat = pair.first
+                    val label = pair.second
+                    val isSelected = selectedTabIndex == index
+                    val count = if (cat == null) uiState.totalCount else (uiState.perCategoryCounts[cat] ?: 0)
+                    Tab(
+                        selected = isSelected,
+                        onClick = { viewModel.selectCategory(cat) },
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = label,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (count > 0) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                    ) {
+                                        Text(
+                                            text = "$count",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    )
+                }
+            }
             // Genre & Tag chip rows (visible when available)
             if (uiState.availableGenres.isNotEmpty()) {
                 GenreChipRow(

@@ -104,4 +104,36 @@ class BackupProcessorV2Test {
         assertEquals(listOf("Monsters"), merged.tags)
         assertEquals(1600000000000L, merged.startDate)
     }
+
+    @Test
+    fun merge_forwardOnlyProgress_neverRegressesProgress() = runTest {
+        // Device A (Local) read chapter 50 offline
+        val localItem = MediaItem(
+            id = "item-1",
+            category = MediaCategory.MANGA,
+            title = "One Piece",
+            currentProgress = 50,
+            totalItems = 1100,
+            userStatus = UserStatus.READING,
+            lastUpdated = 1600000000000L,
+            dateAdded = 1500000000000L
+        )
+
+        // Device B (Imported backup) was synced earlier with chapter 40, but has newer timestamp
+        val importedItem = MediaItem(
+            id = "item-1",
+            category = MediaCategory.MANGA,
+            title = "One Piece",
+            currentProgress = 40,
+            totalItems = 1100,
+            userStatus = UserStatus.READING,
+            lastUpdated = 1700000000000L,
+            dateAdded = 1500000000000L
+        )
+
+        val result = BackupProcessor.merge(listOf(localItem), listOf(importedItem), 2)
+        assertEquals(1, result.mergedItems.size)
+        // Progress must stay at 50, never regress to 40!
+        assertEquals(50, result.mergedItems[0].currentProgress)
+    }
 }

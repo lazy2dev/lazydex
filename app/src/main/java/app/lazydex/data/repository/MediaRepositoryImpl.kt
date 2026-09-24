@@ -190,7 +190,7 @@ class MediaRepositoryImpl(
     }
 
     override suspend fun delete(id: String): Unit = withContext(Dispatchers.IO) {
-        dao.deleteById(id)
+        dao.softDelete(id, System.currentTimeMillis())
         try {
             val coverFile = File(localCoversDir, id)
             if (coverFile.exists()) {
@@ -304,7 +304,9 @@ class MediaRepositoryImpl(
                 startDate = startDate,
                 endDate = endDate,
                 lastUpdated = lastUpdated,
-                dateAdded = dateAdded
+                dateAdded = dateAdded,
+                extraData = extraData,
+                isDeleted = isDeleted
             )
         } catch (e: Exception) {
             null
@@ -335,7 +337,9 @@ class MediaRepositoryImpl(
             startDate = startDate,
             endDate = endDate,
             lastUpdated = lastUpdated,
-            dateAdded = dateAdded
+            dateAdded = dateAdded,
+            extraData = extraData,
+            isDeleted = isDeleted
         )
     }
 }

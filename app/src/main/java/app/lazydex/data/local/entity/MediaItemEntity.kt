@@ -7,7 +7,10 @@ import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "media_items",
-    indices = [Index(value = ["sourceUrl"], unique = true)]
+    indices = [
+        Index(value = ["sourceUrl"], unique = true),
+        Index(value = ["isDeleted"])
+    ]
 )
 data class MediaItemEntity(
     @PrimaryKey val id: String,
@@ -29,6 +32,8 @@ data class MediaItemEntity(
     val startDate: Long? = null,
     val endDate: Long? = null,
     val lastUpdated: Long,
-    val dateAdded: Long
+    val dateAdded: Long,
+    @ColumnInfo(defaultValue = "{}") val extraData: String = "{}",
+    @ColumnInfo(defaultValue = "0") val isDeleted: Boolean = false
 )
 

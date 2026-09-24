@@ -37,7 +37,9 @@ data class MediaItemBackupDto(
     val startDate: Long? = null,
     val endDate: Long? = null,
     val lastUpdated: Long? = null,
-    val dateAdded: Long? = null
+    val dateAdded: Long? = null,
+    val extraData: String? = null,
+    val isDeleted: Boolean? = null
 )
 
 data class DeserializedBackup(
@@ -97,26 +99,39 @@ object BackupProcessor {
                 result[newItem.id] = newItem
                 coverIdsToRestore.add(importedItem.id)
             } else {
-                // Conflict: Resolve who is newer
+                // Conflict: Resolve who is newer with forward-only progress protection
+                val forwardProgress = maxOf(existingLocal.currentProgress, importedItem.currentProgress)
+
                 if (importedItem.lastUpdated > existingLocal.lastUpdated) {
                     val winningItem = if (importedSchemaVersion < 2) {
                         // Legacy v1 backup merge: preserve local v2 metadata if imported lacks it
                         importedItem.copy(
                             id = existingLocal.id,
+                            currentProgress = forwardProgress,
                             genres = importedItem.genres.ifEmpty { existingLocal.genres },
                             tags = importedItem.tags.ifEmpty { existingLocal.tags },
                             author = importedItem.author.ifBlank { existingLocal.author },
                             description = importedItem.description.ifBlank { existingLocal.description },
                             startDate = importedItem.startDate ?: existingLocal.startDate,
-                            endDate = importedItem.endDate ?: existingLocal.endDate
+                            endDate = importedItem.endDate ?: existingLocal.endDate,
+                            extraData = if (importedItem.extraData.isNotBlank() && importedItem.extraData != "{}") importedItem.extraData else existingLocal.extraData
                         ).normalize()
                     } else {
-                        // v2 to v2 merge: take imported as-is (respects user edits/clearing)
-                        importedItem.copy(id = existingLocal.id).normalize()
+                        // v2 to v2 merge: take imported as-is (with forward-only progress)
+                        importedItem.copy(
+                            id = existingLocal.id,
+                            currentProgress = forwardProgress,
+                            notes = importedItem.notes.ifBlank { existingLocal.notes }
+                        ).normalize()
                     }
 
                     result[existingLocal.id] = winningItem
                     coverIdsToRestore.add(importedItem.id)
+                } else {
+                    // Local is newer: still ensure forward progress is preserved
+                    if (forwardProgress > existingLocal.currentProgress) {
+                        result[existingLocal.id] = existingLocal.copy(currentProgress = forwardProgress)
+                    }
                 }
             }
         }
@@ -146,7 +161,9 @@ object BackupProcessor {
         startDate = startDate,
         endDate = endDate,
         lastUpdated = lastUpdated,
-        dateAdded = dateAdded
+        dateAdded = dateAdded,
+        extraData = extraData.takeIf { it.isNotBlank() && it != "{}" },
+        isDeleted = if (isDeleted) true else null
     )
 
     private fun MediaItemBackupDto.toDomain(): MediaItem? {
@@ -178,7 +195,9 @@ object BackupProcessor {
             startDate = startDate,
             endDate = endDate,
             lastUpdated = safeLastUpdated,
-            dateAdded = safeDateAdded
+            dateAdded = safeDateAdded,
+            extraData = extraData ?: "{}",
+            isDeleted = isDeleted ?: false
         ).normalize()
     }
 
