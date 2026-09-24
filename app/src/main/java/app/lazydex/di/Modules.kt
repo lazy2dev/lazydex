@@ -4,6 +4,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import app.lazydex.data.local.LazyDexDatabase
+import app.lazydex.data.local.MIGRATION_1_2
+import app.lazydex.data.local.MIGRATION_2_3
 import app.lazydex.data.local.ThemePreferences
 import app.lazydex.data.repository.MediaRepositoryImpl
 import app.lazydex.domain.repository.MediaRepository
@@ -37,7 +39,7 @@ val databaseModule = module {
             "lazydex_db"
         )
         .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-        .addMigrations(LazyDexDatabase.MIGRATION_1_2)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
         .fallbackToDestructiveMigration()
         .addCallback(object : RoomDatabase.Callback() {
             override fun onDestructiveMigration(db: SupportSQLiteDatabase) {
@@ -124,16 +126,11 @@ val viewModelModule = module {
     }
 }
 
-val syncModule = module {
-    single { app.lazydex.data.sync.InboundHarvester(dao = get(), client = get()) }
-}
-
 val appModule = listOf(
     databaseModule,
     repositoryModule,
     preferencesModule,
     scraperModule,
     storageModule,
-    syncModule,
     viewModelModule
 )

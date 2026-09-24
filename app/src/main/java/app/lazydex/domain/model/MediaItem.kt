@@ -1,6 +1,14 @@
 package app.lazydex.domain.model
 
 import app.lazydex.util.UrlNormalizer
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 data class MediaItem(
     val id: String,              // UUID string
@@ -34,28 +42,26 @@ data class MediaItem(
     fun getExtra(key: String): String? {
         if (extraData.isBlank() || extraData == "{}") return null
         return try {
-            val pattern = Regex(""""${Regex.escape(key)}"\s*:\s*"([^"]*)"""")
-            pattern.find(extraData)?.groupValues?.get(1)
+            val root = Json.parseToJsonElement(extraData).jsonObject
+            root[key]?.jsonPrimitive?.contentOrNull
         } catch (e: Exception) {
             null
         }
     }
 
     fun withExtra(key: String, value: String): MediaItem {
-        val currentMap = parseExtraMap().toMutableMap()
-        currentMap[key] = value
-        val json = currentMap.entries.joinToString(
-            prefix = "{",
-            postfix = "}",
-            separator = ","
-        ) { "\"${it.key}\":\"${it.value.replace("\"", "\\\"")}\"" }
+        val json = try {
+            val current = if (extraData.isNotBlank() && extraData != "{}") {
+                Json.parseToJsonElement(extraData).jsonObject.toMutableMap()
+            } else {
+                mutableMapOf()
+            }
+            current[key] = JsonPrimitive(value)
+            JsonObject(current).toString()
+        } catch (e: Exception) {
+            buildJsonObject { put(key, value) }.toString()
+        }
         return copy(extraData = json)
-    }
-
-    private fun parseExtraMap(): Map<String, String> {
-        if (extraData.isBlank() || extraData == "{}") return emptyMap()
-        val regex = Regex(""""([^"]+)"\s*:\s*"([^"]*)"""")
-        return regex.findAll(extraData).associate { it.groupValues[1] to it.groupValues[2] }
     }
     /**
      * Canonical normalization — run before EVERY write (add, update, import, merge).

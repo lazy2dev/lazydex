@@ -103,34 +103,14 @@ fun DexScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "Library",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.padding(horizontal = 2.dp)
-                        ) {
-                            Text(
-                                text = "${uiState.totalCount}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                },
-                actions = {
                     StatusDropdown(
                         selectedStatus = uiState.selectedStatus,
                         selectedCategory = uiState.selectedCategory,
                         perStatusCounts = uiState.perStatusCounts,
                         onSelectStatus = { viewModel.selectStatus(it) }
                     )
+                },
+                actions = {
                     IconButton(onClick = { isGridView = !isGridView }) {
                         Icon(
                             imageVector = if (isGridView) Icons.Default.ViewList else Icons.Default.GridView,

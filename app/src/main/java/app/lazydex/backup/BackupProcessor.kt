@@ -120,8 +120,7 @@ object BackupProcessor {
                         // v2 to v2 merge: take imported as-is (with forward-only progress)
                         importedItem.copy(
                             id = existingLocal.id,
-                            currentProgress = forwardProgress,
-                            notes = importedItem.notes.ifBlank { existingLocal.notes }
+                            currentProgress = forwardProgress
                         ).normalize()
                     }
 

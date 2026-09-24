@@ -62,5 +62,11 @@ class MediaItemTest {
         val withSteam = withAniList.withExtra("steam_id", "1091500")
         assertEquals(154587L, withSteam.anilistId)
         assertEquals("1091500", withSteam.getExtra("steam_id"))
+
+        // Numeric JSON value support
+        val numericItem = baseItem.copy(extraData = "{\"anilist_id\": 154587, \"mal_id\": 52991}")
+        assertEquals(154587L, numericItem.anilistId)
+        assertEquals(52991L, numericItem.malId)
+        assertEquals("154587", numericItem.getExtra("anilist_id"))
     }
 }
