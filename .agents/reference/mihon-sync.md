@@ -1,8 +1,7 @@
 # Mihon AniList Sync — Architecture Reference
 
 > Extracted from `mihonapp/mihon` GitHub source (main branch, 2026).
-> Purpose: Reference for replicating the same patterns in LazyDex.
-> Main plan: [`v0.0.4.md`](../plans/v0.0.4.md) | API reference: [`anilist-api.md`](anilist-api.md) | DB migration: [`room-migration-v3.md`](room-migration-v3.md)
+> Related: [`anilist-api.md`](anilist-api.md)
 
 ---
 

@@ -15,8 +15,7 @@
 .externalNativeBuild
 .cxx
 .kotlin/
-graphify-out/
+.tmp/
 *.bak
 *.tmp
 /app/schemas/*/
-nul

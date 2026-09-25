@@ -198,52 +198,13 @@ jobs:
           tag_name: ${{ needs.prepare-build.outputs.VERSION_TAG }}
           name: LazyDex ${{ needs.prepare-build.outputs.VERSION_TAG }}
           body: |
-            You are a release notes generator. Given a list of raw git commit messages below, produce structured release notes following this format.
+            ## LazyDex ${{ needs.prepare-build.outputs.VERSION_TAG }}
 
-            ## Rules
-
-            1. Categorize every commit into ONE of these sections (output in this order):
-               - ✨ **New** — Added, Introduced, Implemented, Created (brand-new additions)
-               - 🧩 **Fixes** — Fixed, Resolved, Corrected, Patched (bug fixes)
-               - ⚙️ **Changes** — Changed, Renamed, Updated, Switched, Removed, Configured, Migrated, Refactored (modifications to existing)
-               - 🚀 **Improvements** — Improved, Enhanced, Optimized (enhancements to existing features)
-
-            2. Each bullet starts with a past-tense verb listed above for its section.
-
-            3. End every bullet with author attribution: (@user).
-
-            4. Merge similar commits by same author. Remove noise (typo fixes, formatting, merge commits, wip/tmp).
-
-            5. Sort within each section: most user-impactful first.
-
-            6. Omit any section with zero items.
-
-            7. Start with a `##` heading followed by a brief 1-sentence summary of what this release does and why.
-
-            8. End with a `### 📜 **Full Changelog**` section containing a blockquote link: `> [owner/repo@prev...tag](https://github.com/owner/repo/compare/prev...tag)`
-
-            ## Output format
-
-            ## <1-sentence summary>
-
-            ### ✨ **New**
-            - <Verb> <what> (@user)
-
-            ### 🧩 **Fixes**
-            - Fixed <what> (@user)
-
-            ### ⚙️ **Changes**
-            - <Verb> <what> (@user)
-
-            ### 🚀 **Improvements**
-            - <Verb> <what> (@user)
-
-            ### 📜 **Full Changelog**
-            > [owner/repo@prev...tag](https://github.com/owner/repo/compare/prev...tag)
-
-            ## Raw commits
-
+            ### 📜 Changes
             ${{ needs.prepare-build.outputs.COMMIT_LOGS }}
+
+            ### 🔗 Full Changelog
+            > https://github.com/lazy2dev/lazydex/compare/${{ needs.prepare-build.outputs.PREV_TAG_NAME }}...${{ needs.prepare-build.outputs.VERSION_TAG }}
           files: |
             lazydex-${{ needs.prepare-build.outputs.VERSION_TAG }}.apk
           draft: true

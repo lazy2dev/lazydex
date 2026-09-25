@@ -9,7 +9,7 @@ Local-only Android media tracker for Novels, Anime, Manga, Games, Movies, TV. No
 | Language | Kotlin |
 | UI | Jetpack Compose + Material3 |
 | DI | Koin (no annotation processing) |
-| DB | Room SQLite (v2, Flow, WAL) |
+| DB | Room SQLite (v3, Flow, WAL) |
 | Networking | OkHttp 4.x + Jsoup |
 | Images | Coil v3 (local files, not URLs) |
 | Serialization | kotlinx.serialization |
@@ -18,23 +18,25 @@ Local-only Android media tracker for Novels, Anime, Manga, Games, Movies, TV. No
 | Unit Tests | JUnit 5 Jupiter + MockK + Turbine |
 | UI Tests | JUnit 4 + ComposeTestRule (via android-junit5 bridge) |
 
-## Commands
+## Development Workflow
 
-- `./gradlew test` — unit tests
-- `./gradlew assembleDebug` — debug APK
-- `./gradlew lint` — Android lint
+- **Branching**: `dev` for active feature development; `main` for release tags.
+- **Verification**: Run `./gradlew testDebugUnitTest` and `./gradlew assembleDebug` before pushing.
+- **Version Bumps**: Set `versionCode` (+1) and `versionName` in `app/build.gradle.kts`.
+- **Database Migrations**: Add explicit `Migration(N, N+1)` in `LazyDexDatabase.kt`. Keep Room schema export enabled.
 
-## Knowledge Graph (graphify)
+## Key Commands
 
-- `/graphify` — rebuild full graph
-- `/graphify --update` — incremental re-extract
-- `/graphify query "X to Y"` — ask relationship questions
-- Output: `graphify-out/graph.html`, `graph.json`, `GRAPH_REPORT.md`
+- `./gradlew testDebugUnitTest` — run all unit tests
+- `./gradlew assembleDebug` — build debug APK
+- `./gradlew lint` — run Android lint
 
 ## Context Routing
 
-- **Reference**: `.agents/reference/` — external UI references
-- **Knowledge graph**: `graphify-out/` — run `/graphify` to rebuild
+- **Reference Documentation**: `.agents/reference/`
+  - `anilist-api.md` — AniList GraphQL queries, mutations, OAuth, rate limiting
+  - `mihon-sync.md` — Tracker sync patterns and score conversion
+  - `mihon-ui.md` — UI layout and component visual references
 
 ## Non-Goals
 

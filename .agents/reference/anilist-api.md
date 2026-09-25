@@ -3,8 +3,7 @@
 > Endpoint: `POST https://graphql.anilist.co`  
 > Auth: `Authorization: Bearer {access_token}`  
 > Content-Type: `application/json`  
-> Rate limit: 90 requests per minute (we use 85 with OkHttp interceptor & 429 Retry-After backoff)  
-> Main plan: [`index.md`](index.md) | Mihon reference: [`mihon-reference.md`](mihon-reference.md) | DB migration: [`db-migration.md`](db-migration.md)
+> Related: [`mihon-sync.md`](mihon-sync.md)
 
 ---
 
