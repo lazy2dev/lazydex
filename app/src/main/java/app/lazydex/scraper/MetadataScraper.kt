@@ -5,7 +5,6 @@ import app.lazydex.scraper.source.SourceRegistry
 import app.lazydex.util.UrlNormalizer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
@@ -13,10 +12,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import okhttp3.Dns
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.OkHttpClient
-import okio.Buffer
-import okio.ForwardingSource
-import okio.Source
 import java.io.IOException
 import java.net.InetAddress
 
@@ -36,7 +31,6 @@ class SafeDns : Dns {
 }
 
 class MetadataScraper(
-    private val okHttpClient: OkHttpClient,
     private val sourceRegistry: SourceRegistry
 ) {
 
@@ -71,19 +65,5 @@ class MetadataScraper(
         val host = url.toHttpUrlOrNull()?.host ?: return false
         if (host.matches(Regex("""^(\d{1,3}\.){3}\d{1,3}$""")) || host.startsWith("[") && host.endsWith("]")) return false
         return true
-    }
-}
-
-private const val MAX_SCRAPE_BYTES = 5L * 1024 * 1024
-
-class SizeLimitedSource(delegate: Source, private val maxBytes: Long) : ForwardingSource(delegate) {
-    private var totalRead = 0L
-    override fun read(sink: Buffer, byteCount: Long): Long {
-        val result = super.read(sink, byteCount)
-        if (result != -1L) {
-            totalRead += result
-            if (totalRead > maxBytes) throw IOException("Response size limit of $maxBytes bytes exceeded")
-        }
-        return result
     }
 }

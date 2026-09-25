@@ -85,8 +85,7 @@ class UnifiedAddEditViewModel(
     private val repository: MediaRepository,
     private val scraper: MetadataScraper,
     private val okHttpClient: OkHttpClient,
-    private val cacheDir: File,
-    private val localCoversDir: File
+    private val cacheDir: File
 ) : ViewModel() {
 
     private val itemId: String? = savedStateHandle["itemId"]

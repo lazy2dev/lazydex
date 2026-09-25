@@ -19,7 +19,6 @@ jsoup = "1.18.1"
 coil = "3.0.0-rc01"
 kotlinxSerializationJson = "1.7.3"
 datastore = "1.1.1"
-work = "2.10.0"
 navigation = "2.8.4"
 
 [libraries]
@@ -54,7 +53,6 @@ coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" 
 coil-network = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
-androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }

@@ -25,7 +25,7 @@ import app.lazydex.ui.settings.SettingsViewModel
 import app.lazydex.ui.statistics.StatisticsViewModel
 import okhttp3.OkHttpClient
 import org.koin.android.ext.koin.androidContext
-import org.koin.androidx.viewmodel.dsl.viewModel
+import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import java.io.File
@@ -95,7 +95,7 @@ val scraperModule = module {
             )
         )
     }
-    single { MetadataScraper(get(), get()) }
+    single { MetadataScraper(get()) }
 }
 
 val storageModule = module {
@@ -113,8 +113,7 @@ val viewModelModule = module {
             repository = get(),
             scraper = get(),
             okHttpClient = get(),
-            cacheDir = get(named("cacheDir")),
-            localCoversDir = get(named("coversDir"))
+            cacheDir = get(named("cacheDir"))
         )
     }
     viewModel {

@@ -77,7 +77,7 @@ import app.lazydex.domain.model.UserStatus
 import app.lazydex.ui.components.AltTitleEditor
 import app.lazydex.ui.components.CoverImage
 import app.lazydex.ui.components.StarRating
-import app.lazydex.ui.components.formatDate
+import app.lazydex.util.formatDate
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

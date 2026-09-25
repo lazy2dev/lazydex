@@ -53,6 +53,7 @@ data class MergeResult(
 )
 
 object BackupProcessor {
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     val backupJson = Json {
         ignoreUnknownKeys = true
         decodeEnumsCaseInsensitive = true

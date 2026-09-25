@@ -108,10 +108,6 @@ class MediaRepositoryImpl(
         dao.getAll().mapNotNull { it.toDomain() }
     }
 
-    override suspend fun existsByUrl(url: String): Boolean = withContext(Dispatchers.IO) {
-        dao.existsByUrl(url)
-    }
-
     override suspend fun add(item: MediaItem): MediaItem = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val finalId = UUID.randomUUID().toString()
@@ -201,44 +197,6 @@ class MediaRepositoryImpl(
         }
     }
 
-    override suspend fun incrementProgress(id: String): Unit = withContext(Dispatchers.IO) {
-        val existing = dao.getById(id)?.toDomain() ?: return@withContext
-        val total = existing.totalItems
-        val newProgress = if (total != null && total >= 0) minOf(existing.currentProgress + 1, total) else existing.currentProgress + 1
-        val isNowCompleted = total != null && newProgress >= total
-        val updatedStatus = if (isNowCompleted) UserStatus.COMPLETED else existing.userStatus
-        val updatedItem = applyAutoDates(existing.copy(
-            currentProgress = newProgress,
-            userStatus = updatedStatus,
-            lastUpdated = System.currentTimeMillis()
-        ))
-        dao.upsert(updatedItem.normalize().toEntity())
-    }
-
-    override suspend fun decrementProgress(id: String): Unit = withContext(Dispatchers.IO) {
-        val existing = dao.getById(id)?.toDomain() ?: return@withContext
-        val newProgress = maxOf(existing.currentProgress - 1, 0)
-        val total = existing.totalItems
-        val isWasCompleted = existing.userStatus == UserStatus.COMPLETED
-        val isNowBelowTotal = total != null && newProgress < total
-        val updatedStatus = if (isWasCompleted && isNowBelowTotal) categoryDefaultInProgress(existing.category) else existing.userStatus
-        val updatedItem = applyAutoDates(existing.copy(
-            currentProgress = newProgress,
-            userStatus = updatedStatus,
-            lastUpdated = System.currentTimeMillis()
-        ))
-        dao.upsert(updatedItem.normalize().toEntity())
-    }
-
-    override suspend fun setStatus(id: String, status: UserStatus): Unit = withContext(Dispatchers.IO) {
-        val existing = dao.getById(id)?.toDomain() ?: return@withContext
-        val updated = applyAutoDates(existing.copy(
-            userStatus = status,
-            lastUpdated = System.currentTimeMillis()
-        ))
-        dao.upsert(updated.normalize().toEntity())
-    }
-
     override suspend fun replaceAll(items: List<MediaItem>): Unit = withContext(Dispatchers.IO) {
         try {
             val entities = items.map { applyAutoDates(it).normalize().toEntity() }
@@ -267,14 +225,6 @@ class MediaRepositoryImpl(
                 else -> item.endDate
             }
         )
-    }
-
-    private fun categoryDefaultInProgress(category: MediaCategory): UserStatus {
-        return when (category) {
-            MediaCategory.NOVEL, MediaCategory.MANGA -> UserStatus.READING
-            MediaCategory.ANIME, MediaCategory.MOVIE, MediaCategory.TV -> UserStatus.WATCHING
-            MediaCategory.GAME -> UserStatus.PLAYING
-        }
     }
 
     private fun MediaItemEntity.toDomain(): MediaItem? {
