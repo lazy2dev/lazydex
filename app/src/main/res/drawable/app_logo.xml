@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Seamless dark background with rounded corners (rx=24) -->
+    <path
+        android:fillColor="#0B0F17"
+        android:pathData="M24,0 L76,0 C89.255,0 100,10.745 100,24 L100,76 C100,89.255 89.255,100 76,100 L24,100 C10.745,100 0,89.255 0,76 L0,24 C0,10.745 10.745,0 24,0 Z" />
+
+    <!-- Stylized 'L' Glyph with violet/purple gradient -->
+    <path
+        android:pathData="M18,16 C18,13.7909 19.7909,12 22,12 H36 C38.2091,12 40,13.7909 40,16 V58 C40,60.2091 41.7909,62 44,62 H80 C82.2091,62 84,63.7909 84,66 V78 C84,81.3137 81.3137,84 78,84 H24 C20.6863,84 18,81.3137 18,78 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="18"
+                android:startY="16"
+                android:endX="82"
+                android:endY="84"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFA855F7" />
+                <item android:offset="0.6" android:color="#FF8B5CF6" />
+                <item android:offset="1.0" android:color="#FF6366F1" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Drop shadow for the badge -->
+    <path
+        android:fillColor="#26000000"
+        android:pathData="M56,41 a14,14 0 1,0 28,0 a14,14 0 1,0 -28,0 Z" />
+    <path
+        android:fillColor="#4D000000"
+        android:pathData="M57,40 a13,13 0 1,0 26,0 a13,13 0 1,0 -26,0 Z" />
+
+    <!-- Cyan Accent Circle Badge -->
+    <path
+        android:pathData="M57,38 a13,13 0 1,0 26,0 a13,13 0 1,0 -26,0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="56"
+                android:startY="26"
+                android:endX="84"
+                android:endY="54"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FF22D3EE" />
+                <item android:offset="1.0" android:color="#FF06B6D4" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Dark Checkmark -->
+    <path
+        android:pathData="M64,38 L68.5,42.5 L76.5,34"
+        android:strokeColor="#061320"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
+

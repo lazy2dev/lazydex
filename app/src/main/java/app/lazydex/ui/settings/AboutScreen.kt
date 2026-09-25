@@ -2,7 +2,7 @@ package app.lazydex.ui.settings
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -39,13 +40,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.lazydex.BuildConfig
+import app.lazydex.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,39 +95,14 @@ fun AboutScreen(
         ) {
             Spacer(modifier = Modifier.height(24.dp))
 
-            // ==================== APP LOGO CANVAS ====================
-            val primaryColor = MaterialTheme.colorScheme.primary
-            Canvas(modifier = Modifier.size(80.dp)) {
-                // Drawing a stylized Komikku glasses/infinity-C logo using vector arcs
-                val strokeWidth = 8.dp.toPx()
-                // Left ring of glasses
-                drawCircle(
-                    color = primaryColor,
-                    radius = size.width / 4.5f,
-                    center = center.copy(x = center.x - size.width / 4f),
-                    style = Stroke(width = strokeWidth)
-                )
-                // Right ring of glasses
-                drawCircle(
-                    color = primaryColor,
-                    radius = size.width / 4.5f,
-                    center = center.copy(x = center.x + size.width / 4f),
-                    style = Stroke(width = strokeWidth)
-                )
-                // Bridge arc between them
-                drawArc(
-                    color = primaryColor,
-                    startAngle = 180f,
-                    sweepAngle = 180f,
-                    useCenter = false,
-                    topLeft = center.copy(
-                        x = center.x - size.width / 6f,
-                        y = center.y - size.width / 6f
-                    ),
-                    size = size.copy(width = size.width / 3f, height = size.height / 5f),
-                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                )
-            }
+            // ==================== APP LOGO ====================
+            Image(
+                painter = painterResource(id = R.drawable.app_logo),
+                contentDescription = "LazyDex Beta Logo",
+                modifier = Modifier
+                    .size(88.dp)
+                    .clip(RoundedCornerShape(20.dp))
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
