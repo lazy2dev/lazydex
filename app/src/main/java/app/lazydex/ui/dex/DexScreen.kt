@@ -54,7 +54,6 @@ import app.lazydex.ui.components.EmptyState
 import app.lazydex.ui.components.FilterSheet
 import app.lazydex.ui.components.GenreChipRow
 import app.lazydex.ui.components.MediaCard
-import app.lazydex.ui.components.StatusDropdown
 import app.lazydex.ui.components.TagChipRow
 import kotlinx.coroutines.launch
 
@@ -103,20 +102,31 @@ fun DexScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    StatusDropdown(
-                        selectedStatus = uiState.selectedStatus,
-                        selectedCategory = uiState.selectedCategory,
-                        perStatusCounts = uiState.perStatusCounts,
-                        onSelectStatus = { viewModel.selectStatus(it) }
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Dex",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp
+                        )
+                        if (uiState.showItemCount) {
+                            val count = if (uiState.selectedCategory == null) uiState.totalCount else (uiState.perCategoryCounts[uiState.selectedCategory] ?: 0)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Text(
+                                    text = "$count",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
                 },
                 actions = {
-                    IconButton(onClick = { isGridView = !isGridView }) {
-                        Icon(
-                            imageVector = if (isGridView) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
-                            contentDescription = "Toggle Grid/List View"
-                        )
-                    }
                     IconButton(onClick = { showFilterSheet = true }) {
                         Icon(
                             imageVector = Icons.Default.FilterList,
@@ -169,7 +179,7 @@ fun DexScreen(
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                     color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                if (count > 0) {
+                                if (uiState.showItemCount && count > 0) {
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Surface(
                                         shape = CircleShape,
@@ -305,6 +315,10 @@ fun DexScreen(
             onSetRatingRange = { min, max -> viewModel.setRatingRange(min, max) },
             onSelectSortField = { viewModel.selectSortField(it) },
             onSelectSortDirection = { viewModel.selectSortDirection(it) },
+            isGridView = isGridView,
+            onToggleGridView = { isGridView = it },
+            showItemCount = uiState.showItemCount,
+            onToggleShowItemCount = { viewModel.setShowItemCount(it) },
             onClearAll = { viewModel.clearFilters() }
         )
     }

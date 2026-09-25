@@ -17,6 +17,7 @@ class ThemePreferences(private val context: Context) {
         val THEME_MODE_KEY = stringPreferencesKey("theme_mode")
         val AMOLED_MODE_KEY = booleanPreferencesKey("amoled_mode")
         val COVER_THEMING_KEY = booleanPreferencesKey("cover_theming")
+        val SHOW_ITEM_COUNT_KEY = booleanPreferencesKey("show_item_count")
     }
 
     val themeMode: Flow<String> = context.dataStore.data.map { preferences ->
@@ -29,6 +30,10 @@ class ThemePreferences(private val context: Context) {
 
     val coverTheming: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[COVER_THEMING_KEY] ?: false
+    }
+
+    val showItemCount: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[SHOW_ITEM_COUNT_KEY] ?: false
     }
 
     suspend fun setThemeMode(mode: String) {
@@ -46,6 +51,12 @@ class ThemePreferences(private val context: Context) {
     suspend fun setCoverTheming(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[COVER_THEMING_KEY] = enabled
+        }
+    }
+
+    suspend fun setShowItemCount(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[SHOW_ITEM_COUNT_KEY] = enabled
         }
     }
 }

@@ -2,6 +2,7 @@ package app.lazydex.ui.dex
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.lazydex.data.local.ThemePreferences
 import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.SortDirection
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 data class DexUiState(
     val items: List<MediaItem> = emptyList(),
@@ -36,6 +38,7 @@ data class DexUiState(
     val dateRangeEnd: Long? = null,
     val perCategoryCounts: Map<MediaCategory, Int> = emptyMap(),
     val perStatusCounts: Map<StatusFilter, Int> = emptyMap(),
+    val showItemCount: Boolean = false,
     val isLoading: Boolean = true
 )
 
@@ -75,7 +78,8 @@ private data class MetadataBundle(
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DexViewModel(
-    private val repository: MediaRepository
+    private val repository: MediaRepository,
+    private val themePreferences: ThemePreferences
 ) : ViewModel() {
 
     private val mutableFilterState = MutableStateFlow(MutableFilterState())
@@ -166,7 +170,14 @@ class DexViewModel(
             isLoading = false
         )
     }.combine(repository.observeCount()) { state, count -> state.copy(totalCount = count) }
+    .combine(themePreferences.showItemCount) { state, showCount -> state.copy(showItemCount = showCount) }
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DexUiState())
+
+    fun setShowItemCount(enabled: Boolean) {
+        viewModelScope.launch {
+            themePreferences.setShowItemCount(enabled)
+        }
+    }
 
     fun selectCategory(category: MediaCategory?) {
         mutableFilterState.update { it.copy(category = category, genres = emptySet(), tags = emptySet()) }

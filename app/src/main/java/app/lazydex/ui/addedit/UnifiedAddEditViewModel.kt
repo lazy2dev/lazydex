@@ -96,17 +96,33 @@ class UnifiedAddEditViewModel(
 
     private var originalItem: MediaItem? = null
 
+    private var isInitialized = false
+
     init {
-        initialUrlParam?.let { url ->
+        initialize(itemId, initialUrlParam)
+    }
+
+    fun initialize(id: String?, initialUrl: String?) {
+        if (isInitialized) return
+        val effectiveUrl = initialUrl ?: initialUrlParam
+        val effectiveId = id ?: itemId
+
+        if (effectiveId != null || effectiveUrl != null) {
+            isInitialized = true
+        }
+
+        _formState.value = _formState.value.copy(isNew = effectiveId == null)
+
+        effectiveUrl?.let { url ->
             if (url.isNotBlank()) {
                 updateSourceUrl(url)
                 scrapeUrl()
             }
         }
 
-        itemId?.let { id ->
+        effectiveId?.let { targetId ->
             viewModelScope.launch {
-                repository.observeById(id).collect { item ->
+                repository.observeById(targetId).collect { item ->
                     if (item != null && !_formState.value.isSaving && !_formState.value.isScraping) {
                         originalItem = item
                         _formState.value = _formState.value.copy(
@@ -135,6 +151,7 @@ class UnifiedAddEditViewModel(
             }
         }
     }
+
 
     fun updateTitle(title: String) {
         _formState.value = _formState.value.copy(title = title, errorMsg = null)
@@ -272,11 +289,31 @@ class UnifiedAddEditViewModel(
         }
     }
 
+    fun setError(message: String?) {
+        _formState.value = _formState.value.copy(errorMsg = message)
+    }
+
     fun save() {
         val state = _formState.value
-        if (!state.canSave) return
+        if (state.isTitleBlank) {
+            _formState.value = _formState.value.copy(errorMsg = "Title is required")
+            return
+        }
+        if (state.isProgressInvalid) {
+            _formState.value = _formState.value.copy(errorMsg = "Progress cannot exceed total items")
+            return
+        }
+        if (state.isTotalInvalid) {
+            _formState.value = _formState.value.copy(errorMsg = "Total items cannot be negative")
+            return
+        }
+        if (state.isUrlInvalid) {
+            _formState.value = _formState.value.copy(errorMsg = "Source URL must start with https://")
+            return
+        }
+        if (state.isSaving || state.isScraping) return
 
-        _formState.value = _formState.value.copy(isSaving = true)
+        _formState.value = _formState.value.copy(isSaving = true, errorMsg = null)
 
         viewModelScope.launch {
             val totalVal = state.parsedTotal

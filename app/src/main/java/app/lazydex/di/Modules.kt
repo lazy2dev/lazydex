@@ -104,7 +104,7 @@ val storageModule = module {
 }
 
 val viewModelModule = module {
-    viewModel { DexViewModel(get()) }
+    viewModel { DexViewModel(get(), get()) }
     viewModel { StatisticsViewModel(get()) }
     viewModel { BrowserViewModel(get()) }
     viewModel {

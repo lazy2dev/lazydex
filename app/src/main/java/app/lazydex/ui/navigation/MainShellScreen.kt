@@ -6,11 +6,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,18 +21,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.Casino
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.MenuBook
-import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -38,7 +36,6 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -51,16 +48,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.lazydex.BuildConfig
-import app.lazydex.domain.model.MediaCategory
 import app.lazydex.ui.browser.BrowserScreen
-import app.lazydex.ui.components.CategoryDropdown
+import app.lazydex.ui.browser.BrowserViewModel
 import app.lazydex.ui.dex.DexScreen
 import app.lazydex.ui.dex.DexViewModel
+import app.lazydex.ui.history.HistoryScreen
 import app.lazydex.ui.statistics.StatisticsScreen
 import org.koin.androidx.compose.koinViewModel
 
 enum class ShellTab {
-    DEX, STATISTICS, BROWSE, SETTINGS
+    DEX, STATISTICS, BROWSE, HISTORY, SETTINGS
 }
 
 @Composable
@@ -71,50 +68,21 @@ fun MainShellScreen(
     onNavigateToAddItem: (String?) -> Unit,
     onNavigateToEditItem: (String) -> Unit,
     modifier: Modifier = Modifier,
-    dexViewModel: DexViewModel = koinViewModel()
+    dexViewModel: DexViewModel = koinViewModel(),
+    browserViewModel: BrowserViewModel = koinViewModel()
 ) {
     var currentTab by rememberSaveable { mutableStateOf(ShellTab.DEX) }
-    var showCategoryDropdown by rememberSaveable { mutableStateOf(false) }
-
-    val dexUiState by dexViewModel.uiState.collectAsState()
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             NavigationBar {
                 // 1. Dex Tab
-                val dexIcon = when (dexUiState.selectedCategory) {
-                    MediaCategory.NOVEL -> Icons.Default.Book
-                    MediaCategory.MANGA -> Icons.Default.MenuBook
-                    MediaCategory.ANIME -> Icons.Default.Casino
-                    MediaCategory.GAME -> Icons.Default.SportsEsports
-                    MediaCategory.MOVIE -> Icons.Default.Movie
-                    MediaCategory.TV -> Icons.Default.Tv
-                    null -> Icons.Default.Bookmark
-                }
-                val dexLabel = dexUiState.selectedCategory?.displayName ?: "Dex"
-
                 NavigationBarItem(
                     selected = currentTab == ShellTab.DEX,
-                    onClick = {
-                        if (currentTab == ShellTab.DEX) {
-                            showCategoryDropdown = true
-                        } else {
-                            currentTab = ShellTab.DEX
-                        }
-                    },
-                    icon = {
-                        Box {
-                            Icon(imageVector = dexIcon, contentDescription = dexLabel)
-                            CategoryDropdown(
-                                expanded = showCategoryDropdown,
-                                onDismissRequest = { showCategoryDropdown = false },
-                                selectedCategory = dexUiState.selectedCategory,
-                                perCategoryCounts = dexUiState.perCategoryCounts,
-                                onSelectCategory = { cat -> dexViewModel.selectCategory(cat) }
-                            )
-                        }
-                    },
-                    label = { Text("$dexLabel ▾") }
+                    onClick = { currentTab = ShellTab.DEX },
+                    icon = { Icon(imageVector = Icons.Default.Bookmark, contentDescription = "Dex") },
+                    label = { Text("Dex") }
                 )
 
                 // 2. Statistics Tab
@@ -125,27 +93,33 @@ fun MainShellScreen(
                     label = { Text("Stats") }
                 )
 
-                // 3. Add (+) Button — Center Item
+                // 3. Add (+) Button — Center Hub
                 NavigationBarItem(
-                    selected = false,
-                    onClick = { onNavigateToAddItem(null) },
+                    selected = currentTab == ShellTab.BROWSE,
+                    onClick = {
+                        if (currentTab == ShellTab.BROWSE) {
+                            browserViewModel.selectSource(null)
+                        } else {
+                            currentTab = ShellTab.BROWSE
+                        }
+                    },
                     icon = {
                         Icon(
                             imageVector = Icons.Default.Add,
                             contentDescription = "Add",
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = if (currentTab == ShellTab.BROWSE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(28.dp)
                         )
                     },
                     label = { Text("Add") }
                 )
 
-                // 4. Browse Tab
+                // 4. History Tab
                 NavigationBarItem(
-                    selected = currentTab == ShellTab.BROWSE,
-                    onClick = { currentTab = ShellTab.BROWSE },
-                    icon = { Icon(imageVector = Icons.Default.Search, contentDescription = "Browse") },
-                    label = { Text("Browse") }
+                    selected = currentTab == ShellTab.HISTORY,
+                    onClick = { currentTab = ShellTab.HISTORY },
+                    icon = { Icon(imageVector = Icons.Default.History, contentDescription = "History") },
+                    label = { Text("History") }
                 )
 
                 // 5. Settings Tab
@@ -162,7 +136,8 @@ fun MainShellScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(bottom = innerPadding.calculateBottomPadding())
+                .consumeWindowInsets(innerPadding)
         ) {
             when (currentTab) {
                 ShellTab.DEX -> {
@@ -181,6 +156,14 @@ fun MainShellScreen(
                 ShellTab.BROWSE -> {
                     BrowserScreen(
                         onNavigateToCreateFromUrl = { url -> onNavigateToAddItem(url) },
+                        onNavigateToManualAdd = { onNavigateToAddItem(null) },
+                        viewModel = browserViewModel,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                ShellTab.HISTORY -> {
+                    HistoryScreen(
+                        onNavigateToEditItem = onNavigateToEditItem,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -206,6 +189,7 @@ private fun SettingsTabContent(
 ) {
     Column(
         modifier = modifier
+            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
     ) {
         Spacer(modifier = Modifier.height(32.dp))

@@ -64,6 +64,7 @@ fun LazyDexNavGraph(
             val route = backStackEntry.toRoute<AddEditRoute>()
             UnifiedAddEditScreen(
                 itemId = route.itemId,
+                initialUrl = route.initialUrl,
                 onBack = {
                     navController.popBackStack()
                 }

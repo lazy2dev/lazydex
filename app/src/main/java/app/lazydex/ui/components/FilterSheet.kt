@@ -13,10 +13,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,6 +32,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.SheetState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -74,6 +77,10 @@ fun FilterSheet(
     onSetRatingRange: (Double?, Double?) -> Unit,
     onSelectSortField: (SortField) -> Unit,
     onSelectSortDirection: (SortDirection) -> Unit,
+    isGridView: Boolean,
+    onToggleGridView: (Boolean) -> Unit,
+    showItemCount: Boolean,
+    onToggleShowItemCount: (Boolean) -> Unit,
     onClearAll: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -118,6 +125,12 @@ fun FilterSheet(
                     onClick = { selectedTab = 1 },
                     text = { Text("Sort") },
                     icon = { Icon(Icons.Default.Sort, contentDescription = "Sort") }
+                )
+                Tab(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    text = { Text("Display") },
+                    icon = { Icon(Icons.Default.GridView, contentDescription = "Display") }
                 )
             }
 
@@ -271,6 +284,56 @@ fun FilterSheet(
                                 label = { Text("Ascending") },
                                 leadingIcon = { Icon(Icons.Default.ArrowUpward, contentDescription = "Asc") },
                                 modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    2 -> { // Display Tab
+                        Text("Display Mode", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            FilterChip(
+                                selected = isGridView,
+                                onClick = { onToggleGridView(true) },
+                                label = { Text("Grid") },
+                                leadingIcon = { Icon(Icons.Default.GridView, contentDescription = "Grid") },
+                                modifier = Modifier.weight(1f)
+                            )
+                            FilterChip(
+                                selected = !isGridView,
+                                onClick = { onToggleGridView(false) },
+                                label = { Text("List") },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.ViewList, contentDescription = "List") },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Show number of items",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                                Text(
+                                    text = "Show total and category item count badges",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = showItemCount,
+                                onCheckedChange = onToggleShowItemCount
                             )
                         }
                     }
