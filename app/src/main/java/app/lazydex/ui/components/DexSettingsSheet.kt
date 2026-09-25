@@ -42,6 +42,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SheetState
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,11 +57,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.lazydex.data.local.LibraryDisplayMode
 import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.SortDirection
 import app.lazydex.domain.model.SortField
 import app.lazydex.domain.model.StatusFilter
 import app.lazydex.domain.model.statusLabel
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 @Composable
@@ -86,10 +89,24 @@ fun DexSettingsSheet(
     onSetRatingRange: ((Double?, Double?) -> Unit)? = null,
     onSelectSortField: (SortField) -> Unit,
     onSelectSortDirection: (SortDirection) -> Unit,
-    isGridView: Boolean,
-    onToggleGridView: (Boolean) -> Unit,
-    showItemCount: Boolean,
-    onToggleShowItemCount: (Boolean) -> Unit,
+    displayMode: LibraryDisplayMode = LibraryDisplayMode.COMPACT_GRID,
+    onSelectDisplayMode: (LibraryDisplayMode) -> Unit = {},
+    gridColumns: Int = 0,
+    onSelectGridColumns: (Int) -> Unit = {},
+    showCategoryTabs: Boolean = true,
+    onToggleCategoryTabs: (Boolean) -> Unit = {},
+    showProgressBadge: Boolean = true,
+    onToggleProgressBadge: (Boolean) -> Unit = {},
+    showStatusBadge: Boolean = true,
+    onToggleStatusBadge: (Boolean) -> Unit = {},
+    showScoreBadge: Boolean = true,
+    onToggleScoreBadge: (Boolean) -> Unit = {},
+    showCategoryBadge: Boolean = false,
+    onToggleCategoryBadge: (Boolean) -> Unit = {},
+    showItemCount: Boolean = false,
+    onToggleShowItemCount: (Boolean) -> Unit = {},
+    isGridView: Boolean = displayMode != LibraryDisplayMode.LIST,
+    onToggleGridView: ((Boolean) -> Unit)? = null,
     onClearAll: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -164,8 +181,20 @@ fun DexSettingsSheet(
                         onSelectSortDirection = onSelectSortDirection,
                     )
                     2 -> DisplayPage(
-                        isGridView = isGridView,
-                        onToggleGridView = onToggleGridView,
+                        displayMode = displayMode,
+                        onSelectDisplayMode = onSelectDisplayMode,
+                        gridColumns = gridColumns,
+                        onSelectGridColumns = onSelectGridColumns,
+                        showCategoryTabs = showCategoryTabs,
+                        onToggleCategoryTabs = onToggleCategoryTabs,
+                        showProgressBadge = showProgressBadge,
+                        onToggleProgressBadge = onToggleProgressBadge,
+                        showStatusBadge = showStatusBadge,
+                        onToggleStatusBadge = onToggleStatusBadge,
+                        showScoreBadge = showScoreBadge,
+                        onToggleScoreBadge = onToggleScoreBadge,
+                        showCategoryBadge = showCategoryBadge,
+                        onToggleCategoryBadge = onToggleCategoryBadge,
                         showItemCount = showItemCount,
                         onToggleShowItemCount = onToggleShowItemCount,
                     )
@@ -402,8 +431,20 @@ private fun SortPage(
 
 @Composable
 private fun DisplayPage(
-    isGridView: Boolean,
-    onToggleGridView: (Boolean) -> Unit,
+    displayMode: LibraryDisplayMode,
+    onSelectDisplayMode: (LibraryDisplayMode) -> Unit,
+    gridColumns: Int,
+    onSelectGridColumns: (Int) -> Unit,
+    showCategoryTabs: Boolean,
+    onToggleCategoryTabs: (Boolean) -> Unit,
+    showProgressBadge: Boolean,
+    onToggleProgressBadge: (Boolean) -> Unit,
+    showStatusBadge: Boolean,
+    onToggleStatusBadge: (Boolean) -> Unit,
+    showScoreBadge: Boolean,
+    onToggleScoreBadge: (Boolean) -> Unit,
+    showCategoryBadge: Boolean,
+    onToggleCategoryBadge: (Boolean) -> Unit,
     showItemCount: Boolean,
     onToggleShowItemCount: (Boolean) -> Unit,
 ) {
@@ -414,32 +455,141 @@ private fun DisplayPage(
             .padding(vertical = 8.dp)
     ) {
         HeadingItem(text = "Display mode")
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 24.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             DisplayModeButton(
                 text = "Compact grid",
-                selected = isGridView,
-                onClick = { onToggleGridView(true) },
-                modifier = Modifier.weight(1f)
+                selected = displayMode == LibraryDisplayMode.COMPACT_GRID,
+                onClick = { onSelectDisplayMode(LibraryDisplayMode.COMPACT_GRID) },
+                modifier = Modifier.weight(1.3f)
+            )
+            DisplayModeButton(
+                text = "Comfortable grid",
+                selected = displayMode == LibraryDisplayMode.COMFORTABLE_GRID,
+                onClick = { onSelectDisplayMode(LibraryDisplayMode.COMFORTABLE_GRID) },
+                modifier = Modifier.weight(1.5f)
             )
             DisplayModeButton(
                 text = "List",
-                selected = !isGridView,
-                onClick = { onToggleGridView(false) },
-                modifier = Modifier.weight(1f)
+                selected = displayMode == LibraryDisplayMode.LIST,
+                onClick = { onSelectDisplayMode(LibraryDisplayMode.LIST) },
+                modifier = Modifier.weight(0.9f)
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DisplayModeButton(
+                text = "Cover-only grid",
+                selected = displayMode == LibraryDisplayMode.COVER_ONLY_GRID,
+                onClick = { onSelectDisplayMode(LibraryDisplayMode.COVER_ONLY_GRID) },
+                modifier = Modifier.weight(1.2f)
+            )
+            DisplayModeButton(
+                text = "Panorama comfortable grid",
+                selected = displayMode == LibraryDisplayMode.PANORAMA_COMFORTABLE_GRID,
+                onClick = { onSelectDisplayMode(LibraryDisplayMode.PANORAMA_COMFORTABLE_GRID) },
+                modifier = Modifier.weight(2f)
+            )
+        }
+
+        if (displayMode != LibraryDisplayMode.LIST) {
+            Spacer(modifier = Modifier.height(8.dp))
+            SliderItem(
+                label = "Items per row",
+                value = gridColumns,
+                onChange = onSelectGridColumns
             )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
         HeadingItem(text = "Overlay")
         CheckboxItem(
+            label = "Progress badge",
+            checked = showProgressBadge,
+            onClick = { onToggleProgressBadge(!showProgressBadge) }
+        )
+        CheckboxItem(
+            label = "Status badge",
+            checked = showStatusBadge,
+            onClick = { onToggleStatusBadge(!showStatusBadge) }
+        )
+        CheckboxItem(
+            label = "Score badge",
+            checked = showScoreBadge,
+            onClick = { onToggleScoreBadge(!showScoreBadge) }
+        )
+        CheckboxItem(
+            label = "Category badge",
+            checked = showCategoryBadge,
+            onClick = { onToggleCategoryBadge(!showCategoryBadge) }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+        HeadingItem(text = "Tabs")
+        CheckboxItem(
+            label = "Show category tabs",
+            checked = showCategoryTabs,
+            onClick = { onToggleCategoryTabs(!showCategoryTabs) }
+        )
+        CheckboxItem(
             label = "Show number of items",
             checked = showItemCount,
             onClick = { onToggleShowItemCount(!showItemCount) }
+        )
+    }
+}
+
+@Composable
+private fun SliderItem(
+    label: String,
+    value: Int,
+    onChange: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 6.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .padding(horizontal = 10.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = if (value == 0) "Auto" else value.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+        Slider(
+            value = value.toFloat(),
+            onValueChange = { onChange(it.roundToInt()) },
+            valueRange = 0f..10f,
+            steps = 9,
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }

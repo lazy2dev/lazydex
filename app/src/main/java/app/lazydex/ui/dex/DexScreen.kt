@@ -57,6 +57,7 @@ import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import app.lazydex.data.local.LibraryDisplayMode
 import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.StatusFilter
 import app.lazydex.ui.components.EmptyState
@@ -79,7 +80,6 @@ fun DexScreen(
     val coroutineScope = rememberCoroutineScope()
 
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
-    var isGridView by rememberSaveable { mutableStateOf(true) }
     val filterSheetState = rememberModalBottomSheetState()
 
     var isSearching by rememberSaveable { mutableStateOf(false) }
@@ -220,54 +220,56 @@ fun DexScreen(
                 .padding(innerPadding)
         ) {
             // Komikku-style Category Tab Row with Item Counts
-            ScrollableTabRow(
-                selectedTabIndex = selectedTabIndex,
-                edgePadding = 12.dp,
-                containerColor = MaterialTheme.colorScheme.background,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                indicator = { tabPositions ->
-                    if (selectedTabIndex < tabPositions.size) {
-                        TabRowDefaults.SecondaryIndicator(
-                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                },
-                divider = {}
-            ) {
-                categories.forEachIndexed { index, pair ->
-                    val cat = pair.first
-                    val label = pair.second
-                    val isSelected = selectedTabIndex == index
-                    val count = if (cat == null) uiState.totalCount else (uiState.perCategoryCounts[cat] ?: 0)
-                    Tab(
-                        selected = isSelected,
-                        onClick = { viewModel.selectCategory(cat) },
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = label,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                if (uiState.showItemCount && count > 0) {
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-                                    ) {
-                                        Text(
-                                            text = "$count",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                                        )
+            if (uiState.showCategoryTabs) {
+                ScrollableTabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    edgePadding = 12.dp,
+                    containerColor = MaterialTheme.colorScheme.background,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    indicator = { tabPositions ->
+                        if (selectedTabIndex < tabPositions.size) {
+                            TabRowDefaults.SecondaryIndicator(
+                                modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    },
+                    divider = {}
+                ) {
+                    categories.forEachIndexed { index, pair ->
+                        val cat = pair.first
+                        val label = pair.second
+                        val isSelected = selectedTabIndex == index
+                        val count = if (cat == null) uiState.totalCount else (uiState.perCategoryCounts[cat] ?: 0)
+                        Tab(
+                            selected = isSelected,
+                            onClick = { viewModel.selectCategory(cat) },
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = label,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    if (uiState.showItemCount && count > 0) {
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                        ) {
+                                            Text(
+                                                text = "$count",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
             // Genre & Tag chip rows (visible when available)
@@ -324,24 +326,7 @@ fun DexScreen(
                         )
                     }
                     else -> {
-                        if (isGridView) {
-                            LazyVerticalGrid(
-                                columns = GridCells.Fixed(3),
-                                contentPadding = PaddingValues(4.dp),
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                items(
-                                    items = displayedItems,
-                                    key = { it.id }
-                                ) { item ->
-                                    MediaCard(
-                                        item = item,
-                                        onClick = { onNavigateToEditItem(item.id) },
-                                        isGridView = true
-                                    )
-                                }
-                            }
-                        } else {
+                        if (uiState.displayMode == LibraryDisplayMode.LIST) {
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize()
                             ) {
@@ -352,7 +337,38 @@ fun DexScreen(
                                     MediaCard(
                                         item = item,
                                         onClick = { onNavigateToEditItem(item.id) },
-                                        isGridView = false
+                                        displayMode = uiState.displayMode,
+                                        showProgressBadge = uiState.showProgressBadge,
+                                        showStatusBadge = uiState.showStatusBadge,
+                                        showScoreBadge = uiState.showScoreBadge,
+                                        showCategoryBadge = uiState.showCategoryBadge,
+                                    )
+                                }
+                            }
+                        } else {
+                            val gridCells = when {
+                                uiState.gridColumns > 0 -> GridCells.Fixed(uiState.gridColumns)
+                                uiState.displayMode == LibraryDisplayMode.PANORAMA_COMFORTABLE_GRID -> GridCells.Adaptive(minSize = 160.dp)
+                                else -> GridCells.Adaptive(minSize = 105.dp)
+                            }
+
+                            LazyVerticalGrid(
+                                columns = gridCells,
+                                contentPadding = PaddingValues(4.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(
+                                    items = displayedItems,
+                                    key = { it.id }
+                                ) { item ->
+                                    MediaCard(
+                                        item = item,
+                                        onClick = { onNavigateToEditItem(item.id) },
+                                        displayMode = uiState.displayMode,
+                                        showProgressBadge = uiState.showProgressBadge,
+                                        showStatusBadge = uiState.showStatusBadge,
+                                        showScoreBadge = uiState.showScoreBadge,
+                                        showCategoryBadge = uiState.showCategoryBadge,
                                     )
                                 }
                             }
@@ -392,8 +408,20 @@ fun DexScreen(
             onSetRatingRange = { min, max -> viewModel.setRatingRange(min, max) },
             onSelectSortField = { viewModel.selectSortField(it) },
             onSelectSortDirection = { viewModel.selectSortDirection(it) },
-            isGridView = isGridView,
-            onToggleGridView = { isGridView = it },
+            displayMode = uiState.displayMode,
+            onSelectDisplayMode = { viewModel.setDisplayMode(it) },
+            gridColumns = uiState.gridColumns,
+            onSelectGridColumns = { viewModel.setGridColumns(it) },
+            showCategoryTabs = uiState.showCategoryTabs,
+            onToggleCategoryTabs = { viewModel.setShowCategoryTabs(it) },
+            showProgressBadge = uiState.showProgressBadge,
+            onToggleProgressBadge = { viewModel.setShowProgressBadge(it) },
+            showStatusBadge = uiState.showStatusBadge,
+            onToggleStatusBadge = { viewModel.setShowStatusBadge(it) },
+            showScoreBadge = uiState.showScoreBadge,
+            onToggleScoreBadge = { viewModel.setShowScoreBadge(it) },
+            showCategoryBadge = uiState.showCategoryBadge,
+            onToggleCategoryBadge = { viewModel.setShowCategoryBadge(it) },
             showItemCount = uiState.showItemCount,
             onToggleShowItemCount = { viewModel.setShowItemCount(it) },
             onClearAll = { viewModel.clearFilters() }

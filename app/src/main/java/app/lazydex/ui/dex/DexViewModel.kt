@@ -2,6 +2,7 @@ package app.lazydex.ui.dex
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.lazydex.data.local.LibraryDisplayMode
 import app.lazydex.data.local.ThemePreferences
 import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.MediaItem
@@ -38,6 +39,13 @@ data class DexUiState(
     val dateRangeEnd: Long? = null,
     val perCategoryCounts: Map<MediaCategory, Int> = emptyMap(),
     val perStatusCounts: Map<StatusFilter, Int> = emptyMap(),
+    val displayMode: LibraryDisplayMode = LibraryDisplayMode.COMPACT_GRID,
+    val gridColumns: Int = 0,
+    val showCategoryTabs: Boolean = true,
+    val showProgressBadge: Boolean = true,
+    val showStatusBadge: Boolean = true,
+    val showScoreBadge: Boolean = true,
+    val showCategoryBadge: Boolean = false,
     val showItemCount: Boolean = false,
     val isLoading: Boolean = true
 )
@@ -170,12 +178,65 @@ class DexViewModel(
             isLoading = false
         )
     }.combine(repository.observeCount()) { state, count -> state.copy(totalCount = count) }
-    .combine(themePreferences.showItemCount) { state, showCount -> state.copy(showItemCount = showCount) }
+    .combine(themePreferences.displayPreferences) { state, dp ->
+        state.copy(
+            displayMode = dp.displayMode,
+            gridColumns = dp.gridColumns,
+            showCategoryTabs = dp.showCategoryTabs,
+            showProgressBadge = dp.showProgressBadge,
+            showStatusBadge = dp.showStatusBadge,
+            showScoreBadge = dp.showScoreBadge,
+            showCategoryBadge = dp.showCategoryBadge,
+            showItemCount = dp.showItemCount
+        )
+    }
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DexUiState())
 
     fun setShowItemCount(enabled: Boolean) {
         viewModelScope.launch {
             themePreferences.setShowItemCount(enabled)
+        }
+    }
+
+    fun setDisplayMode(mode: LibraryDisplayMode) {
+        viewModelScope.launch {
+            themePreferences.setDisplayMode(mode)
+        }
+    }
+
+    fun setGridColumns(columns: Int) {
+        viewModelScope.launch {
+            themePreferences.setGridColumns(columns)
+        }
+    }
+
+    fun setShowCategoryTabs(enabled: Boolean) {
+        viewModelScope.launch {
+            themePreferences.setShowCategoryTabs(enabled)
+        }
+    }
+
+    fun setShowProgressBadge(enabled: Boolean) {
+        viewModelScope.launch {
+            themePreferences.setShowProgressBadge(enabled)
+        }
+    }
+
+    fun setShowStatusBadge(enabled: Boolean) {
+        viewModelScope.launch {
+            themePreferences.setShowStatusBadge(enabled)
+        }
+    }
+
+    fun setShowScoreBadge(enabled: Boolean) {
+        viewModelScope.launch {
+            themePreferences.setShowScoreBadge(enabled)
+        }
+    }
+
+    fun setShowCategoryBadge(enabled: Boolean) {
+        viewModelScope.launch {
+            themePreferences.setShowCategoryBadge(enabled)
         }
     }
 
