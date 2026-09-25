@@ -60,8 +60,8 @@ import androidx.compose.ui.unit.sp
 import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.StatusFilter
 import app.lazydex.ui.components.EmptyState
-import app.lazydex.ui.components.FilterSheet
 import app.lazydex.ui.components.GenreChipRow
+import app.lazydex.ui.components.DexSettingsSheet
 import app.lazydex.ui.components.MediaCard
 import app.lazydex.ui.components.TagChipRow
 import kotlinx.coroutines.launch
@@ -364,7 +364,7 @@ fun DexScreen(
     }
 
     if (showFilterSheet) {
-        FilterSheet(
+        DexSettingsSheet(
             sheetState = filterSheetState,
             onDismissRequest = {
                 coroutineScope.launch { filterSheetState.hide() }.invokeOnCompletion {
