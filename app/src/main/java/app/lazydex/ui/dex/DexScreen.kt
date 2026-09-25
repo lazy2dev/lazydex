@@ -13,14 +13,21 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -34,6 +41,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
@@ -63,7 +72,8 @@ fun DexScreen(
     onNavigateToAddItem: () -> Unit,
     onNavigateToEditItem: (String) -> Unit,
     viewModel: DexViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onSearchClick: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
@@ -71,6 +81,21 @@ fun DexScreen(
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     var isGridView by rememberSaveable { mutableStateOf(true) }
     val filterSheetState = rememberModalBottomSheetState()
+
+    var isSearching by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+
+    val displayedItems = remember(uiState.items, searchQuery) {
+        val query = searchQuery.trim()
+        if (query.isEmpty()) {
+            uiState.items
+        } else {
+            uiState.items.filter { item ->
+                item.title.contains(query, ignoreCase = true) ||
+                        (item.author?.contains(query, ignoreCase = true) == true)
+            }
+        }
+    }
 
     val isFilterActive = uiState.selectedCategory != null ||
             uiState.selectedStatus != StatusFilter.ALL ||
@@ -102,31 +127,77 @@ fun DexScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "Dex",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
+                    if (isSearching) {
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Search dex...") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = {}),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                disabledContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            ),
+                            modifier = Modifier.fillMaxWidth()
                         )
-                        if (uiState.showItemCount) {
-                            val count = if (uiState.selectedCategory == null) uiState.totalCount else (uiState.perCategoryCounts[uiState.selectedCategory] ?: 0)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceVariant
-                            ) {
-                                Text(
-                                    text = "$count",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                )
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Dex",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp
+                            )
+                            if (uiState.showItemCount) {
+                                val count = if (uiState.selectedCategory == null) uiState.totalCount else (uiState.perCategoryCounts[uiState.selectedCategory] ?: 0)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.surfaceVariant
+                                ) {
+                                    Text(
+                                        text = "$count",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    )
+                                }
                             }
                         }
                     }
                 },
+                navigationIcon = {
+                    if (isSearching) {
+                        IconButton(onClick = {
+                            isSearching = false
+                            searchQuery = ""
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search")
+                        }
+                    }
+                },
                 actions = {
+                    if (isSearching) {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear search")
+                            }
+                        }
+                    } else {
+                        IconButton(onClick = {
+                            if (onSearchClick != null) onSearchClick() else isSearching = true
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Search",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
                     IconButton(onClick = { showFilterSheet = true }) {
                         Icon(
                             imageVector = Icons.Default.FilterList,
@@ -229,16 +300,22 @@ fun DexScreen(
                     uiState.isLoading -> {
                         CircularProgressIndicator()
                     }
-                    uiState.items.isEmpty() -> {
-                        val message = if (isFilterActive) {
-                            "No items match your filters"
-                        } else {
-                            "Nothing here yet. Tap [+] to add your first tracking item."
+                    displayedItems.isEmpty() -> {
+                        val message = when {
+                            searchQuery.isNotBlank() -> "No items matching '$searchQuery'"
+                            isFilterActive -> "No items match your filters"
+                            else -> "Nothing here yet. Tap [+] to add your first tracking item."
                         }
-                        val actionLabel = if (isFilterActive) "Clear Filters" else null
-                        val actionCallback = if (isFilterActive) {
-                            { viewModel.clearFilters() }
-                        } else null
+                        val actionLabel = when {
+                            searchQuery.isNotBlank() -> "Clear Search"
+                            isFilterActive -> "Clear Filters"
+                            else -> null
+                        }
+                        val actionCallback = when {
+                            searchQuery.isNotBlank() -> { { searchQuery = "" } }
+                            isFilterActive -> { { viewModel.clearFilters() } }
+                            else -> null
+                        }
 
                         EmptyState(
                             message = message,
@@ -254,7 +331,7 @@ fun DexScreen(
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 items(
-                                    items = uiState.items,
+                                    items = displayedItems,
                                     key = { it.id }
                                 ) { item ->
                                     MediaCard(
@@ -269,7 +346,7 @@ fun DexScreen(
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 items(
-                                    items = uiState.items,
+                                    items = displayedItems,
                                     key = { it.id }
                                 ) { item ->
                                     MediaCard(
