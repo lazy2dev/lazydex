@@ -74,7 +74,8 @@ private data class AdvancedFilterBundle(
 
 private data class SortBundle(
     val field: SortField,
-    val direction: SortDirection
+    val direction: SortDirection,
+    val randomSeed: Long
 )
 
 private data class MetadataBundle(
@@ -90,8 +91,11 @@ class DexViewModel(
 ) : ViewModel() {
 
     private val mutableFilterState = MutableStateFlow(MutableFilterState())
-    private val sortField = MutableStateFlow(SortField.DATE_ADDED)
-    private val sortDirection = MutableStateFlow(SortDirection.DESCENDING)
+    private val sortField = themePreferences.sortField
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SortField.DATE_ADDED)
+    private val sortDirection = themePreferences.sortDirection
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SortDirection.DESCENDING)
+    private val randomSeed = MutableStateFlow(System.currentTimeMillis())
 
     private val authorQuery = MutableStateFlow("")
     private val minRating = MutableStateFlow<Double?>(null)
@@ -144,7 +148,7 @@ class DexViewModel(
         dbFiltered,
         filterState,
         advancedFilterState,
-        combine(sortField, sortDirection) { f, d -> SortBundle(f, d) },
+        combine(sortField, sortDirection, randomSeed) { f, d, r -> SortBundle(f, d, r) },
         metadataState
     ) { items, fs, afs, ss, meta ->
         val filtered = items.filter { item ->
@@ -158,7 +162,7 @@ class DexViewModel(
         }
 
         DexUiState(
-            items = sortItems(filtered, ss.field, ss.direction),
+            items = sortItems(filtered, ss.field, ss.direction, ss.randomSeed),
             selectedCategory = fs.category,
             selectedStatus = fs.status,
             sortField = ss.field,
@@ -279,11 +283,18 @@ class DexViewModel(
     }
 
     fun selectSortField(field: SortField) {
-        sortField.value = field
+        if (field == SortField.RANDOM) {
+            randomSeed.value = System.currentTimeMillis()
+        }
+        viewModelScope.launch {
+            themePreferences.setSortField(field)
+        }
     }
 
     fun selectSortDirection(direction: SortDirection) {
-        sortDirection.value = direction
+        viewModelScope.launch {
+            themePreferences.setSortDirection(direction)
+        }
     }
 
     fun clearFilters() {
@@ -295,16 +306,28 @@ class DexViewModel(
         dateRangeEnd.value = null
     }
 
-    private fun sortItems(items: List<MediaItem>, field: SortField, direction: SortDirection): List<MediaItem> {
+    private fun sortItems(
+        items: List<MediaItem>,
+        field: SortField,
+        direction: SortDirection,
+        randomSeed: Long
+    ): List<MediaItem> {
         val sorted = when (field) {
+            SortField.ALPHABETICAL -> items.sortedBy { it.title.lowercase() }
+            SortField.TOTAL_COUNT -> items.sortedBy { it.totalItems ?: 0 }
+            SortField.LAST_READ -> items.sortedBy { it.lastUpdated }
+            SortField.UNREAD_COUNT -> items.sortedBy { (it.totalItems ?: 0) - it.currentProgress }
+            SortField.CURRENT_PROGRESS -> items.sortedBy { it.currentProgress }
             SortField.DATE_ADDED -> items.sortedBy { it.dateAdded }
-            SortField.LAST_ACTIVE -> items.sortedBy { it.lastUpdated }
-            SortField.TITLE -> items.sortedBy { it.title.lowercase() }
-            SortField.PROGRESS -> items.sortedBy { 
-                val total = it.totalItems ?: 0
-                if (total <= 0) 0.0 else it.currentProgress.toDouble() / total.toDouble()
-            }
+            SortField.RATING -> items.sortedBy { it.rating ?: 0.0 }
+            SortField.RANDOM -> items.shuffled(kotlin.random.Random(randomSeed))
         }
-        return if (direction == SortDirection.ASCENDING) sorted else sorted.reversed()
+        return if (field == SortField.RANDOM) {
+            sorted
+        } else if (direction == SortDirection.ASCENDING) {
+            sorted
+        } else {
+            sorted.reversed()
+        }
     }
 }

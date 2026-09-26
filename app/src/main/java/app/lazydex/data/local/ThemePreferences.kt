@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import app.lazydex.domain.model.SortDirection
+import app.lazydex.domain.model.SortField
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -44,6 +46,8 @@ class ThemePreferences(private val context: Context) {
         val SHOW_PROGRESS_BADGE_KEY = booleanPreferencesKey("show_progress_badge")
         val SHOW_STATUS_BADGE_KEY = booleanPreferencesKey("show_status_badge")
         val SHOW_SCORE_BADGE_KEY = booleanPreferencesKey("show_score_badge")
+        val SORT_FIELD_KEY = stringPreferencesKey("sort_field")
+        val SORT_DIRECTION_KEY = stringPreferencesKey("sort_direction")
     }
 
     val themeMode: Flow<String> = context.dataStore.data.map { preferences ->
@@ -60,6 +64,14 @@ class ThemePreferences(private val context: Context) {
 
     val showItemCount: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[SHOW_ITEM_COUNT_KEY] ?: false
+    }
+
+    val sortField: Flow<SortField> = context.dataStore.data.map { preferences ->
+        SortField.fromNameOrDefault(preferences[SORT_FIELD_KEY])
+    }
+
+    val sortDirection: Flow<SortDirection> = context.dataStore.data.map { preferences ->
+        SortDirection.fromNameOrDefault(preferences[SORT_DIRECTION_KEY])
     }
 
     val displayPreferences: Flow<DisplayPreferences> = context.dataStore.data.map { preferences ->
@@ -137,6 +149,18 @@ class ThemePreferences(private val context: Context) {
     suspend fun setShowScoreBadge(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[SHOW_SCORE_BADGE_KEY] = enabled
+        }
+    }
+
+    suspend fun setSortField(field: SortField) {
+        context.dataStore.edit { preferences ->
+            preferences[SORT_FIELD_KEY] = field.name
+        }
+    }
+
+    suspend fun setSortDirection(direction: SortDirection) {
+        context.dataStore.edit { preferences ->
+            preferences[SORT_DIRECTION_KEY] = direction.name
         }
     }
 }

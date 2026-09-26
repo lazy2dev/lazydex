@@ -29,8 +29,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.rounded.CheckBox
 import androidx.compose.material.icons.rounded.CheckBoxOutlineBlank
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -404,24 +406,39 @@ private fun SortPage(
     ) {
         SortField.entries.forEach { field ->
             val isSelected = sortField == field
-            val sortDescending = if (isSelected) (sortDirection == SortDirection.DESCENDING) else null
-            SortItem(
-                label = field.displayName,
-                sortDescending = sortDescending,
-                onClick = {
-                    if (isSelected) {
-                        val newDir = if (sortDirection == SortDirection.DESCENDING) {
-                            SortDirection.ASCENDING
-                        } else {
-                            SortDirection.DESCENDING
-                        }
-                        onSelectSortDirection(newDir)
-                    } else {
-                        onSelectSortField(field)
-                        onSelectSortDirection(SortDirection.DESCENDING)
+            if (field == SortField.RANDOM) {
+                BaseSortItem(
+                    label = field.displayName,
+                    icon = Icons.Default.Refresh.takeIf { isSelected },
+                    onClick = {
+                        onSelectSortField(SortField.RANDOM)
                     }
-                }
-            )
+                )
+            } else {
+                val sortDescending = if (isSelected) (sortDirection == SortDirection.DESCENDING) else null
+                SortItem(
+                    label = field.displayName,
+                    sortDescending = sortDescending,
+                    onClick = {
+                        if (isSelected) {
+                            val newDir = if (sortDirection == SortDirection.DESCENDING) {
+                                SortDirection.ASCENDING
+                            } else {
+                                SortDirection.DESCENDING
+                            }
+                            onSelectSortDirection(newDir)
+                        } else {
+                            onSelectSortField(field)
+                            val defaultDir = if (field == SortField.ALPHABETICAL) {
+                                SortDirection.ASCENDING
+                            } else {
+                                SortDirection.DESCENDING
+                            }
+                            onSelectSortDirection(defaultDir)
+                        }
+                    }
+                )
+            }
         }
     }
 }
@@ -620,17 +637,11 @@ private fun CheckboxItem(
 }
 
 @Composable
-private fun SortItem(
+private fun BaseSortItem(
     label: String,
-    sortDescending: Boolean?,
+    icon: ImageVector?,
     onClick: () -> Unit
 ) {
-    val arrowIcon = when (sortDescending) {
-        true -> Icons.Default.ArrowDownward
-        false -> Icons.Default.ArrowUpward
-        null -> null
-    }
-
     Row(
         modifier = Modifier
             .clickable(onClick = onClick)
@@ -639,9 +650,9 @@ private fun SortItem(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        if (arrowIcon != null) {
+        if (icon != null) {
             Icon(
-                imageVector = arrowIcon,
+                imageVector = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
@@ -652,8 +663,26 @@ private fun SortItem(
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            color = if (sortDescending != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            color = if (icon != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
         )
     }
+}
+
+@Composable
+private fun SortItem(
+    label: String,
+    sortDescending: Boolean?,
+    onClick: () -> Unit
+) {
+    val arrowIcon = when (sortDescending) {
+        true -> Icons.Default.ArrowDownward
+        false -> Icons.Default.ArrowUpward
+        null -> null
+    }
+    BaseSortItem(
+        label = label,
+        icon = arrowIcon,
+        onClick = onClick
+    )
 }
 
