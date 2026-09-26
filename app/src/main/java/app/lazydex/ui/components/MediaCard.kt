@@ -44,8 +44,74 @@ import app.lazydex.ui.theme.StatusDropped
 import app.lazydex.ui.theme.StatusInProgress
 import app.lazydex.ui.theme.StatusOnHold
 import app.lazydex.ui.theme.StatusPlanTo
+import app.lazydex.ui.theme.getRatingColor
 
+private fun Color.darken(factor: Float = 0.65f): Color = Color(
+    red = red * factor,
+    green = green * factor,
+    blue = blue * factor,
+    alpha = alpha,
+)
 
+@Composable
+private fun CardStartBadges(
+    item: MediaItem,
+    showStatusBadge: Boolean,
+    showProgressBadge: Boolean,
+    statusColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    val hasProgress = showProgressBadge && (item.currentProgress > 0 || (item.totalItems != null && item.totalItems > 0))
+    val hasStartBadges = showStatusBadge || hasProgress
+    if (!hasStartBadges) return
+
+    val baseColor = if (showStatusBadge) statusColor else MaterialTheme.colorScheme.tertiary
+    val baseColorDark = remember(baseColor) { baseColor.darken(0.65f) }
+
+    BadgeGroup(modifier = modifier) {
+        if (hasProgress) {
+            Badge(
+                text = "${item.currentProgress}",
+                color = baseColor,
+                textColor = Color.White,
+            )
+            if (item.totalItems != null && item.totalItems > 0) {
+                Badge(
+                    text = "${item.totalItems}",
+                    color = baseColorDark,
+                    textColor = Color.White.copy(alpha = 0.9f),
+                )
+            }
+        } else if (showStatusBadge) {
+            Badge(
+                imageVector = item.userStatus.icon(),
+                color = statusColor,
+                iconColor = Color.White,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CardEndBadges(
+    item: MediaItem,
+    showScoreBadge: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    if (!showScoreBadge || item.rating == null) return
+
+    val ratingText = remember(item.rating) {
+        "%.1f".format(item.rating)
+    }
+
+    BadgeGroup(modifier = modifier) {
+        Badge(
+            text = ratingText,
+            color = getRatingColor(item.rating),
+            textColor = Color.White,
+        )
+    }
+}
 
 @Composable
 fun MediaCard(
@@ -57,21 +123,9 @@ fun MediaCard(
     showProgressBadge: Boolean = true,
     showStatusBadge: Boolean = true,
     showScoreBadge: Boolean = true,
-    showCategoryBadge: Boolean = false,
 ) {
     val effectiveMode = displayMode ?: if (isGridView) LibraryDisplayMode.COMPACT_GRID else LibraryDisplayMode.LIST
     val relativeTime = remember(item.lastUpdated) { getRelativeTime(item.lastUpdated) }
-
-    val progressLabel = remember(item.currentProgress, item.totalItems, item.category) {
-        val totalStr = item.totalItems?.toString() ?: "?"
-        val unit = when (item.category) {
-            MediaCategory.NOVEL, MediaCategory.MANGA -> "Ch."
-            MediaCategory.ANIME, MediaCategory.TV -> "Ep."
-            MediaCategory.GAME -> "Progress:"
-            MediaCategory.MOVIE -> "Movie:"
-        }
-        "$unit ${item.currentProgress} / $totalStr"
-    }
 
     val statusColor = when (item.userStatus) {
         UserStatus.READING, UserStatus.WATCHING, UserStatus.PLAYING -> StatusInProgress
@@ -80,9 +134,6 @@ fun MediaCard(
         UserStatus.DROPPED -> StatusDropped
         UserStatus.PLAN_TO -> StatusPlanTo
     }
-
-    val hasStartBadges = showStatusBadge || (showProgressBadge && item.currentProgress > 0)
-    val hasEndBadges = (showScoreBadge && item.rating != null) || showCategoryBadge
 
     when (effectiveMode) {
         LibraryDisplayMode.LIST -> {
@@ -138,35 +189,17 @@ fun MediaCard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (showProgressBadge) {
-                            Text(
-                                text = progressLabel,
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        } else {
-                            Spacer(modifier = Modifier.width(1.dp))
-                        }
+                        CardStartBadges(
+                            item = item,
+                            showStatusBadge = showStatusBadge,
+                            showProgressBadge = showProgressBadge,
+                            statusColor = statusColor,
+                        )
 
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (showScoreBadge && item.rating != null) {
-                                Text(
-                                    text = "${item.rating}★",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFF1C40F)
-                                )
-                            }
-                            if (showCategoryBadge) {
-                                CategoryBadge(category = item.category)
-                            }
-                            if (showStatusBadge) {
-                                StatusBadge(status = item.userStatus)
-                            }
-                        }
+                        CardEndBadges(
+                            item = item,
+                            showScoreBadge = showScoreBadge,
+                        )
                     }
                 }
             }
@@ -230,51 +263,19 @@ fun MediaCard(
                         }
                     }
 
-                    if (hasStartBadges) {
-                        BadgeGroup(
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(4.dp)
-                        ) {
-                            if (showStatusBadge) {
-                                Badge(
-                                    imageVector = item.userStatus.icon(),
-                                    color = statusColor,
-                                    iconColor = Color.White,
-                                )
-                            }
-                            if (showProgressBadge && item.currentProgress > 0) {
-                                Badge(
-                                    text = "${item.currentProgress}",
-                                    color = MaterialTheme.colorScheme.tertiary,
-                                    textColor = MaterialTheme.colorScheme.onTertiary,
-                                )
-                            }
-                        }
-                    }
+                    CardStartBadges(
+                        item = item,
+                        showStatusBadge = showStatusBadge,
+                        showProgressBadge = showProgressBadge,
+                        statusColor = statusColor,
+                        modifier = Modifier.align(Alignment.TopStart),
+                    )
 
-                    if (hasEndBadges) {
-                        BadgeGroup(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(4.dp)
-                        ) {
-                            if (showScoreBadge && item.rating != null) {
-                                Badge(
-                                    text = "${item.rating}★",
-                                    color = MaterialTheme.colorScheme.secondary,
-                                    textColor = MaterialTheme.colorScheme.onSecondary,
-                                )
-                            }
-                            if (showCategoryBadge) {
-                                Badge(
-                                    imageVector = item.category.icon(),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    iconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                )
-                            }
-                        }
-                    }
+                    CardEndBadges(
+                        item = item,
+                        showScoreBadge = showScoreBadge,
+                        modifier = Modifier.align(Alignment.TopEnd),
+                    )
                 }
             }
         }
@@ -301,51 +302,19 @@ fun MediaCard(
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    if (hasStartBadges) {
-                        BadgeGroup(
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(4.dp)
-                        ) {
-                            if (showStatusBadge) {
-                                Badge(
-                                    imageVector = item.userStatus.icon(),
-                                    color = statusColor,
-                                    iconColor = Color.White,
-                                )
-                            }
-                            if (showProgressBadge && item.currentProgress > 0) {
-                                Badge(
-                                    text = "${item.currentProgress}",
-                                    color = MaterialTheme.colorScheme.tertiary,
-                                    textColor = MaterialTheme.colorScheme.onTertiary,
-                                )
-                            }
-                        }
-                    }
+                    CardStartBadges(
+                        item = item,
+                        showStatusBadge = showStatusBadge,
+                        showProgressBadge = showProgressBadge,
+                        statusColor = statusColor,
+                        modifier = Modifier.align(Alignment.TopStart),
+                    )
 
-                    if (hasEndBadges) {
-                        BadgeGroup(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(4.dp)
-                        ) {
-                            if (showScoreBadge && item.rating != null) {
-                                Badge(
-                                    text = "${item.rating}★",
-                                    color = MaterialTheme.colorScheme.secondary,
-                                    textColor = MaterialTheme.colorScheme.onSecondary,
-                                )
-                            }
-                            if (showCategoryBadge) {
-                                Badge(
-                                    imageVector = item.category.icon(),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    iconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                )
-                            }
-                        }
-                    }
+                    CardEndBadges(
+                        item = item,
+                        showScoreBadge = showScoreBadge,
+                        modifier = Modifier.align(Alignment.TopEnd),
+                    )
                 }
 
                 Text(

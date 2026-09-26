@@ -302,7 +302,6 @@ fun DexScreen(
                                         showProgressBadge = uiState.showProgressBadge,
                                         showStatusBadge = uiState.showStatusBadge,
                                         showScoreBadge = uiState.showScoreBadge,
-                                        showCategoryBadge = uiState.showCategoryBadge,
                                     )
                                 }
                             }
@@ -331,7 +330,6 @@ fun DexScreen(
                                         showProgressBadge = uiState.showProgressBadge,
                                         showStatusBadge = uiState.showStatusBadge,
                                         showScoreBadge = uiState.showScoreBadge,
-                                        showCategoryBadge = uiState.showCategoryBadge,
                                     )
                                 }
                             }
@@ -383,8 +381,6 @@ fun DexScreen(
             onToggleStatusBadge = { viewModel.setShowStatusBadge(it) },
             showScoreBadge = uiState.showScoreBadge,
             onToggleScoreBadge = { viewModel.setShowScoreBadge(it) },
-            showCategoryBadge = uiState.showCategoryBadge,
-            onToggleCategoryBadge = { viewModel.setShowCategoryBadge(it) },
             showItemCount = uiState.showItemCount,
             onToggleShowItemCount = { viewModel.setShowItemCount(it) },
             onClearAll = { viewModel.clearFilters() }

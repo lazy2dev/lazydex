@@ -45,7 +45,6 @@ data class DexUiState(
     val showProgressBadge: Boolean = true,
     val showStatusBadge: Boolean = true,
     val showScoreBadge: Boolean = true,
-    val showCategoryBadge: Boolean = false,
     val showItemCount: Boolean = false,
     val isLoading: Boolean = true
 )
@@ -186,7 +185,6 @@ class DexViewModel(
             showProgressBadge = dp.showProgressBadge,
             showStatusBadge = dp.showStatusBadge,
             showScoreBadge = dp.showScoreBadge,
-            showCategoryBadge = dp.showCategoryBadge,
             showItemCount = dp.showItemCount
         )
     }
@@ -231,12 +229,6 @@ class DexViewModel(
     fun setShowScoreBadge(enabled: Boolean) {
         viewModelScope.launch {
             themePreferences.setShowScoreBadge(enabled)
-        }
-    }
-
-    fun setShowCategoryBadge(enabled: Boolean) {
-        viewModelScope.launch {
-            themePreferences.setShowCategoryBadge(enabled)
         }
     }
 

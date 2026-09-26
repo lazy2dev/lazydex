@@ -102,8 +102,6 @@ fun DexSettingsSheet(
     onToggleStatusBadge: (Boolean) -> Unit = {},
     showScoreBadge: Boolean = true,
     onToggleScoreBadge: (Boolean) -> Unit = {},
-    showCategoryBadge: Boolean = false,
-    onToggleCategoryBadge: (Boolean) -> Unit = {},
     showItemCount: Boolean = false,
     onToggleShowItemCount: (Boolean) -> Unit = {},
     isGridView: Boolean = displayMode != LibraryDisplayMode.LIST,
@@ -194,8 +192,6 @@ fun DexSettingsSheet(
                         onToggleStatusBadge = onToggleStatusBadge,
                         showScoreBadge = showScoreBadge,
                         onToggleScoreBadge = onToggleScoreBadge,
-                        showCategoryBadge = showCategoryBadge,
-                        onToggleCategoryBadge = onToggleCategoryBadge,
                         showItemCount = showItemCount,
                         onToggleShowItemCount = onToggleShowItemCount,
                     )
@@ -444,8 +440,6 @@ private fun DisplayPage(
     onToggleStatusBadge: (Boolean) -> Unit,
     showScoreBadge: Boolean,
     onToggleScoreBadge: (Boolean) -> Unit,
-    showCategoryBadge: Boolean,
-    onToggleCategoryBadge: (Boolean) -> Unit,
     showItemCount: Boolean,
     onToggleShowItemCount: (Boolean) -> Unit,
 ) {
@@ -504,11 +498,6 @@ private fun DisplayPage(
             label = "Score badge",
             checked = showScoreBadge,
             onClick = { onToggleScoreBadge(!showScoreBadge) }
-        )
-        CheckboxItem(
-            label = "Category badge",
-            checked = showCategoryBadge,
-            onClick = { onToggleCategoryBadge(!showCategoryBadge) }
         )
 
         Spacer(modifier = Modifier.height(8.dp))

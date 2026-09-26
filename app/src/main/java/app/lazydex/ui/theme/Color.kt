@@ -38,9 +38,33 @@ val CategoryGameColor = Color(0xFFA855F7)
 val CategoryMovieColor = Color(0xFFF97316)
 val CategoryTvColor = Color(0xFF14B8A6)
 
-// Rating Colors (WTR-LAB scale)
-val Rating5 = Color(0xFF22C55E)
-val Rating4 = Color(0xFF84CC16)
-val Rating3 = Color(0xFFEAB308)
-val Rating2 = Color(0xFFF97316)
-val Rating1 = Color(0xFFEF4444)
+// Rating Colors (Piecewise Linear Interpolation: Gray -> Brown -> Blue -> Green -> Purple)
+val Rating1 = Color(59, 64, 68)    // 1.0 (Dark Gray)
+val Rating2 = Color(165, 105, 66)  // 2.0 (Brown)
+val Rating3 = Color(58, 124, 165)  // 3.0 (Blue)
+val Rating4 = Color(62, 134, 81)   // 4.0 (Green)
+val Rating5 = Color(123, 85, 138)  // 5.0 (Purple)
+
+fun getRatingColor(rating: Double): Color {
+    val clamped = rating.coerceIn(1.0, 5.0).toFloat()
+    val floor = kotlin.math.floor(clamped).toInt()
+    if (floor >= 5) return Rating5
+
+    val t = clamped - floor
+    val (c1, c2) = when (floor) {
+        1 -> Rating1 to Rating2
+        2 -> Rating2 to Rating3
+        3 -> Rating3 to Rating4
+        else -> Rating4 to Rating5
+    }
+
+    val r = kotlin.math.round(c1.red * 255f + t * (c2.red * 255f - c1.red * 255f)).toInt()
+    val g = kotlin.math.round(c1.green * 255f + t * (c2.green * 255f - c1.green * 255f)).toInt()
+    val b = kotlin.math.round(c1.blue * 255f + t * (c2.blue * 255f - c1.blue * 255f)).toInt()
+
+    return Color(r, g, b)
+}
+
+// Komikku cover placeholder colors
+val CoverPlaceholderColor = Color(0x1F888888)
+val CoverPlaceholderOnBgColor = Color(0x8F888888)

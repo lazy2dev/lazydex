@@ -19,11 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.lazydex.ui.theme.Rating1
-import app.lazydex.ui.theme.Rating2
-import app.lazydex.ui.theme.Rating3
-import app.lazydex.ui.theme.Rating4
-import app.lazydex.ui.theme.Rating5
+import app.lazydex.ui.theme.getRatingColor
 
 @Composable
 fun StarRating(
@@ -34,15 +30,7 @@ fun StarRating(
 ) {
     val displayRating = rating ?: 0.0
 
-    // Assign color based on rating range
-    val starColor = when {
-        rating == null -> Color.Gray
-        rating >= 4.5 -> Rating5
-        rating >= 3.5 -> Rating4
-        rating >= 2.5 -> Rating3
-        rating >= 1.5 -> Rating2
-        else -> Rating1
-    }
+    val starColor = if (rating == null) Color.Gray else getRatingColor(rating)
 
     val pointerModifier = if (isEditable) {
         Modifier.pointerInput(Unit) {

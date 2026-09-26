@@ -28,7 +28,6 @@ data class DisplayPreferences(
     val showProgressBadge: Boolean = true,
     val showStatusBadge: Boolean = true,
     val showScoreBadge: Boolean = true,
-    val showCategoryBadge: Boolean = false,
     val showItemCount: Boolean = false
 )
 
@@ -45,7 +44,6 @@ class ThemePreferences(private val context: Context) {
         val SHOW_PROGRESS_BADGE_KEY = booleanPreferencesKey("show_progress_badge")
         val SHOW_STATUS_BADGE_KEY = booleanPreferencesKey("show_status_badge")
         val SHOW_SCORE_BADGE_KEY = booleanPreferencesKey("show_score_badge")
-        val SHOW_CATEGORY_BADGE_KEY = booleanPreferencesKey("show_category_badge")
     }
 
     val themeMode: Flow<String> = context.dataStore.data.map { preferences ->
@@ -78,7 +76,6 @@ class ThemePreferences(private val context: Context) {
             showProgressBadge = preferences[SHOW_PROGRESS_BADGE_KEY] ?: true,
             showStatusBadge = preferences[SHOW_STATUS_BADGE_KEY] ?: true,
             showScoreBadge = preferences[SHOW_SCORE_BADGE_KEY] ?: true,
-            showCategoryBadge = preferences[SHOW_CATEGORY_BADGE_KEY] ?: false,
             showItemCount = preferences[SHOW_ITEM_COUNT_KEY] ?: false
         )
     }
@@ -140,12 +137,6 @@ class ThemePreferences(private val context: Context) {
     suspend fun setShowScoreBadge(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[SHOW_SCORE_BADGE_KEY] = enabled
-        }
-    }
-
-    suspend fun setShowCategoryBadge(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[SHOW_CATEGORY_BADGE_KEY] = enabled
         }
     }
 }

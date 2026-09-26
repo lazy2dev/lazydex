@@ -1,26 +1,28 @@
 package app.lazydex.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
+import app.lazydex.R
+import app.lazydex.ui.theme.CoverPlaceholderColor
+import app.lazydex.ui.theme.CoverPlaceholderOnBgColor
+import coil3.compose.SubcomposeAsyncImage
 import java.io.File
 
 @Composable
@@ -34,56 +36,61 @@ fun CoverImage(
     val fileExists = remember(coverImagePath) {
         coverImagePath.isNotEmpty() && File(coverImagePath).exists()
     }
-    
+
     val imageModel: Any? = remember(coverImagePath, coverImageUrl, fileExists) {
         if (fileExists) File(coverImagePath)
         else coverImageUrl?.takeIf { it.isNotBlank() }
     }
-    
-    var hasError by remember(imageModel) { mutableStateOf(imageModel == null) }
 
-    // Initials fallback calculation
-    val initials = remember(title) {
-        val parts = title.trim().split(Regex("\\s+"))
-        val firstChar = parts.firstOrNull()?.firstOrNull()?.toString() ?: ""
-        val secondChar = if (parts.size > 1) parts[1].firstOrNull()?.toString() ?: "" else ""
-        (firstChar + secondChar).uppercase().ifEmpty { "?" }
-    }
-
-    // Modern linear gradient for fallback
-    val fallbackGradient = remember {
-        Brush.linearGradient(
-            colors = listOf(Color(0xFF2C3E50), Color(0xFF000000))
-        )
-    }
-
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .clip(shape)
-            .background(fallbackGradient)
+            .background(CoverPlaceholderColor),
+        contentAlignment = Alignment.Center
     ) {
-        if (!hasError && imageModel != null) {
-            AsyncImage(
+        val isSmall = maxWidth < 60.dp || maxHeight < 80.dp
+        val iconSize = if (isSmall) 24.dp else 32.dp
+        val strokeWidth = if (isSmall) 2.dp else 3.dp
+
+        if (imageModel != null) {
+            SubcomposeAsyncImage(
                 model = imageModel,
                 contentDescription = "Cover for $title",
                 contentScale = ContentScale.Crop,
-                onError = { hasError = true },
-                onSuccess = { hasError = false },
+                loading = {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = CoverPlaceholderOnBgColor,
+                            modifier = Modifier.size(iconSize),
+                            strokeWidth = strokeWidth,
+                        )
+                    }
+                },
+                error = {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            imageVector = ImageVector.vectorResource(R.drawable.cover_error_vector),
+                            contentDescription = "Cover for $title",
+                            modifier = Modifier.size(iconSize),
+                            colorFilter = ColorFilter.tint(CoverPlaceholderOnBgColor)
+                        )
+                    }
+                },
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            // Initials Fallback UI
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Text(
-                    text = initials,
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            Image(
+                imageVector = ImageVector.vectorResource(R.drawable.cover_error_vector),
+                contentDescription = "Cover for $title",
+                modifier = Modifier.size(iconSize),
+                colorFilter = ColorFilter.tint(CoverPlaceholderOnBgColor)
+            )
         }
     }
 }
