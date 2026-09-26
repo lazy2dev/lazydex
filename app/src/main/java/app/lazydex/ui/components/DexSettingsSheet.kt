@@ -43,6 +43,7 @@ import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -456,50 +457,26 @@ private fun DisplayPage(
     ) {
         HeadingItem(text = "Display mode")
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            DisplayModeButton(
-                text = "Compact grid",
-                selected = displayMode == LibraryDisplayMode.COMPACT_GRID,
-                onClick = { onSelectDisplayMode(LibraryDisplayMode.COMPACT_GRID) },
-                modifier = Modifier.weight(1.3f)
-            )
-            DisplayModeButton(
-                text = "Comfortable grid",
-                selected = displayMode == LibraryDisplayMode.COMFORTABLE_GRID,
-                onClick = { onSelectDisplayMode(LibraryDisplayMode.COMFORTABLE_GRID) },
-                modifier = Modifier.weight(1.5f)
-            )
-            DisplayModeButton(
-                text = "List",
-                selected = displayMode == LibraryDisplayMode.LIST,
-                onClick = { onSelectDisplayMode(LibraryDisplayMode.LIST) },
-                modifier = Modifier.weight(0.9f)
-            )
-        }
+        val displayModes = listOf(
+            "Compact grid" to LibraryDisplayMode.COMPACT_GRID,
+            "Comfortable grid" to LibraryDisplayMode.COMFORTABLE_GRID,
+            "List" to LibraryDisplayMode.LIST,
+            "Cover-only grid" to LibraryDisplayMode.COVER_ONLY_GRID,
+            "Panorama comfortable grid" to LibraryDisplayMode.PANORAMA_COMFORTABLE_GRID,
+        )
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        FlowRow(
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            DisplayModeButton(
-                text = "Cover-only grid",
-                selected = displayMode == LibraryDisplayMode.COVER_ONLY_GRID,
-                onClick = { onSelectDisplayMode(LibraryDisplayMode.COVER_ONLY_GRID) },
-                modifier = Modifier.weight(1.2f)
-            )
-            DisplayModeButton(
-                text = "Panorama comfortable grid",
-                selected = displayMode == LibraryDisplayMode.PANORAMA_COMFORTABLE_GRID,
-                onClick = { onSelectDisplayMode(LibraryDisplayMode.PANORAMA_COMFORTABLE_GRID) },
-                modifier = Modifier.weight(2f)
-            )
+            displayModes.forEach { (text, mode) ->
+                FilterChip(
+                    selected = displayMode == mode,
+                    onClick = { onSelectDisplayMode(mode) },
+                    label = { Text(text) },
+                )
+            }
         }
 
         if (displayMode != LibraryDisplayMode.LIST) {
@@ -512,7 +489,7 @@ private fun DisplayPage(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
-        HeadingItem(text = "Overlay")
+        HeadingItem(text = "Badges")
         CheckboxItem(
             label = "Progress badge",
             checked = showProgressBadge,
@@ -559,7 +536,7 @@ private fun SliderItem(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 6.dp)
+            .padding(horizontal = 24.dp, vertical = 10.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -571,59 +548,39 @@ private fun SliderItem(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .padding(horizontal = 10.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = if (value == 0) "Auto" else value.toString(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
+            Pill(
+                text = if (value == 0) "Auto" else value.toString(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+            )
         }
         Slider(
             value = value.toFloat(),
             onValueChange = { onChange(it.roundToInt()) },
             valueRange = 0f..10f,
             steps = 9,
+            thumb = {
+                Box(
+                    modifier = Modifier
+                        .size(width = 4.dp, height = 36.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+            },
+            track = { sliderState ->
+                SliderDefaults.Track(
+                    colors = SliderDefaults.colors(
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        activeTickColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.38f),
+                        inactiveTickColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                    ),
+                    sliderState = sliderState,
+                    modifier = Modifier.height(16.dp),
+                )
+            },
             modifier = Modifier.fillMaxWidth()
-        )
-    }
-}
-
-@Composable
-private fun DisplayModeButton(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val backgroundColor = if (selected) {
-        MaterialTheme.colorScheme.secondaryContainer
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerHighest
-    }
-    val textColor = if (selected) {
-        MaterialTheme.colorScheme.onSecondaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(backgroundColor)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge,
-            color = textColor,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
         )
     }
 }
@@ -632,8 +589,8 @@ private fun DisplayModeButton(
 private fun HeadingItem(text: String) {
     Text(
         text = text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier
             .fillMaxWidth()
@@ -653,7 +610,7 @@ private fun CheckboxItem(
         modifier = modifier
             .clickable(onClick = onClick)
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 12.dp),
+            .padding(horizontal = 24.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(24.dp),
     ) {
@@ -665,7 +622,7 @@ private fun CheckboxItem(
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f)
         )
@@ -689,7 +646,7 @@ private fun SortItem(
         modifier = Modifier
             .clickable(onClick = onClick)
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 12.dp),
+            .padding(horizontal = 24.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(24.dp),
     ) {
@@ -705,7 +662,7 @@ private fun SortItem(
         }
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyMedium,
             color = if (sortDescending != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
         )
     }

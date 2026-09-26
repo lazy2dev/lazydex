@@ -1,12 +1,15 @@
 package app.lazydex.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,8 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,6 +27,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -32,6 +38,14 @@ import androidx.compose.ui.unit.sp
 import app.lazydex.data.local.LibraryDisplayMode
 import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.MediaItem
+import app.lazydex.domain.model.UserStatus
+import app.lazydex.ui.theme.StatusCompleted
+import app.lazydex.ui.theme.StatusDropped
+import app.lazydex.ui.theme.StatusInProgress
+import app.lazydex.ui.theme.StatusOnHold
+import app.lazydex.ui.theme.StatusPlanTo
+
+
 
 @Composable
 fun MediaCard(
@@ -59,94 +73,98 @@ fun MediaCard(
         "$unit ${item.currentProgress} / $totalStr"
     }
 
+    val statusColor = when (item.userStatus) {
+        UserStatus.READING, UserStatus.WATCHING, UserStatus.PLAYING -> StatusInProgress
+        UserStatus.COMPLETED -> StatusCompleted
+        UserStatus.ON_HOLD -> StatusOnHold
+        UserStatus.DROPPED -> StatusDropped
+        UserStatus.PLAN_TO -> StatusPlanTo
+    }
+
+    val hasStartBadges = showStatusBadge || (showProgressBadge && item.currentProgress > 0)
+    val hasEndBadges = (showScoreBadge && item.rating != null) || showCategoryBadge
+
     when (effectiveMode) {
         LibraryDisplayMode.LIST -> {
-            Card(
-                onClick = onClick,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            Row(
                 modifier = modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp, horizontal = 8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .clickable(onClick = onClick)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
+                CoverImage(
+                    coverImagePath = item.coverImagePath,
+                    title = item.title,
+                    coverImageUrl = item.coverImageUrl,
+                    shape = RoundedCornerShape(4.dp),
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .size(width = 48.dp, height = 72.dp)
+                )
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(72.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    CoverImage(
-                        coverImagePath = item.coverImagePath,
-                        title = item.title,
-                        coverImageUrl = item.coverImageUrl,
-                        modifier = Modifier
-                            .size(width = 70.dp, height = 95.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                    )
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(95.dp),
-                        verticalArrangement = Arrangement.SpaceBetween
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
                     ) {
-                        Column {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.Top
-                            ) {
-                                Text(
-                                    text = item.title,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = relativeTime,
-                                    fontSize = 10.sp,
-                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                                )
-                            }
+                        Text(
+                            text = item.title,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = relativeTime,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
-                            if (showScoreBadge && item.rating != null) {
-                                Spacer(modifier = Modifier.height(2.dp))
-                                StarRating(
-                                    rating = item.rating,
-                                    isEditable = false
-                                )
-                            }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (showProgressBadge) {
+                            Text(
+                                text = progressLabel,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.width(1.dp))
                         }
 
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (showProgressBadge) {
+                            if (showScoreBadge && item.rating != null) {
                                 Text(
-                                    text = progressLabel,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                                    text = "${item.rating}★",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFF1C40F)
                                 )
-                            } else {
-                                Spacer(modifier = Modifier.width(1.dp))
                             }
-
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                if (showCategoryBadge) {
-                                    CategoryBadge(category = item.category)
-                                }
-                                if (showStatusBadge) {
-                                    StatusBadge(status = item.userStatus)
-                                }
+                            if (showCategoryBadge) {
+                                CategoryBadge(category = item.category)
+                            }
+                            if (showStatusBadge) {
+                                StatusBadge(status = item.userStatus)
                             }
                         }
                     }
@@ -156,103 +174,104 @@ fun MediaCard(
 
         LibraryDisplayMode.COMPACT_GRID, LibraryDisplayMode.COVER_ONLY_GRID -> {
             val showTitle = effectiveMode == LibraryDisplayMode.COMPACT_GRID
-            Card(
-                onClick = onClick,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            Box(
                 modifier = modifier
-                    .padding(4.dp)
-                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(4.dp))
+                    .clickable(onClick = onClick)
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp)
+                        .aspectRatio(2f / 3f)
                 ) {
                     CoverImage(
                         coverImagePath = item.coverImagePath,
                         title = item.title,
                         coverImageUrl = item.coverImageUrl,
+                        shape = RoundedCornerShape(4.dp),
                         modifier = Modifier.fillMaxSize()
                     )
 
                     if (showTitle) {
                         Box(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .clip(RoundedCornerShape(bottomStart = 4.dp, bottomEnd = 4.dp))
                                 .background(
                                     Brush.verticalGradient(
-                                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)),
-                                        startY = 110f
+                                        0f to Color.Transparent,
+                                        1f to Color(0xAA000000),
                                     )
                                 )
-                        )
-                    }
-
-                    if (showStatusBadge) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(6.dp)
-                        ) {
-                            StatusBadge(status = item.userStatus)
-                        }
-                    }
-
-                    if (showCategoryBadge) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(6.dp)
-                        ) {
-                            CategoryBadge(category = item.category)
-                        }
-                    }
-
-                    if (showTitle) {
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
+                                .fillMaxHeight(0.33f)
                                 .fillMaxWidth()
-                                .padding(8.dp)
+                                .align(Alignment.BottomCenter)
+                        )
+                        Row(
+                            modifier = Modifier.align(Alignment.BottomStart),
+                            verticalAlignment = Alignment.Bottom,
                         ) {
                             Text(
                                 text = item.title,
-                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp),
                                 fontSize = 12.sp,
-                                color = Color.White,
+                                lineHeight = 16.sp,
                                 maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    color = Color.White,
+                                    shadow = Shadow(
+                                        color = Color.Black,
+                                        blurRadius = 4f,
+                                    ),
+                                ),
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
+                        }
+                    }
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                if (showProgressBadge) {
-                                    Text(
-                                        text = progressLabel,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = Color.White.copy(alpha = 0.8f),
-                                        modifier = Modifier.weight(1f),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                } else {
-                                    Spacer(modifier = Modifier.weight(1f))
-                                }
-                                if (showScoreBadge && item.rating != null) {
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "${item.rating}★",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFF1C40F)
-                                    )
-                                }
+                    if (hasStartBadges) {
+                        BadgeGroup(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(4.dp)
+                        ) {
+                            if (showStatusBadge) {
+                                Badge(
+                                    imageVector = item.userStatus.icon(),
+                                    color = statusColor,
+                                    iconColor = Color.White,
+                                )
+                            }
+                            if (showProgressBadge && item.currentProgress > 0) {
+                                Badge(
+                                    text = "${item.currentProgress}",
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                    textColor = MaterialTheme.colorScheme.onTertiary,
+                                )
+                            }
+                        }
+                    }
+
+                    if (hasEndBadges) {
+                        BadgeGroup(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(4.dp)
+                        ) {
+                            if (showScoreBadge && item.rating != null) {
+                                Badge(
+                                    text = "${item.rating}★",
+                                    color = MaterialTheme.colorScheme.secondary,
+                                    textColor = MaterialTheme.colorScheme.onSecondary,
+                                )
+                            }
+                            if (showCategoryBadge) {
+                                Badge(
+                                    imageVector = item.category.icon(),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    iconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
                             }
                         }
                     }
@@ -262,95 +281,84 @@ fun MediaCard(
 
         LibraryDisplayMode.COMFORTABLE_GRID, LibraryDisplayMode.PANORAMA_COMFORTABLE_GRID -> {
             val isPanorama = effectiveMode == LibraryDisplayMode.PANORAMA_COMFORTABLE_GRID
-            Card(
-                onClick = onClick,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            val coverRatio = if (isPanorama) (3f / 2f) else (2f / 3f)
+
+            Column(
                 modifier = modifier
-                    .padding(4.dp)
-                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(4.dp))
+                    .clickable(onClick = onClick)
             ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .then(
-                                if (isPanorama) Modifier.aspectRatio(16f / 9f)
-                                else Modifier.aspectRatio(3f / 4f)
-                            )
-                    ) {
-                        CoverImage(
-                            coverImagePath = item.coverImagePath,
-                            title = item.title,
-                            coverImageUrl = item.coverImageUrl,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(coverRatio)
+                ) {
+                    CoverImage(
+                        coverImagePath = item.coverImagePath,
+                        title = item.title,
+                        coverImageUrl = item.coverImageUrl,
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.fillMaxSize()
+                    )
 
-                        if (showStatusBadge) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.TopStart)
-                                    .padding(6.dp)
-                            ) {
-                                StatusBadge(status = item.userStatus)
+                    if (hasStartBadges) {
+                        BadgeGroup(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(4.dp)
+                        ) {
+                            if (showStatusBadge) {
+                                Badge(
+                                    imageVector = item.userStatus.icon(),
+                                    color = statusColor,
+                                    iconColor = Color.White,
+                                )
                             }
-                        }
-
-                        if (showCategoryBadge) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(6.dp)
-                            ) {
-                                CategoryBadge(category = item.category)
+                            if (showProgressBadge && item.currentProgress > 0) {
+                                Badge(
+                                    text = "${item.currentProgress}",
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                    textColor = MaterialTheme.colorScheme.onTertiary,
+                                )
                             }
                         }
                     }
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = item.title,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 12.sp,
-                            maxLines = if (isPanorama) 1 else 2,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                    if (hasEndBadges) {
+                        BadgeGroup(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(4.dp)
                         ) {
-                            if (showProgressBadge) {
-                                Text(
-                                    text = progressLabel,
-                                    fontSize = 10.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.weight(1f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            } else {
-                                Spacer(modifier = Modifier.weight(1f))
-                            }
                             if (showScoreBadge && item.rating != null) {
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
+                                Badge(
                                     text = "${item.rating}★",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFF1C40F)
+                                    color = MaterialTheme.colorScheme.secondary,
+                                    textColor = MaterialTheme.colorScheme.onSecondary,
+                                )
+                            }
+                            if (showCategoryBadge) {
+                                Badge(
+                                    imageVector = item.category.icon(),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    iconColor = MaterialTheme.colorScheme.onPrimaryContainer,
                                 )
                             }
                         }
                     }
                 }
+
+                Text(
+                    text = item.title,
+                    modifier = Modifier.padding(4.dp),
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp,
+                    minLines = if (isPanorama) 1 else 2,
+                    maxLines = if (isPanorama) 1 else 2,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
             }
         }
     }

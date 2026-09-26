@@ -1,13 +1,16 @@
 package app.lazydex.ui.dex
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -22,10 +25,16 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
@@ -42,29 +51,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.automirrored.filled.ViewList
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
-import androidx.compose.material3.Text
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import app.lazydex.data.local.LibraryDisplayMode
 import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.StatusFilter
-import app.lazydex.ui.components.EmptyState
-import app.lazydex.ui.components.GenreChipRow
 import app.lazydex.ui.components.DexSettingsSheet
+import app.lazydex.ui.components.EmptyState
 import app.lazydex.ui.components.MediaCard
-import app.lazydex.ui.components.TagChipRow
+import app.lazydex.ui.components.Pill
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -153,19 +150,10 @@ fun DexScreen(
                             )
                             if (uiState.showItemCount) {
                                 val count = if (uiState.selectedCategory == null) uiState.totalCount else (uiState.perCategoryCounts[uiState.selectedCategory] ?: 0)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.surfaceVariant
-                                ) {
-                                    Text(
-                                        text = "$count",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                    )
-                                }
+                                Pill(
+                                    text = "$count",
+                                    fontSize = 14.sp
+                                )
                             }
                         }
                     }
@@ -223,7 +211,7 @@ fun DexScreen(
             if (uiState.showCategoryTabs) {
                 ScrollableTabRow(
                     selectedTabIndex = selectedTabIndex,
-                    edgePadding = 12.dp,
+                    edgePadding = 0.dp,
                     containerColor = MaterialTheme.colorScheme.background,
                     contentColor = MaterialTheme.colorScheme.onSurface,
                     indicator = { tabPositions ->
@@ -252,46 +240,18 @@ fun DexScreen(
                                         color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     if (uiState.showItemCount && count > 0) {
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-                                        ) {
-                                            Text(
-                                                text = "$count",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                                            )
-                                        }
+                                        Pill(
+                                            text = "$count",
+                                            fontSize = 10.sp
+                                        )
                                     }
                                 }
                             }
                         )
                     }
                 }
+                HorizontalDivider()
             }
-            // Genre & Tag chip rows (visible when available)
-            if (uiState.availableGenres.isNotEmpty()) {
-                GenreChipRow(
-                    availableGenres = uiState.availableGenres,
-                    selectedGenres = uiState.selectedGenres,
-                    onToggleGenre = { viewModel.toggleGenre(it) },
-                    onClearGenres = { viewModel.selectGenres(emptySet()) }
-                )
-            }
-
-            if (uiState.availableTags.isNotEmpty()) {
-                TagChipRow(
-                    availableTags = uiState.availableTags,
-                    selectedTags = uiState.selectedTags,
-                    onToggleTag = { viewModel.toggleTag(it) },
-                    onClearTags = { viewModel.selectTags(emptySet()) }
-                )
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
 
             // Main List/Grid Content
             Box(
@@ -328,6 +288,7 @@ fun DexScreen(
                     else -> {
                         if (uiState.displayMode == LibraryDisplayMode.LIST) {
                             LazyColumn(
+                                contentPadding = PaddingValues(vertical = 4.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 items(
@@ -349,12 +310,14 @@ fun DexScreen(
                             val gridCells = when {
                                 uiState.gridColumns > 0 -> GridCells.Fixed(uiState.gridColumns)
                                 uiState.displayMode == LibraryDisplayMode.PANORAMA_COMFORTABLE_GRID -> GridCells.Adaptive(minSize = 160.dp)
-                                else -> GridCells.Adaptive(minSize = 105.dp)
+                                else -> GridCells.Adaptive(minSize = 128.dp)
                             }
 
                             LazyVerticalGrid(
                                 columns = gridCells,
-                                contentPadding = PaddingValues(4.dp),
+                                contentPadding = PaddingValues(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 items(

@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -27,7 +28,8 @@ fun CoverImage(
     coverImagePath: String,
     title: String,
     modifier: Modifier = Modifier,
-    coverImageUrl: String? = null
+    coverImageUrl: String? = null,
+    shape: Shape = RoundedCornerShape(4.dp),
 ) {
     val fileExists = remember(coverImagePath) {
         coverImagePath.isNotEmpty() && File(coverImagePath).exists()
@@ -57,7 +59,7 @@ fun CoverImage(
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(shape)
             .background(fallbackGradient)
     ) {
         if (!hasError && imageModel != null) {
