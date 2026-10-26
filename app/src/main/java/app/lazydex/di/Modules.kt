@@ -11,13 +11,8 @@ import app.lazydex.data.repository.MediaRepositoryImpl
 import app.lazydex.domain.repository.MediaRepository
 import app.lazydex.scraper.MetadataScraper
 import app.lazydex.scraper.SafeDns
-import app.lazydex.scraper.source.AniListSource
 import app.lazydex.scraper.source.GenericSource
-import app.lazydex.scraper.source.MangaDexSource
-import app.lazydex.scraper.source.NovelUpdatesSource
-import app.lazydex.scraper.source.RoyalRoadSource
 import app.lazydex.scraper.source.SourceRegistry
-import app.lazydex.scraper.source.WtrLabSource
 import app.lazydex.ui.addedit.UnifiedAddEditViewModel
 import app.lazydex.ui.browser.BrowserViewModel
 import app.lazydex.ui.dex.DexViewModel
@@ -31,6 +26,8 @@ import org.koin.dsl.module
 import java.io.File
 import java.time.Duration
 
+import app.lazydex.data.local.MIGRATION_3_4
+
 val databaseModule = module {
     single {
         Room.databaseBuilder(
@@ -39,8 +36,8 @@ val databaseModule = module {
             "lazydex_db"
         )
         .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
-        .fallbackToDestructiveMigration()
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+        .fallbackToDestructiveMigrationOnDowngrade()
         .addCallback(object : RoomDatabase.Callback() {
             override fun onDestructiveMigration(db: SupportSQLiteDatabase) {
                 super.onDestructiveMigration(db)
@@ -51,6 +48,8 @@ val databaseModule = module {
     }
 
     single { get<LazyDexDatabase>().mediaItemDao() }
+    single { get<LazyDexDatabase>().extensionRepoDao() }
+    single { get<LazyDexDatabase>().installedExtensionDao() }
 }
 
 val repositoryModule = module {
@@ -77,20 +76,10 @@ val scraperModule = module {
             .followSslRedirects(true)
             .build()
     }
-    single { WtrLabSource(get()) }
-    single { NovelUpdatesSource(get()) }
-    single { RoyalRoadSource(get()) }
-    single { MangaDexSource(get()) }
-    single { AniListSource(get()) }
     single { GenericSource(get()) }
     single {
         SourceRegistry(
             listOf(
-                get<WtrLabSource>(),
-                get<NovelUpdatesSource>(),
-                get<RoyalRoadSource>(),
-                get<MangaDexSource>(),
-                get<AniListSource>(),
                 get<GenericSource>()
             )
         )
@@ -101,6 +90,28 @@ val scraperModule = module {
 val storageModule = module {
     single(named("cacheDir")) { androidContext().cacheDir }
     single(named("coversDir")) { File(androidContext().filesDir, "covers") }
+}
+
+val extensionModule = module {
+    single { app.lazydex.extension.manifest.ManifestParser() }
+    single { app.lazydex.extension.runtime.DexRuntimeEngine(androidContext()) }
+    single { app.lazydex.extension.runtime.JsRuntimeEngine(get()) }
+    single { app.lazydex.extension.runtime.LuaRuntimeEngine(get()) }
+    single { app.lazydex.extension.runtime.WasmRuntimeEngine(get()) }
+    single {
+        app.lazydex.extension.repository.ExtensionRepository(
+            context = androidContext(),
+            repoDao = get(),
+            installedDao = get(),
+            manifestParser = get(),
+            okHttpClient = get(),
+            dexEngine = get(),
+            jsEngine = get(),
+            luaEngine = get(),
+            wasmEngine = get(),
+            sourceRegistry = get()
+        )
+    }
 }
 
 val viewModelModule = module {
@@ -124,6 +135,7 @@ val viewModelModule = module {
             cacheDir = get(named("cacheDir"))
         )
     }
+    viewModel { app.lazydex.ui.settings.extensions.ExtensionViewModel(get()) }
 }
 
 val appModule = listOf(
@@ -131,6 +143,7 @@ val appModule = listOf(
     repositoryModule,
     preferencesModule,
     scraperModule,
+    extensionModule,
     storageModule,
     viewModelModule
 )

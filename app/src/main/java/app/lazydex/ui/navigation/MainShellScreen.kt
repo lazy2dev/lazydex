@@ -41,6 +41,7 @@ enum class ShellTab {
 @Composable
 fun MainShellScreen(
     onNavigateToAppearance: () -> Unit,
+    onNavigateToExtensions: () -> Unit,
     onNavigateToDataAndStorage: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onNavigateToAddItem: (String?) -> Unit,
@@ -148,6 +149,7 @@ fun MainShellScreen(
                 ShellTab.SETTINGS -> {
                     SettingsMainScreen(
                         onNavigateToAppearance = onNavigateToAppearance,
+                        onNavigateToExtensions = onNavigateToExtensions,
                         onNavigateToDataAndStorage = onNavigateToDataAndStorage,
                         onNavigateToAbout = onNavigateToAbout,
                         modifier = Modifier.fillMaxSize()

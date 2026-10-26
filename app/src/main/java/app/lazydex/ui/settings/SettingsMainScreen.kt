@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Storage
@@ -30,6 +31,7 @@ import app.lazydex.ui.settings.components.TextPreferenceWidget
 @Composable
 fun SettingsMainScreen(
     onNavigateToAppearance: () -> Unit,
+    onNavigateToExtensions: () -> Unit,
     onNavigateToDataAndStorage: () -> Unit,
     onNavigateToAbout: () -> Unit,
     modifier: Modifier = Modifier
@@ -65,6 +67,18 @@ fun SettingsMainScreen(
                 subtitle = "Theme mode, color preset & pure black",
                 icon = Icons.Default.Palette,
                 onClick = onNavigateToAppearance
+            )
+
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+
+            TextPreferenceWidget(
+                title = "Extensions",
+                subtitle = "Repositories, scrapers & multi-runtime store",
+                icon = Icons.Default.Extension,
+                onClick = onNavigateToExtensions
             )
 
             HorizontalDivider(

@@ -13,8 +13,8 @@ android {
         applicationId = "app.lazydex"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "0.0.2.8"
+        versionCode = 11
+        versionName = "0.0.2.9"
     }
 
     buildTypes {
@@ -40,6 +40,10 @@ android {
         excludes += "/META-INF/{AL2.0,LGPL2.1}"
       }
     }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 ksp {
@@ -54,6 +58,8 @@ dependencies {
   val composeBom = platform(libs.androidx.compose.bom)
   implementation(composeBom)
   androidTestImplementation(composeBom)
+
+  implementation(project(":lib:extensions"))
 
   // Core Android dependencies
   implementation(libs.androidx.core.ktx)
@@ -78,6 +84,7 @@ dependencies {
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
+  testImplementation("org.xerial:sqlite-jdbc:3.41.2.2")
 
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)
@@ -107,6 +114,11 @@ dependencies {
 
   // Serialization
   implementation(libs.kotlinx.serialization.json)
+  implementation("org.jetbrains.kotlinx:kotlinx-serialization-protobuf:1.7.3")
+  implementation("org.luaj:luaj-jse:3.0.1")
+  implementation("com.dylibso.chicory:runtime:1.0.0-M1")
+  implementation("app.cash.quickjs:quickjs-android:0.9.2")
+  implementation("org.mozilla:rhino:1.7.15")
 
   // DataStore
   implementation(libs.androidx.datastore.preferences)

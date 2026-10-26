@@ -31,3 +31,4 @@ plugins {
 
 rootProject.name = "LazyDex"
 include(":app")
+include(":lib:extensions")

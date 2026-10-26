@@ -9,8 +9,8 @@
 /.idea/assetWizardSettings.xml
 /.idea/planningMode.xml
 .DS_Store
-/build
-/app/build
+build/
+**/build/
 /captures
 .externalNativeBuild
 .cxx

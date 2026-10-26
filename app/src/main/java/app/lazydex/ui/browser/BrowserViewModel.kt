@@ -52,8 +52,12 @@ class BrowserViewModel(
     val uiState: StateFlow<BrowserUiState> = _uiState.asStateFlow()
 
     init {
-        _uiState.update {
-            it.copy(sources = sourceRegistry.getSearchableSources())
+        viewModelScope.launch {
+            sourceRegistry.sourcesFlow.collect {
+                _uiState.update { state ->
+                    state.copy(sources = sourceRegistry.getSearchableSources())
+                }
+            }
         }
 
         viewModelScope.launch {

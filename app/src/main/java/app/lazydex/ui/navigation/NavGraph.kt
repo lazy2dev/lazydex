@@ -30,6 +30,11 @@ object DataAndStorageRoute
 @Serializable
 object AboutRoute
 
+@Serializable
+data class ExtensionsRoute(
+    val initialAddRepoUrl: String? = null
+)
+
 @Composable
 fun LazyDexNavGraph(
     navController: NavHostController,
@@ -51,11 +56,24 @@ fun LazyDexNavGraph(
                 onNavigateToAppearance = {
                     navController.navigate(AppearanceRoute)
                 },
+                onNavigateToExtensions = {
+                    navController.navigate(ExtensionsRoute())
+                },
                 onNavigateToDataAndStorage = {
                     navController.navigate(DataAndStorageRoute)
                 },
                 onNavigateToAbout = {
                     navController.navigate(AboutRoute)
+                }
+            )
+        }
+
+        composable<ExtensionsRoute> { backStackEntry ->
+            val route = backStackEntry.toRoute<ExtensionsRoute>()
+            app.lazydex.ui.settings.extensions.ExtensionStoreScreen(
+                initialAddRepoUrl = route.initialAddRepoUrl,
+                onBack = {
+                    navController.popBackStack()
                 }
             )
         }
