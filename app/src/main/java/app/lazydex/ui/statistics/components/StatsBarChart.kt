@@ -4,26 +4,23 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -43,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.lazydex.ui.components.Pill
 import app.lazydex.ui.statistics.StatBarItem
-import java.util.Locale
 
 @Composable
 fun StatsBarChart(
@@ -57,93 +53,81 @@ fun StatsBarChart(
     val visibleItems = if (isExpanded) items else items.take(maxPreview)
     val resolvedColor = accentColor ?: MaterialTheme.colorScheme.primary
 
-    Column(modifier = modifier.fillMaxWidth()) {
-        // Section title outside the card (Komikku style)
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .animateContentSize()
+    ) {
+        // Flat section header matching Dex/Appearance screen
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 6.dp)
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.titleMedium,
                 color = resolvedColor,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold
             )
             if (items.isNotEmpty()) {
                 Pill(
                     text = "${items.size}",
-                    fontSize = 12.sp
+                    fontSize = 10.sp
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // Komikku 16dp rounded card
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-            ),
-            border = BorderStroke(
-                1.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
-            ),
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .animateContentSize()
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                if (items.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
+        if (items.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Text(
+                    text = "No ${title.lowercase()} recorded",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                visibleItems.forEach { item ->
+                    StatBarRow(
+                        item = item,
+                        defaultColor = resolvedColor
+                    )
+                }
+            }
+
+            if (items.size > maxPreview) {
+                Spacer(modifier = Modifier.height(6.dp))
+                TextButton(
+                    onClick = { isExpanded = !isExpanded },
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .defaultMinSize(minHeight = 48.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
                     ) {
                         Text(
-                            text = "No ${title.lowercase()} in library",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            text = if (isExpanded) "Show less" else "Show all",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = resolvedColor
                         )
-                    }
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        visibleItems.forEach { item ->
-                            StatBarRow(
-                                item = item,
-                                defaultColor = resolvedColor
-                            )
-                        }
-                    }
-
-                    if (items.size > maxPreview) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        TextButton(
-                            onClick = { isExpanded = !isExpanded },
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Text(
-                                    text = if (isExpanded) "Show less" else "Show all (${items.size})",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = resolvedColor
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                    contentDescription = if (isExpanded) "Show less" else "Show all",
-                                    tint = resolvedColor,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            tint = resolvedColor,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }
@@ -180,21 +164,21 @@ fun StatBarRow(
                 modifier = Modifier.weight(1f, fill = false)
             )
             Spacer(modifier = Modifier.width(8.dp))
-            val percentFormatted = String.format(Locale.getDefault(), "%.1f", item.percentage)
             Text(
-                text = "${item.count} ($percentFormatted%)",
-                style = MaterialTheme.typography.labelSmall,
+                text = "${item.count}",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(8.dp)
-                .clip(CircleShape)
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
         ) {
             if (animatedFraction > 0f) {

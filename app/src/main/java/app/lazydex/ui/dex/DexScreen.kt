@@ -142,20 +142,11 @@ fun DexScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
                     } else {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Dex",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp
-                            )
-                            if (uiState.showItemCount) {
-                                val count = if (uiState.selectedCategory == null) uiState.totalCount else (uiState.perCategoryCounts[uiState.selectedCategory] ?: 0)
-                                Pill(
-                                    text = "$count",
-                                    fontSize = 14.sp
-                                )
-                            }
-                        }
+                        Text(
+                            text = "Dex",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp
+                        )
                     }
                 },
                 navigationIcon = {

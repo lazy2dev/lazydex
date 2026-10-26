@@ -46,6 +46,7 @@ data class StatisticsUiState(
     val categoryCounts: Map<MediaCategory?, Int> = emptyMap(),
     val overview: StatsOverviewData = StatsOverviewData(),
     val statusBreakdown: List<StatusSegmentData> = emptyList(),
+    val ratingDistribution: Map<Int, Int> = emptyMap(),
     val genreBars: List<StatBarItem> = emptyList(),
     val tagBars: List<StatBarItem> = emptyList()
 )

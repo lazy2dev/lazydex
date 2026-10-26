@@ -211,6 +211,16 @@ class StatisticsViewModelTest {
         assertEquals(0, state.overview.onHoldCount)
         assertEquals(1, state.overview.droppedCount)
 
+        // Status breakdown verification
+        val breakdown = state.statusBreakdown
+        assertEquals(3, breakdown.size) // inProgress (1), completed (2), dropped (1)
+        assertEquals(1, breakdown[0].count)
+        assertEquals(25.0f, breakdown[0].percentage, 0.01f)
+        assertEquals(2, breakdown[1].count)
+        assertEquals(50.0f, breakdown[1].percentage, 0.01f)
+        assertEquals(1, breakdown[2].count)
+        assertEquals(25.0f, breakdown[2].percentage, 0.01f)
+
         collectJob.cancel()
     }
 
@@ -234,5 +244,45 @@ class StatisticsViewModelTest {
         assertTrue(state.tagBars.isEmpty())
 
         collectJob.cancel()
+    }
+
+    @Test
+    fun testDurationComputationYearsMonthsDays() = runTest {
+        val yearItem = MediaItem(
+            id = "year1",
+            category = MediaCategory.NOVEL,
+            title = "Long Novel",
+            currentProgress = 10,
+            totalItems = 100,
+            userStatus = UserStatus.COMPLETED,
+            startDate = 1000L,
+            endDate = 1000L + (86400000L * 400L),
+            lastUpdated = 1000L,
+            dateAdded = 1000L
+        )
+        val monthItem = MediaItem(
+            id = "month1",
+            category = MediaCategory.MANGA,
+            title = "Medium Manga",
+            currentProgress = 5,
+            totalItems = 50,
+            userStatus = UserStatus.COMPLETED,
+            startDate = 1000L,
+            endDate = 1000L + (86400000L * 45L),
+            lastUpdated = 1000L,
+            dateAdded = 1000L
+        )
+
+        val yearRepo = FakeRepository(listOf(yearItem))
+        val yearVm = StatisticsViewModel(yearRepo)
+        val job1 = launch(UnconfinedTestDispatcher(testScheduler)) { yearVm.uiState.collect {} }
+        assertEquals("1y 1mo", yearVm.uiState.value.overview.durationText)
+        job1.cancel()
+
+        val monthRepo = FakeRepository(listOf(monthItem))
+        val monthVm = StatisticsViewModel(monthRepo)
+        val job2 = launch(UnconfinedTestDispatcher(testScheduler)) { monthVm.uiState.collect {} }
+        assertEquals("1mo 15d", monthVm.uiState.value.overview.durationText)
+        job2.cancel()
     }
 }

@@ -88,6 +88,12 @@ class StatisticsViewModel(
         val ratedCount = ratedItems.size
         val unratedCount = activeTotal - ratedCount
         val meanRating = if (ratedItems.isNotEmpty()) ratedItems.average() else null
+        val ratingDistribution = (1..5).associateWith { star ->
+            ratedItems.count { rating ->
+                val rounded = kotlin.math.round(rating).toInt().coerceIn(1, 5)
+                rounded == star
+            }
+        }
 
         // Duration computation
         val now = System.currentTimeMillis()
@@ -103,12 +109,23 @@ class StatisticsViewModel(
 
         val durationText = if (totalDurationMillis > 0) {
             val totalMinutes = TimeUnit.MILLISECONDS.toMinutes(totalDurationMillis)
-            val days = totalMinutes / (24 * 60)
+            val totalDays = totalMinutes / (24 * 60)
+            val years = totalDays / 365
+            val remDaysAfterYears = totalDays % 365
+            val months = remDaysAfterYears / 30
+            val days = remDaysAfterYears % 30
             val hours = (totalMinutes % (24 * 60)) / 60
             val mins = totalMinutes % 60
             when {
+                years > 0 && months > 0 -> "${years}y ${months}mo"
+                years > 0 && days > 0 -> "${years}y ${days}d"
+                years > 0 -> "${years}y"
+                months > 0 && days > 0 -> "${months}mo ${days}d"
+                months > 0 && hours > 0 -> "${months}mo ${hours}h"
+                months > 0 -> "${months}mo"
                 days > 0 && hours > 0 -> "${days}d ${hours}h"
                 days > 0 -> "${days}d"
+                hours > 0 && mins > 0 -> "${hours}h ${mins}m"
                 hours > 0 -> "${hours}h"
                 mins > 0 -> "${mins}m"
                 else -> "< 1m"
@@ -129,7 +146,7 @@ class StatisticsViewModel(
             MediaCategory.ANIME, MediaCategory.TV -> "Episodes watched"
             MediaCategory.GAME -> "Games played"
             MediaCategory.MOVIE -> "Movies watched"
-            null -> "Total progress"
+            null -> "Progress units"
         }
 
         val inProgressLabel = when (selectedCategory) {
@@ -173,23 +190,28 @@ class StatisticsViewModel(
             unratedCount = unratedCount
         )
 
-        // Status breakdown segments
-        val statusCounts = UserStatus.entries.associateWith { status ->
-            activeItems.count { it.userStatus == status }
-        }
-        val statusSegments = UserStatus.entries.mapNotNull { status ->
-            val count = statusCounts[status] ?: 0
+        // Status breakdown segments ordered logically
+        val statusList = listOf(
+            Triple(
+                StatusFilter.IN_PROGRESS,
+                inProgressCount,
+                when (selectedCategory) {
+                    MediaCategory.NOVEL, MediaCategory.MANGA -> UserStatus.READING
+                    MediaCategory.ANIME, MediaCategory.MOVIE, MediaCategory.TV -> UserStatus.WATCHING
+                    MediaCategory.GAME -> UserStatus.PLAYING
+                    null -> UserStatus.READING
+                }
+            ),
+            Triple(StatusFilter.PLAN_TO, planToCount, UserStatus.PLAN_TO),
+            Triple(StatusFilter.COMPLETED, completedCount, UserStatus.COMPLETED),
+            Triple(StatusFilter.ON_HOLD, onHoldCount, UserStatus.ON_HOLD),
+            Triple(StatusFilter.DROPPED, droppedCount, UserStatus.DROPPED)
+        )
+
+        val statusSegments = statusList.mapNotNull { (filter, count, status) ->
             if (count > 0 || activeTotal == 0) {
                 val percentage = if (activeTotal > 0) (count.toFloat() / activeTotal) * 100f else 0f
-                val label = when (status) {
-                    UserStatus.READING, UserStatus.WATCHING, UserStatus.PLAYING ->
-                        selectedCategory.statusLabel(StatusFilter.IN_PROGRESS)
-                    UserStatus.PLAN_TO ->
-                        selectedCategory.statusLabel(StatusFilter.PLAN_TO)
-                    UserStatus.COMPLETED -> "Completed"
-                    UserStatus.ON_HOLD -> "On Hold"
-                    UserStatus.DROPPED -> "Dropped"
-                }
+                val label = selectedCategory.statusLabel(filter)
                 StatusSegmentData(
                     status = status,
                     label = label,
@@ -220,6 +242,7 @@ class StatisticsViewModel(
             categoryCounts = tabCounts,
             overview = overview,
             statusBreakdown = statusSegments,
+            ratingDistribution = ratingDistribution,
             genreBars = genreBars,
             tagBars = tagBars
         )
