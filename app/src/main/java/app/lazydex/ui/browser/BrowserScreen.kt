@@ -1,6 +1,10 @@
 package app.lazydex.ui.browser
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,23 +18,31 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
-import androidx.compose.material.icons.filled.AddBox
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,21 +54,22 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.lazydex.domain.model.MediaCategory
-import app.lazydex.ui.components.CategoryBadge
-import app.lazydex.ui.components.EmptyState
-import coil3.compose.AsyncImage
+import app.lazydex.scraper.source.Source
+import app.lazydex.ui.browser.components.BaseSourceItem
+import app.lazydex.ui.browser.components.SourceCoverGridItem
+import app.lazydex.ui.components.color
+import app.lazydex.ui.components.icon
 import org.koin.androidx.compose.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,21 +81,34 @@ fun BrowserScreen(
     viewModel: BrowserViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var urlInput by rememberSaveable { mutableStateOf("") }
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+
+    val selectedSource = uiState.selectedSource
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = uiState.selectedSource?.name ?: "Add & Browse",
+                        text = selectedSource?.name ?: "Add & Browse",
                         fontWeight = FontWeight.Bold
                     )
                 },
                 navigationIcon = {
-                    if (uiState.selectedSource != null) {
+                    if (selectedSource != null) {
                         IconButton(onClick = { viewModel.selectSource(null) }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to sources")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to directory")
+                        }
+                    }
+                },
+                actions = {
+                    if (selectedSource != null && selectedSource.baseUrl.isNotBlank()) {
+                        IconButton(onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(selectedSource.baseUrl))
+                            context.startActivity(intent)
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = "Open in browser")
                         }
                     }
                 },
@@ -94,282 +120,518 @@ fun BrowserScreen(
         containerColor = MaterialTheme.colorScheme.background,
         modifier = modifier
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            if (uiState.selectedSource == null) {
-                // Source List & Add Options View
-                LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    // Direct Link Card
-                    item {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = "Import from Link",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "Paste a link from MangaDex, AniList, RoyalRoad, etc.",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    OutlinedTextField(
-                                        value = urlInput,
-                                        onValueChange = { urlInput = it },
-                                        placeholder = { Text("https://...") },
-                                        singleLine = true,
-                                        leadingIcon = {
-                                            Icon(Icons.Default.Link, contentDescription = "URL Link")
-                                        },
-                                        trailingIcon = {
-                                            if (urlInput.isNotEmpty()) {
-                                                IconButton(onClick = { urlInput = "" }) {
-                                                    Icon(Icons.Default.Clear, contentDescription = "Clear")
-                                                }
-                                            }
-                                        },
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Button(
-                                        onClick = {
-                                            val trimmed = urlInput.trim()
-                                            if (trimmed.isNotBlank()) {
-                                                onNavigateToCreateFromUrl(trimmed)
-                                            }
-                                        },
-                                        enabled = urlInput.isNotBlank()
-                                    ) {
-                                        Text("Import")
-                                    }
-                                }
-                            }
-                        }
+        if (selectedSource != null) {
+            // Single Source Browse View
+            SingleSourceBrowseView(
+                source = selectedSource,
+                uiState = uiState,
+                onSearchQueryChanged = { viewModel.updateSearchQuery(it) },
+                onSearch = { viewModel.performSearch() },
+                onClearSearch = { viewModel.clearSearch() },
+                onItemClick = { onNavigateToCreateFromUrl(it.url) },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            )
+        } else {
+            // Main Unified Add & Browse Directory View
+            MainBrowseView(
+                uiState = uiState,
+                onCategorySelected = { viewModel.setCategory(it) },
+                onSearchQueryChanged = { viewModel.updateSearchQuery(it) },
+                onSearch = { viewModel.performSearch() },
+                onClearSearch = { viewModel.clearSearch() },
+                onPasteClipboard = {
+                    val clip = clipboardManager.getText()?.text
+                    if (!clip.isNullOrBlank()) {
+                        viewModel.updateSearchQuery(clip)
                     }
+                },
+                onTogglePin = { viewModel.togglePin(it) },
+                onSelectSource = { viewModel.selectSource(it) },
+                onNavigateToCreateFromUrl = onNavigateToCreateFromUrl,
+                onNavigateToManualAdd = onNavigateToManualAdd,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            )
+        }
+    }
+}
 
-                    // Manual Add Card
-                    item {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onNavigateToManualAdd() }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp)
-                            ) {
+@Composable
+private fun MainBrowseView(
+    uiState: BrowserUiState,
+    onCategorySelected: (MediaCategory?) -> Unit,
+    onSearchQueryChanged: (String) -> Unit,
+    onSearch: () -> Unit,
+    onClearSearch: () -> Unit,
+    onPasteClipboard: () -> Unit,
+    onTogglePin: (String) -> Unit,
+    onSelectSource: (Source) -> Unit,
+    onNavigateToCreateFromUrl: (String) -> Unit,
+    onNavigateToManualAdd: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val categories = listOf(
+        null to "All",
+        MediaCategory.NOVEL to "Novels",
+        MediaCategory.MANGA to "Manga",
+        MediaCategory.ANIME to "Anime",
+        MediaCategory.GAME to "Games",
+        MediaCategory.MOVIE to "Movies",
+        MediaCategory.TV to "TV"
+    )
+
+    val selectedCategory = uiState.selectedCategory
+    val categoryHasNoScrapers = selectedCategory in listOf(MediaCategory.GAME, MediaCategory.MOVIE, MediaCategory.TV)
+    val detectedSource = uiState.detectedSourceForUrl
+
+    LazyColumn(
+        contentPadding = PaddingValues(bottom = 24.dp),
+        modifier = modifier.fillMaxSize()
+    ) {
+        // 1. Type / Category Filter Row
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                categories.forEach { (cat, label) ->
+                    val isSelected = selectedCategory == cat
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { onCategorySelected(if (isSelected && cat != null) null else cat) },
+                        label = { Text(label) },
+                        leadingIcon = if (cat != null) {
+                            {
                                 Icon(
-                                    imageVector = Icons.Default.AddBox,
-                                    contentDescription = "Manual Add",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(32.dp)
-                                )
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Add Manually",
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "Create an entry with custom title and details",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                    imageVector = cat.icon(),
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = if (isSelected) MaterialTheme.colorScheme.primary else cat.color(),
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
+                        } else null,
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    )
+                }
+            }
+        }
+
+        // 2. Unified Search & URL Input Bar
+        item {
+            OutlinedTextField(
+                value = uiState.searchQuery,
+                onValueChange = onSearchQueryChanged,
+                placeholder = {
+                    Text(
+                        if (categoryHasNoScrapers) "Enter title to add manually..."
+                        else "Search title or paste URL..."
+                    )
+                },
+                singleLine = true,
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                trailingIcon = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (uiState.searchQuery.isNotEmpty()) {
+                            IconButton(onClick = onClearSearch) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear input")
+                            }
+                        } else {
+                            IconButton(onClick = onPasteClipboard) {
+                                Icon(Icons.Default.ContentPaste, contentDescription = "Paste from clipboard")
+                            }
                         }
                     }
+                },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+            )
+        }
 
-                    item {
-                        Text(
-                            text = "Browse & Search Sources",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+        // 3. Contextual Quick Actions (URL detected or No Scrapers)
+        if (categoryHasNoScrapers) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .clickable(onClick = onNavigateToManualAdd)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(14.dp)
+                    ) {
+                        val cat = selectedCategory!!
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(cat.color().copy(alpha = 0.2f))
+                        ) {
+                            Icon(
+                                imageVector = cat.icon(),
+                                contentDescription = null,
+                                tint = cat.color(),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Create ${cat.name.lowercase().replaceFirstChar { it.uppercase() }} Manually",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Text(
+                                text = "Offline entry — no web scrapers required",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
+                }
+            }
+        } else if (detectedSource != null) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .clickable { onNavigateToCreateFromUrl(uiState.searchQuery.trim()) }
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(14.dp)
+                    ) {
+                        val iconVector = detectedSource.categoryHint?.icon() ?: Icons.Default.Search
+                        val iconColor = detectedSource.categoryHint?.color() ?: MaterialTheme.colorScheme.primary
 
-                    items(uiState.sources) { source ->
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            ),
+                        Box(
+                            contentAlignment = Alignment.Center,
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { viewModel.selectSource(source) }
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(iconColor.copy(alpha = 0.2f))
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Language,
-                                    contentDescription = source.name,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(32.dp)
-                                )
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = source.name,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = source.baseUrl,
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                source.categoryHint?.let { cat ->
-                                    CategoryBadge(category = cat)
-                                }
-                            }
+                            Icon(
+                                imageVector = iconVector,
+                                contentDescription = null,
+                                tint = iconColor,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Import from ${detectedSource.name}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Text(
+                                text = "Detected source link. Tap to auto-fetch details.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            }
+        }
+
+        // 4. Progress or Error indicator
+        if (uiState.isSearching) {
+            item {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(modifier = Modifier.size(36.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Searching online sources...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        } else if (uiState.searchError != null) {
+            item {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "Search error: ${uiState.searchError}",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        }
+
+        // 5. Active Search Results Grid
+        if (uiState.hasSearched && !uiState.isSearching) {
+            if (uiState.searchResults.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "RESULTS (${uiState.searchResults.size})",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 8.dp)
+                    )
+                }
+
+                // 3-column chunked row items
+                items(uiState.searchResults.chunked(3)) { rowItems ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        for (result in rowItems) {
+                            SourceCoverGridItem(
+                                result = result,
+                                isTracked = uiState.isTracked(result),
+                                onClick = { onNavigateToCreateFromUrl(result.url) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        repeat(3 - rowItems.size) {
+                            Spacer(modifier = Modifier.weight(1f))
                         }
                     }
                 }
             } else {
-                // Search View for Selected Source
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                // 0 Results fallback -> Add Manually
+                item {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .padding(horizontal = 24.dp, vertical = 36.dp)
                     ) {
-                        OutlinedTextField(
-                            value = uiState.searchQuery,
-                            onValueChange = { viewModel.updateSearchQuery(it) },
-                            placeholder = { Text("Search ${uiState.selectedSource?.name}...") },
-                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
-                            trailingIcon = {
-                                if (uiState.searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                                        Icon(Icons.Default.Clear, contentDescription = "Clear")
-                                    }
-                                }
-                            },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions = KeyboardActions(onSearch = { viewModel.performSearch() }),
-                            modifier = Modifier.weight(1f)
+                        Text(
+                            text = "No online results found for \"${uiState.searchQuery}\"",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    }
-
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        when {
-                            uiState.isSearching -> {
-                                CircularProgressIndicator()
-                            }
-                            uiState.searchResults.isEmpty() && uiState.searchQuery.isNotBlank() -> {
-                                EmptyState(message = uiState.searchError ?: "No results found for '${uiState.searchQuery}'")
-                            }
-                            uiState.searchResults.isEmpty() -> {
-                                EmptyState(message = "Type a search query and press Enter")
-                            }
-                            else -> {
-                                LazyColumn(
-                                    contentPadding = PaddingValues(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    modifier = Modifier.fillMaxSize()
-                                ) {
-                                    items(uiState.searchResults) { result ->
-                                        Card(
-                                            colors = CardDefaults.cardColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                                            ),
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clickable { onNavigateToCreateFromUrl(result.url) }
-                                        ) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(12.dp)
-                                            ) {
-                                                if (!result.imageUrl.isNullOrEmpty()) {
-                                                    AsyncImage(
-                                                        model = result.imageUrl,
-                                                        contentDescription = result.title,
-                                                        contentScale = ContentScale.Crop,
-                                                        modifier = Modifier
-                                                            .size(60.dp, 84.dp)
-                                                            .clip(RoundedCornerShape(8.dp))
-                                                    )
-                                                    Spacer(modifier = Modifier.width(12.dp))
-                                                }
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text(
-                                                        text = result.title,
-                                                        fontSize = 15.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        maxLines = 2
-                                                    )
-                                                    result.author?.let { author ->
-                                                        if (author.isNotBlank()) {
-                                                            Text(
-                                                                text = "by $author",
-                                                                fontSize = 12.sp,
-                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                            )
-                                                        }
-                                                    }
-                                                    result.description?.let { desc ->
-                                                        if (desc.isNotBlank()) {
-                                                            Spacer(modifier = Modifier.height(4.dp))
-                                                            Text(
-                                                                text = desc,
-                                                                fontSize = 11.sp,
-                                                                maxLines = 2,
-                                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = onNavigateToManualAdd,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Add \"${uiState.searchQuery.take(20)}\" Manually")
                         }
                     }
                 }
+            }
+        }
+
+        // 6. Komikku Source Directory (visible when not viewing search results)
+        if (!uiState.hasSearched) {
+            val allSources = if (selectedCategory != null) {
+                uiState.sources.filter { it.categoryHint == selectedCategory || it.categoryHint == null }
+            } else {
+                uiState.sources
+            }
+
+            val pinnedSources = allSources.filter { uiState.pinnedSourceIds.contains(it.id) }
+            val otherSources = allSources.filter { !uiState.pinnedSourceIds.contains(it.id) }
+
+            // Pinned Section
+            if (pinnedSources.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "PINNED",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp)
+                    )
+                }
+                items(pinnedSources, key = { "pinned_${it.id}" }) { source ->
+                    BaseSourceItem(
+                        source = source,
+                        isPinned = true,
+                        onTogglePin = { onTogglePin(source.id) },
+                        onClick = { onSelectSource(source) }
+                    )
+                }
+            }
+
+            // Other Sources Grouped by Category
+            if (otherSources.isNotEmpty()) {
+                if (pinnedSources.isNotEmpty()) {
+                    item {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+
+                item {
+                    Text(
+                        text = "SOURCES",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
+                    )
+                }
+
+                items(otherSources, key = { "source_${it.id}" }) { source ->
+                    BaseSourceItem(
+                        source = source,
+                        isPinned = false,
+                        onTogglePin = { onTogglePin(source.id) },
+                        onClick = { onSelectSource(source) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SingleSourceBrowseView(
+    source: Source,
+    uiState: BrowserUiState,
+    onSearchQueryChanged: (String) -> Unit,
+    onSearch: () -> Unit,
+    onClearSearch: () -> Unit,
+    onItemClick: (app.lazydex.scraper.source.SearchResult) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        OutlinedTextField(
+            value = uiState.searchQuery,
+            onValueChange = onSearchQueryChanged,
+            placeholder = { Text("Search ${source.name}...") },
+            singleLine = true,
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = "Search",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            trailingIcon = {
+                if (uiState.searchQuery.isNotEmpty()) {
+                    IconButton(onClick = onClearSearch) {
+                        Icon(Icons.Default.Clear, contentDescription = "Clear")
+                    }
+                }
+            },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+
+        if (uiState.isSearching) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp)
+            ) {
+                CircularProgressIndicator()
+            }
+        } else if (uiState.searchError != null) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp)
+            ) {
+                Text(
+                    text = uiState.searchError,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        } else if (uiState.searchResults.isNotEmpty()) {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 110.dp),
+                contentPadding = PaddingValues(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(uiState.searchResults) { result ->
+                    SourceCoverGridItem(
+                        result = result,
+                        isTracked = uiState.isTracked(result),
+                        onClick = { onItemClick(result) }
+                    )
+                }
+            }
+        } else {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp)
+            ) {
+                Text(
+                    text = if (uiState.hasSearched) "No results found" else "Type a search query and press Search",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

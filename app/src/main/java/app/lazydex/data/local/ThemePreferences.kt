@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import app.lazydex.domain.model.SortDirection
 import app.lazydex.domain.model.SortField
@@ -57,10 +58,17 @@ open class ThemePreferences(private val context: Context? = null) {
         val SHOW_SCORE_BADGE_KEY = booleanPreferencesKey("show_score_badge")
         val SORT_FIELD_KEY = stringPreferencesKey("sort_field")
         val SORT_DIRECTION_KEY = stringPreferencesKey("sort_direction")
+        val PINNED_SOURCES_KEY = stringSetPreferencesKey("pinned_sources")
     }
 
     private val dataStore: DataStore<Preferences>
         get() = requireNotNull(context) { "Context is required when using default DataStore" }.dataStore
+
+    open val pinnedSources: Flow<Set<String>> by lazy {
+        dataStore.data.map { preferences ->
+            preferences[PINNED_SOURCES_KEY] ?: setOf("mangadex", "anilist", "royalroad")
+        }
+    }
 
     open val themeMode: Flow<String> by lazy {
         dataStore.data.map { preferences ->
@@ -204,6 +212,17 @@ open class ThemePreferences(private val context: Context? = null) {
     open suspend fun setSortDirection(direction: SortDirection) {
         dataStore.edit { preferences ->
             preferences[SORT_DIRECTION_KEY] = direction.name
+        }
+    }
+
+    open suspend fun togglePinnedSource(sourceId: String) {
+        dataStore.edit { preferences ->
+            val current = preferences[PINNED_SOURCES_KEY] ?: setOf("mangadex", "anilist", "royalroad")
+            preferences[PINNED_SOURCES_KEY] = if (current.contains(sourceId)) {
+                current - sourceId
+            } else {
+                current + sourceId
+            }
         }
     }
 }

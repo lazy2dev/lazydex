@@ -106,7 +106,7 @@ val storageModule = module {
 val viewModelModule = module {
     viewModel { DexViewModel(get(), get()) }
     viewModel { StatisticsViewModel(get()) }
-    viewModel { BrowserViewModel(get()) }
+    viewModel { BrowserViewModel(get(), get(), get()) }
     viewModel {
         UnifiedAddEditViewModel(
             savedStateHandle = get(),
