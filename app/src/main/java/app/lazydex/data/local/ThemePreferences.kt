@@ -15,6 +15,14 @@ import kotlinx.coroutines.flow.map
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings_prefs")
 
+enum class ThemePreset {
+    DEFAULT,
+    DYNAMIC,
+    MANGA,
+    GAME,
+    MOVIE
+}
+
 enum class LibraryDisplayMode {
     COMPACT_GRID,
     COMFORTABLE_GRID,
@@ -33,9 +41,10 @@ data class DisplayPreferences(
     val showItemCount: Boolean = false
 )
 
-class ThemePreferences(private val context: Context) {
+open class ThemePreferences(private val context: Context? = null) {
     companion object {
         val THEME_MODE_KEY = stringPreferencesKey("theme_mode")
+        val THEME_PRESET_KEY = stringPreferencesKey("theme_preset")
         val AMOLED_MODE_KEY = booleanPreferencesKey("amoled_mode")
         val COVER_THEMING_KEY = booleanPreferencesKey("cover_theming")
         val SHOW_ITEM_COUNT_KEY = booleanPreferencesKey("show_item_count")
@@ -50,116 +59,150 @@ class ThemePreferences(private val context: Context) {
         val SORT_DIRECTION_KEY = stringPreferencesKey("sort_direction")
     }
 
-    val themeMode: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[THEME_MODE_KEY] ?: "DARK" // Dark mode by default
-    }
+    private val dataStore: DataStore<Preferences>
+        get() = requireNotNull(context) { "Context is required when using default DataStore" }.dataStore
 
-    val amoledMode: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[AMOLED_MODE_KEY] ?: false
-    }
-
-    val coverTheming: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[COVER_THEMING_KEY] ?: false
-    }
-
-    val showItemCount: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[SHOW_ITEM_COUNT_KEY] ?: false
-    }
-
-    val sortField: Flow<SortField> = context.dataStore.data.map { preferences ->
-        SortField.fromNameOrDefault(preferences[SORT_FIELD_KEY])
-    }
-
-    val sortDirection: Flow<SortDirection> = context.dataStore.data.map { preferences ->
-        SortDirection.fromNameOrDefault(preferences[SORT_DIRECTION_KEY])
-    }
-
-    val displayPreferences: Flow<DisplayPreferences> = context.dataStore.data.map { preferences ->
-        val modeStr = preferences[DISPLAY_MODE_KEY] ?: LibraryDisplayMode.COMPACT_GRID.name
-        val mode = try {
-            LibraryDisplayMode.valueOf(modeStr)
-        } catch (_: Exception) {
-            LibraryDisplayMode.COMPACT_GRID
+    open val themeMode: Flow<String> by lazy {
+        dataStore.data.map { preferences ->
+            preferences[THEME_MODE_KEY] ?: "DARK" // Dark mode by default
         }
-        DisplayPreferences(
-            displayMode = mode,
-            gridColumns = preferences[GRID_COLUMNS_KEY] ?: 0,
-            showCategoryTabs = preferences[SHOW_CATEGORY_TABS_KEY] ?: true,
-            showProgressBadge = preferences[SHOW_PROGRESS_BADGE_KEY] ?: true,
-            showStatusBadge = preferences[SHOW_STATUS_BADGE_KEY] ?: true,
-            showScoreBadge = preferences[SHOW_SCORE_BADGE_KEY] ?: true,
-            showItemCount = preferences[SHOW_ITEM_COUNT_KEY] ?: false
-        )
     }
 
-    suspend fun setThemeMode(mode: String) {
-        context.dataStore.edit { preferences ->
+    open val themePreset: Flow<ThemePreset> by lazy {
+        dataStore.data.map { preferences ->
+            val presetStr = preferences[THEME_PRESET_KEY] ?: ThemePreset.DEFAULT.name
+            try {
+                ThemePreset.valueOf(presetStr)
+            } catch (_: Exception) {
+                ThemePreset.DEFAULT
+            }
+        }
+    }
+
+    open val amoledMode: Flow<Boolean> by lazy {
+        dataStore.data.map { preferences ->
+            preferences[AMOLED_MODE_KEY] ?: false
+        }
+    }
+
+    open val coverTheming: Flow<Boolean> by lazy {
+        dataStore.data.map { preferences ->
+            preferences[COVER_THEMING_KEY] ?: false
+        }
+    }
+
+    open val showItemCount: Flow<Boolean> by lazy {
+        dataStore.data.map { preferences ->
+            preferences[SHOW_ITEM_COUNT_KEY] ?: false
+        }
+    }
+
+    open val sortField: Flow<SortField> by lazy {
+        dataStore.data.map { preferences ->
+            SortField.fromNameOrDefault(preferences[SORT_FIELD_KEY])
+        }
+    }
+
+    open val sortDirection: Flow<SortDirection> by lazy {
+        dataStore.data.map { preferences ->
+            SortDirection.fromNameOrDefault(preferences[SORT_DIRECTION_KEY])
+        }
+    }
+
+    open val displayPreferences: Flow<DisplayPreferences> by lazy {
+        dataStore.data.map { preferences ->
+            val modeStr = preferences[DISPLAY_MODE_KEY] ?: LibraryDisplayMode.COMPACT_GRID.name
+            val mode = try {
+                LibraryDisplayMode.valueOf(modeStr)
+            } catch (_: Exception) {
+                LibraryDisplayMode.COMPACT_GRID
+            }
+            DisplayPreferences(
+                displayMode = mode,
+                gridColumns = preferences[GRID_COLUMNS_KEY] ?: 0,
+                showCategoryTabs = preferences[SHOW_CATEGORY_TABS_KEY] ?: true,
+                showProgressBadge = preferences[SHOW_PROGRESS_BADGE_KEY] ?: true,
+                showStatusBadge = preferences[SHOW_STATUS_BADGE_KEY] ?: true,
+                showScoreBadge = preferences[SHOW_SCORE_BADGE_KEY] ?: true,
+                showItemCount = preferences[SHOW_ITEM_COUNT_KEY] ?: false
+            )
+        }
+    }
+
+    open suspend fun setThemeMode(mode: String) {
+        dataStore.edit { preferences ->
             preferences[THEME_MODE_KEY] = mode
         }
     }
 
-    suspend fun setAmoledMode(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+    open suspend fun setThemePreset(preset: ThemePreset) {
+        dataStore.edit { preferences ->
+            preferences[THEME_PRESET_KEY] = preset.name
+        }
+    }
+
+    open suspend fun setAmoledMode(enabled: Boolean) {
+        dataStore.edit { preferences ->
             preferences[AMOLED_MODE_KEY] = enabled
         }
     }
 
-    suspend fun setCoverTheming(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+    open suspend fun setCoverTheming(enabled: Boolean) {
+        dataStore.edit { preferences ->
             preferences[COVER_THEMING_KEY] = enabled
         }
     }
 
-    suspend fun setShowItemCount(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+    open suspend fun setShowItemCount(enabled: Boolean) {
+        dataStore.edit { preferences ->
             preferences[SHOW_ITEM_COUNT_KEY] = enabled
         }
     }
 
-    suspend fun setDisplayMode(mode: LibraryDisplayMode) {
-        context.dataStore.edit { preferences ->
+    open suspend fun setDisplayMode(mode: LibraryDisplayMode) {
+        dataStore.edit { preferences ->
             preferences[DISPLAY_MODE_KEY] = mode.name
         }
     }
 
-    suspend fun setGridColumns(columns: Int) {
-        context.dataStore.edit { preferences ->
+    open suspend fun setGridColumns(columns: Int) {
+        dataStore.edit { preferences ->
             preferences[GRID_COLUMNS_KEY] = columns
         }
     }
 
-    suspend fun setShowCategoryTabs(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+    open suspend fun setShowCategoryTabs(enabled: Boolean) {
+        dataStore.edit { preferences ->
             preferences[SHOW_CATEGORY_TABS_KEY] = enabled
         }
     }
 
-    suspend fun setShowProgressBadge(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+    open suspend fun setShowProgressBadge(enabled: Boolean) {
+        dataStore.edit { preferences ->
             preferences[SHOW_PROGRESS_BADGE_KEY] = enabled
         }
     }
 
-    suspend fun setShowStatusBadge(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+    open suspend fun setShowStatusBadge(enabled: Boolean) {
+        dataStore.edit { preferences ->
             preferences[SHOW_STATUS_BADGE_KEY] = enabled
         }
     }
 
-    suspend fun setShowScoreBadge(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+    open suspend fun setShowScoreBadge(enabled: Boolean) {
+        dataStore.edit { preferences ->
             preferences[SHOW_SCORE_BADGE_KEY] = enabled
         }
     }
 
-    suspend fun setSortField(field: SortField) {
-        context.dataStore.edit { preferences ->
+    open suspend fun setSortField(field: SortField) {
+        dataStore.edit { preferences ->
             preferences[SORT_FIELD_KEY] = field.name
         }
     }
 
-    suspend fun setSortDirection(direction: SortDirection) {
-        context.dataStore.edit { preferences ->
+    open suspend fun setSortDirection(direction: SortDirection) {
+        dataStore.edit { preferences ->
             preferences[SORT_DIRECTION_KEY] = direction.name
         }
     }

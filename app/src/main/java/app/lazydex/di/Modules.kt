@@ -120,7 +120,8 @@ val viewModelModule = module {
         SettingsViewModel(
             repository = get(),
             themePreferences = get(),
-            localCoversDir = get(named("coversDir"))
+            localCoversDir = get(named("coversDir")),
+            cacheDir = get(named("cacheDir"))
         )
     }
 }

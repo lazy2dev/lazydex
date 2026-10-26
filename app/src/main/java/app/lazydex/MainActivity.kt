@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val themeMode by themePreferences.themeMode.collectAsState(initial = "DARK")
+            val themePreset by themePreferences.themePreset.collectAsState(initial = app.lazydex.data.local.ThemePreset.DEFAULT)
             val amoledMode by themePreferences.amoledMode.collectAsState(initial = false)
 
             val isDark = when (themeMode) {
@@ -37,6 +38,7 @@ class MainActivity : ComponentActivity() {
 
             LazyDexTheme(
                 darkTheme = isDark,
+                themePreset = themePreset,
                 amoledMode = amoledMode
             ) {
                 Surface(

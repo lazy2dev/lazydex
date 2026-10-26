@@ -1,11 +1,11 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package app.lazydex.ui.settings
 
-import android.content.Context
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,22 +18,22 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CleaningServices
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -47,15 +47,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.lazydex.ui.settings.components.PreferenceGroupHeader
+import app.lazydex.ui.settings.components.SwitchPreferenceWidget
+import app.lazydex.ui.settings.components.TextPreferenceWidget
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DataAndStorageScreen(
     onBack: () -> Unit,
@@ -130,65 +133,102 @@ fun DataAndStorageScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp)
+                .verticalScroll(rememberScrollState())
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
             // ==================== STORAGE SECTION ====================
-            Text(
-                text = "Backup and restore",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.height(10.dp))
+            PreferenceGroupHeader(title = "Storage space")
 
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier.fillMaxWidth()
+            val usedBytes = (state.storageStats.totalBytes - state.storageStats.availableBytes).coerceAtLeast(0L)
+            val progress = if (state.storageStats.totalBytes > 0) {
+                (usedBytes.toFloat() / state.storageStats.totalBytes.toFloat()).coerceIn(0f, 1f)
+            } else 0f
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Text(
-                        text = "Local Backups",
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 15.sp,
+                        text = "Available: ${formatBytes(state.storageStats.availableBytes)}",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Export your local media tracker data and covers, or import backups using Android SAF.",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        text = "Total: ${formatBytes(state.storageStats.totalBytes)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { viewModel.showExportCoversDialog(true) },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Create backup", fontSize = 13.sp)
-                        }
-                        OutlinedButton(
-                            onClick = { importLauncher.launch(arrayOf("*/*")) },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Restore backup", fontSize = 13.sp)
-                        }
-                    }
                 }
+                Spacer(modifier = Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            TextPreferenceWidget(
+                title = "Clear temporary cache",
+                subtitle = "Free space from transient image & network cache (${formatBytes(state.storageStats.cacheBytes)})",
+                icon = Icons.Default.CleaningServices,
+                onClick = { viewModel.clearTemporaryCache() }
+            )
 
-            // Information box
+            TextPreferenceWidget(
+                title = "Clean orphaned covers",
+                subtitle = "Delete cached covers no longer linked to any library item (${formatBytes(state.storageStats.coversBytes)} cover storage)",
+                icon = Icons.Default.DeleteSweep,
+                onClick = { viewModel.cleanOrphanCovers() }
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // ==================== BACKUP & RESTORE ====================
+            PreferenceGroupHeader(title = "Backup and restore")
+
+            Text(
+                text = "Export your local media tracker data and covers, or import backups using Android SAF.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { viewModel.showExportCoversDialog(true) },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Create backup", fontSize = 13.sp)
+                }
+                OutlinedButton(
+                    onClick = { importLauncher.launch(arrayOf("*/*")) },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Restore backup", fontSize = 13.sp)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.Top
             ) {
                 Icon(
@@ -197,33 +237,22 @@ fun DataAndStorageScreen(
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     text = "You should keep copies of backups in other places as well. Backups may contain sensitive data; be careful if sharing.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            SwitchPreferenceWidget(
+                title = "Show restoring progress banner",
+                subtitle = "Display notification banner while restoring database",
+                checked = showRestoringProgressBanner,
+                onCheckedChange = { showRestoringProgressBanner = it }
+            )
 
-            // RESTORING PROGRESS SWITCH
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Show restoring progress banner",
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 15.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Switch(
-                    checked = showRestoringProgressBanner,
-                    onCheckedChange = { showRestoringProgressBanner = it }
-                )
-            }
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 
@@ -308,7 +337,7 @@ fun DataAndStorageScreen(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         LinearProgressIndicator(
-                            progress = holdProgress,
+                            progress = { holdProgress },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -337,7 +366,6 @@ fun DataAndStorageScreen(
                         )
                     }
                 ) {
-                    // Styled warning button that responds to pointer hold
                     TextButton(
                         onClick = {},
                         colors = ButtonDefaults.textButtonColors(
