@@ -7,9 +7,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import app.lazydex.ui.addedit.UnifiedAddEditScreen
+import app.lazydex.ui.browser.BrowserScreen
+import app.lazydex.ui.history.HistoryScreen
 import app.lazydex.ui.settings.AboutScreen
 import app.lazydex.ui.settings.AppearanceScreen
+import app.lazydex.ui.settings.CategoryManagerScreen
 import app.lazydex.ui.settings.DataAndStorageScreen
+import app.lazydex.ui.settings.SettingsMainScreen
+import app.lazydex.ui.statistics.StatisticsScreen
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -34,6 +39,21 @@ object AboutRoute
 data class ExtensionsRoute(
     val initialAddRepoUrl: String? = null
 )
+
+@Serializable
+object SettingsRoute
+
+@Serializable
+object StatsRoute
+
+@Serializable
+object HistoryRoute
+
+@Serializable
+object BrowseRoute
+
+@Serializable
+object CategoryManagerRoute
 
 @Composable
 fun LazyDexNavGraph(
@@ -64,6 +84,82 @@ fun LazyDexNavGraph(
                 },
                 onNavigateToAbout = {
                     navController.navigate(AboutRoute)
+                },
+                onNavigateToBrowseSources = {
+                    navController.navigate(BrowseRoute)
+                },
+                onNavigateToStatistics = {
+                    navController.navigate(StatsRoute)
+                },
+                onNavigateToHistory = {
+                    navController.navigate(HistoryRoute)
+                },
+                onNavigateToSettings = {
+                    navController.navigate(SettingsRoute)
+                }
+            )
+        }
+
+        composable<BrowseRoute> {
+            BrowserScreen(
+                onNavigateToCreateFromUrl = { url ->
+                    navController.navigate(AddEditRoute(itemId = null, initialUrl = url))
+                },
+                onNavigateToManualAdd = {
+                    navController.navigate(AddEditRoute(itemId = null, initialUrl = null))
+                },
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable<StatsRoute> {
+            StatisticsScreen(
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable<HistoryRoute> {
+            HistoryScreen(
+                onNavigateToEditItem = { itemId ->
+                    navController.navigate(AddEditRoute(itemId = itemId, initialUrl = null))
+                },
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable<SettingsRoute> {
+            SettingsMainScreen(
+                onNavigateToAppearance = {
+                    navController.navigate(AppearanceRoute)
+                },
+                onNavigateToExtensions = {
+                    navController.navigate(ExtensionsRoute())
+                },
+                onNavigateToDataAndStorage = {
+                    navController.navigate(DataAndStorageRoute)
+                },
+                onNavigateToAbout = {
+                    navController.navigate(AboutRoute)
+                },
+                onNavigateToCategories = {
+                    navController.navigate(CategoryManagerRoute)
+                },
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable<CategoryManagerRoute> {
+            CategoryManagerScreen(
+                onBack = {
+                    navController.popBackStack()
                 }
             )
         }
@@ -88,6 +184,7 @@ fun LazyDexNavGraph(
                 }
             )
         }
+
         composable<AppearanceRoute> {
             AppearanceScreen(
                 onBack = {
@@ -95,6 +192,7 @@ fun LazyDexNavGraph(
                 }
             )
         }
+
         composable<DataAndStorageRoute> {
             DataAndStorageScreen(
                 onBack = {
@@ -102,6 +200,7 @@ fun LazyDexNavGraph(
                 }
             )
         }
+
         composable<AboutRoute> {
             AboutScreen(
                 onBack = {

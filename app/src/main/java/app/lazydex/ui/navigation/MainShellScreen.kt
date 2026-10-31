@@ -1,42 +1,40 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package app.lazydex.ui.navigation
 
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import app.lazydex.ui.settings.SettingsMainScreen
-import app.lazydex.ui.browser.BrowserScreen
-import app.lazydex.ui.browser.BrowserViewModel
+import app.lazydex.ui.components.CategoryCreatorSheet
+import app.lazydex.ui.components.CategoryPickerSheet
+import app.lazydex.ui.components.getCategoryIcon
 import app.lazydex.ui.dex.DexScreen
 import app.lazydex.ui.dex.DexViewModel
-import app.lazydex.ui.history.HistoryScreen
-import app.lazydex.ui.statistics.StatisticsScreen
 import org.koin.androidx.compose.koinViewModel
-
-enum class ShellTab {
-    DEX, STATISTICS, BROWSE, HISTORY, SETTINGS
-}
 
 @Composable
 fun MainShellScreen(
@@ -46,67 +44,76 @@ fun MainShellScreen(
     onNavigateToAbout: () -> Unit,
     onNavigateToAddItem: (String?) -> Unit,
     onNavigateToEditItem: (String) -> Unit,
+    onNavigateToBrowseSources: () -> Unit,
+    onNavigateToStatistics: () -> Unit,
+    onNavigateToHistory: () -> Unit,
+    onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier,
-    dexViewModel: DexViewModel = koinViewModel(),
-    browserViewModel: BrowserViewModel = koinViewModel()
+    dexViewModel: DexViewModel = koinViewModel()
 ) {
-    var currentTab by rememberSaveable { mutableStateOf(ShellTab.DEX) }
+    val uiState by dexViewModel.uiState.collectAsState()
+    val pinnedCategories by dexViewModel.pinnedCategories.collectAsState()
+    val topLevelCategories by dexViewModel.topLevelCategories.collectAsState()
+
+    var showCategoryPickerSheet by rememberSaveable { mutableStateOf(false) }
+    var showCategoryCreatorSheet by rememberSaveable { mutableStateOf(false) }
+
+    val isAnyPinnedSelected = pinnedCategories.any { it.id == uiState.selectedCategoryId }
+    val isLibrarySelected = !isAnyPinnedSelected
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             NavigationBar {
-                // 1. Dex Tab
-                NavigationBarItem(
-                    selected = currentTab == ShellTab.DEX,
-                    onClick = { currentTab = ShellTab.DEX },
-                    icon = { Icon(imageVector = Icons.Default.Bookmark, contentDescription = "Dex") },
-                    label = { Text("Dex") }
-                )
+                // 1-4. The 4 Pinned Categories
+                pinnedCategories.take(4).forEach { category ->
+                    val isSelected = uiState.selectedCategoryId == category.id
+                    NavigationBarItem(
+                        selected = isSelected,
+                        onClick = { dexViewModel.selectCategoryId(category.id) },
+                        icon = {
+                            Icon(
+                                imageVector = getCategoryIcon(category),
+                                contentDescription = category.name
+                            )
+                        },
+                        label = {
+                            Text(
+                                text = category.name,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    )
+                }
 
-                // 2. Statistics Tab
+                // 5. Library ▾ Item (Tap opens picker sheet; long press also works; arrow hint on icon)
                 NavigationBarItem(
-                    selected = currentTab == ShellTab.STATISTICS,
-                    onClick = { currentTab = ShellTab.STATISTICS },
-                    icon = { Icon(imageVector = Icons.Default.BarChart, contentDescription = "Statistics") },
-                    label = { Text("Stats") }
-                )
-
-                // 3. Add (+) Button — Center Hub
-                NavigationBarItem(
-                    selected = currentTab == ShellTab.BROWSE,
-                    onClick = {
-                        if (currentTab == ShellTab.BROWSE) {
-                            browserViewModel.selectSource(null)
-                        } else {
-                            currentTab = ShellTab.BROWSE
+                    selected = isLibrarySelected,
+                    onClick = { showCategoryPickerSheet = true },
+                    icon = {
+                        Box(
+                            contentAlignment = Alignment.BottomEnd,
+                            modifier = Modifier.combinedClickable(
+                                onClick = { showCategoryPickerSheet = true },
+                                onLongClick = { showCategoryPickerSheet = true }
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Bookmarks,
+                                contentDescription = "Library",
+                                modifier = Modifier.padding(end = 4.dp, bottom = 2.dp)
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .offset(x = 6.dp, y = 4.dp)
+                            )
                         }
                     },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Add",
-                            tint = if (currentTab == ShellTab.BROWSE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    },
-                    label = { Text("Add") }
-                )
-
-                // 4. History Tab
-                NavigationBarItem(
-                    selected = currentTab == ShellTab.HISTORY,
-                    onClick = { currentTab = ShellTab.HISTORY },
-                    icon = { Icon(imageVector = Icons.Default.History, contentDescription = "History") },
-                    label = { Text("History") }
-                )
-
-                // 5. Settings Tab
-                NavigationBarItem(
-                    selected = currentTab == ShellTab.SETTINGS,
-                    onClick = { currentTab = ShellTab.SETTINGS },
-                    icon = { Icon(imageVector = Icons.Default.Settings, contentDescription = "Settings") },
-                    label = { Text("Settings") }
+                    label = { Text("Library ▾", maxLines = 1) }
                 )
             }
         },
@@ -118,44 +125,45 @@ fun MainShellScreen(
                 .padding(bottom = innerPadding.calculateBottomPadding())
                 .consumeWindowInsets(innerPadding)
         ) {
-            when (currentTab) {
-                ShellTab.DEX -> {
-                    DexScreen(
-                        onNavigateToAddItem = { onNavigateToAddItem(null) },
-                        onNavigateToEditItem = onNavigateToEditItem,
-                        viewModel = dexViewModel,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                ShellTab.STATISTICS -> {
-                    StatisticsScreen(
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                ShellTab.BROWSE -> {
-                    BrowserScreen(
-                        onNavigateToCreateFromUrl = { url -> onNavigateToAddItem(url) },
-                        onNavigateToManualAdd = { onNavigateToAddItem(null) },
-                        viewModel = browserViewModel,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                ShellTab.HISTORY -> {
-                    HistoryScreen(
-                        onNavigateToEditItem = onNavigateToEditItem,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                ShellTab.SETTINGS -> {
-                    SettingsMainScreen(
-                        onNavigateToAppearance = onNavigateToAppearance,
-                        onNavigateToExtensions = onNavigateToExtensions,
-                        onNavigateToDataAndStorage = onNavigateToDataAndStorage,
-                        onNavigateToAbout = onNavigateToAbout,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
+            DexScreen(
+                onNavigateToAddItem = { onNavigateToAddItem(null) },
+                onNavigateToEditItem = onNavigateToEditItem,
+                onNavigateToBrowseSources = onNavigateToBrowseSources,
+                onNavigateToStatistics = onNavigateToStatistics,
+                onNavigateToHistory = onNavigateToHistory,
+                onNavigateToSettings = onNavigateToSettings,
+                viewModel = dexViewModel,
+                modifier = Modifier.fillMaxSize()
+            )
         }
+    }
+
+    if (showCategoryPickerSheet) {
+        CategoryPickerSheet(
+            categories = topLevelCategories,
+            selectedCategoryId = uiState.selectedCategoryId,
+            totalItemCount = uiState.totalCount,
+            categoryCounts = emptyMap(),
+            onSelectCategory = { catId ->
+                dexViewModel.selectCategoryId(catId)
+            },
+            onCreateNewCategory = {
+                showCategoryCreatorSheet = true
+            },
+            onDismiss = {
+                showCategoryPickerSheet = false
+            }
+        )
+    }
+
+    if (showCategoryCreatorSheet) {
+        CategoryCreatorSheet(
+            parentCategory = null,
+            onDismiss = { showCategoryCreatorSheet = false },
+            onSaveCategory = { cat ->
+                dexViewModel.createCategory(cat)
+                showCategoryCreatorSheet = false
+            }
+        )
     }
 }

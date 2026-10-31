@@ -29,11 +29,18 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
@@ -82,6 +89,10 @@ fun DexScreen(
     onNavigateToEditItem: (String) -> Unit,
     viewModel: DexViewModel,
     modifier: Modifier = Modifier,
+    onNavigateToBrowseSources: (() -> Unit)? = null,
+    onNavigateToStatistics: (() -> Unit)? = null,
+    onNavigateToHistory: (() -> Unit)? = null,
+    onNavigateToSettings: (() -> Unit)? = null,
     onSearchClick: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -106,6 +117,18 @@ fun DexScreen(
                         (item.author.contains(query, ignoreCase = true))
             }
         }
+    }
+
+    val activeCategory = remember(uiState.topLevelCategories, uiState.selectedCategoryId) {
+        uiState.topLevelCategories.firstOrNull { it.id == uiState.selectedCategoryId }
+    }
+    val activeSubtype = remember(uiState.subtypesForSelectedCategory, uiState.selectedSubtypeId) {
+        uiState.subtypesForSelectedCategory.firstOrNull { it.id == uiState.selectedSubtypeId }
+    }
+    val screenTitle = when {
+        activeSubtype != null -> "${activeCategory?.name ?: "Dex"} • ${activeSubtype.name}"
+        activeCategory != null -> activeCategory.name
+        else -> "Dex"
     }
 
     val isFilterActive = uiState.selectedCategoryId != null ||
@@ -141,7 +164,7 @@ fun DexScreen(
                         )
                     } else {
                         Text(
-                            text = "Dex",
+                            text = screenTitle,
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp
                         )
@@ -182,6 +205,64 @@ fun DexScreen(
                             tint = if (isFilterActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                         )
                     }
+
+                    if (onNavigateToSettings != null || onNavigateToStatistics != null || onNavigateToHistory != null || onNavigateToBrowseSources != null) {
+                        var showOverflowMenu by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { showOverflowMenu = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "More options",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showOverflowMenu,
+                                onDismissRequest = { showOverflowMenu = false }
+                            ) {
+                                if (onNavigateToBrowseSources != null) {
+                                    DropdownMenuItem(
+                                        text = { Text("Browse Sources") },
+                                        leadingIcon = { Icon(Icons.Default.Explore, contentDescription = null) },
+                                        onClick = {
+                                            showOverflowMenu = false
+                                            onNavigateToBrowseSources()
+                                        }
+                                    )
+                                }
+                                if (onNavigateToStatistics != null) {
+                                    DropdownMenuItem(
+                                        text = { Text("Statistics") },
+                                        leadingIcon = { Icon(Icons.Default.BarChart, contentDescription = null) },
+                                        onClick = {
+                                            showOverflowMenu = false
+                                            onNavigateToStatistics()
+                                        }
+                                    )
+                                }
+                                if (onNavigateToHistory != null) {
+                                    DropdownMenuItem(
+                                        text = { Text("History") },
+                                        leadingIcon = { Icon(Icons.Default.History, contentDescription = null) },
+                                        onClick = {
+                                            showOverflowMenu = false
+                                            onNavigateToHistory()
+                                        }
+                                    )
+                                }
+                                if (onNavigateToSettings != null) {
+                                    DropdownMenuItem(
+                                        text = { Text("Settings") },
+                                        leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                        onClick = {
+                                            showOverflowMenu = false
+                                            onNavigateToSettings()
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
@@ -205,109 +286,7 @@ fun DexScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Adaptive Two-Tier Category Rail
-            if (uiState.showCategoryTabs) {
-                // Tier 1: Top-level category pills
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FilterChip(
-                        selected = uiState.selectedCategoryId == null,
-                        onClick = { viewModel.selectCategoryId(null) },
-                        label = { Text("All (${uiState.totalCount})") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    )
-
-                    uiState.topLevelCategories.forEach { cat ->
-                        FilterChip(
-                            selected = uiState.selectedCategoryId == cat.id,
-                            onClick = { viewModel.selectCategoryId(cat.id) },
-                            label = { Text(cat.name) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        )
-                    }
-
-                    AssistChip(
-                        onClick = {
-                            categoryToCreateTypeUnder = null
-                            showCategoryCreatorSheet = true
-                        },
-                        label = { Text("+ Category") },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Add,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    )
-                }
-
-                // Tier 2: Subtypes Rail with smooth animation
-                AnimatedVisibility(
-                    visible = uiState.selectedCategoryId != null && uiState.subtypesForSelectedCategory.isNotEmpty(),
-                    enter = expandVertically(tween(200)),
-                    exit = shrinkVertically(tween(200))
-                ) {
-                    val activeParent = uiState.topLevelCategories.firstOrNull { it.id == uiState.selectedCategoryId }
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            FilterChip(
-                                selected = uiState.selectedSubtypeId == null,
-                                onClick = { viewModel.selectSubtypeId(null) },
-                                label = { Text("All ${activeParent?.name ?: ""}") }
-                            )
-
-                            uiState.subtypesForSelectedCategory.forEach { sub ->
-                                FilterChip(
-                                    selected = uiState.selectedSubtypeId == sub.id,
-                                    onClick = { viewModel.selectSubtypeId(sub.id) },
-                                    label = { Text(sub.name) }
-                                )
-                            }
-
-                            AssistChip(
-                                onClick = {
-                                    categoryToCreateTypeUnder = activeParent
-                                    showCategoryCreatorSheet = true
-                                },
-                                label = { Text("+ Type") },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.Add,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            )
-                        }
-                    }
-                }
-
-                HorizontalDivider()
-            }
+            // Main List/Grid Content
 
             // Main List/Grid Content
             Box(
@@ -439,6 +418,13 @@ fun DexScreen(
             onToggleScoreBadge = { viewModel.setShowScoreBadge(it) },
             showItemCount = uiState.showItemCount,
             onToggleShowItemCount = { viewModel.setShowItemCount(it) },
+            subtypes = uiState.subtypesForSelectedCategory,
+            selectedSubtypeId = uiState.selectedSubtypeId,
+            onSelectSubtypeId = { viewModel.selectSubtypeId(it) },
+            onCreateType = {
+                categoryToCreateTypeUnder = activeCategory
+                showCategoryCreatorSheet = true
+            },
             onClearAll = { viewModel.clearFilters() }
         )
     }

@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.CheckBox
 import androidx.compose.material.icons.rounded.CheckBoxOutlineBlank
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -61,6 +62,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.lazydex.data.local.LibraryDisplayMode
+import app.lazydex.domain.model.Category
 import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.SortDirection
 import app.lazydex.domain.model.SortField
@@ -109,6 +111,10 @@ fun DexSettingsSheet(
     isGridView: Boolean = displayMode != LibraryDisplayMode.LIST,
     onToggleGridView: ((Boolean) -> Unit)? = null,
     onClearAll: () -> Unit,
+    subtypes: List<Category> = emptyList(),
+    selectedSubtypeId: String? = null,
+    onSelectSubtypeId: (String?) -> Unit = {},
+    onCreateType: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val tabs = remember { listOf("Filter", "Sort", "Display") }
@@ -173,6 +179,10 @@ fun DexSettingsSheet(
                         onToggleGenre = onToggleGenre,
                         onToggleTag = onToggleTag,
                         onSetAuthorQuery = onSetAuthorQuery,
+                        subtypes = subtypes,
+                        selectedSubtypeId = selectedSubtypeId,
+                        onSelectSubtypeId = onSelectSubtypeId,
+                        onCreateType = onCreateType,
                         onClearAll = onClearAll,
                     )
                     1 -> SortPage(
@@ -218,6 +228,10 @@ private fun FilterPage(
     onToggleTag: (String) -> Unit,
     onSetAuthorQuery: (String) -> Unit,
     onClearAll: () -> Unit,
+    subtypes: List<Category> = emptyList(),
+    selectedSubtypeId: String? = null,
+    onSelectSubtypeId: (String?) -> Unit = {},
+    onCreateType: (() -> Unit)? = null,
 ) {
     var showCategoryDialog by remember { mutableStateOf(false) }
 
@@ -321,6 +335,38 @@ private fun FilterPage(
                 }
             }
         )
+
+        // Types / Subtypes if present
+        if (subtypes.isNotEmpty()) {
+            HeadingItem(text = "Types")
+            FlowRow(
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = selectedSubtypeId == null,
+                    onClick = { onSelectSubtypeId(null) },
+                    label = { Text("All") }
+                )
+                subtypes.forEach { sub ->
+                    val isSelected = selectedSubtypeId == sub.id
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = {
+                            if (isSelected) onSelectSubtypeId(null) else onSelectSubtypeId(sub.id)
+                        },
+                        label = { Text(sub.name) }
+                    )
+                }
+                if (onCreateType != null) {
+                    AssistChip(
+                        onClick = onCreateType,
+                        label = { Text("+ Type") }
+                    )
+                }
+            }
+        }
 
         // Genres if present
         if (availableGenres.isNotEmpty()) {

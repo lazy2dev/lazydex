@@ -79,6 +79,7 @@ import org.koin.androidx.compose.koinViewModel
 fun BrowserScreen(
     onNavigateToCreateFromUrl: (String) -> Unit,
     onNavigateToManualAdd: () -> Unit = {},
+    onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: BrowserViewModel = koinViewModel()
 ) {
@@ -101,6 +102,10 @@ fun BrowserScreen(
                     if (selectedSource != null) {
                         IconButton(onClick = { viewModel.selectSource(null) }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to directory")
+                        }
+                    } else if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
                 },

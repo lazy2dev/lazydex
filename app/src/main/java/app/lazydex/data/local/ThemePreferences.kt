@@ -59,10 +59,25 @@ open class ThemePreferences(private val context: Context? = null) {
         val SORT_FIELD_KEY = stringPreferencesKey("sort_field")
         val SORT_DIRECTION_KEY = stringPreferencesKey("sort_direction")
         val PINNED_SOURCES_KEY = stringSetPreferencesKey("pinned_sources")
+        val LAST_USED_CATEGORY_KEY = stringPreferencesKey("last_used_category")
+        val PINNED_CATEGORIES_KEY = stringPreferencesKey("pinned_categories")
     }
 
     private val dataStore: DataStore<Preferences>
         get() = requireNotNull(context) { "Context is required when using default DataStore" }.dataStore
+
+    open val lastUsedCategory: Flow<String?> by lazy {
+        dataStore.data.map { preferences ->
+            preferences[LAST_USED_CATEGORY_KEY]
+        }
+    }
+
+    open val pinnedCategoryIds: Flow<List<String>> by lazy {
+        dataStore.data.map { preferences ->
+            val raw = preferences[PINNED_CATEGORIES_KEY] ?: "cat_novel,cat_manga,cat_anime,cat_movie"
+            if (raw.isBlank()) emptyList() else raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        }
+    }
 
     open val pinnedSources: Flow<Set<String>> by lazy {
         dataStore.data.map { preferences ->
@@ -212,6 +227,22 @@ open class ThemePreferences(private val context: Context? = null) {
     open suspend fun setSortDirection(direction: SortDirection) {
         dataStore.edit { preferences ->
             preferences[SORT_DIRECTION_KEY] = direction.name
+        }
+    }
+
+    open suspend fun setLastUsedCategory(categoryId: String?) {
+        dataStore.edit { preferences ->
+            if (categoryId == null) {
+                preferences.remove(LAST_USED_CATEGORY_KEY)
+            } else {
+                preferences[LAST_USED_CATEGORY_KEY] = categoryId
+            }
+        }
+    }
+
+    open suspend fun setPinnedCategoryIds(categoryIds: List<String>) {
+        dataStore.edit { preferences ->
+            preferences[PINNED_CATEGORIES_KEY] = categoryIds.take(4).joinToString(",")
         }
     }
 

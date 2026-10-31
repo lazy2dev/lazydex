@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -106,6 +107,33 @@ class DexViewModel(
     val subtypesForSelectedCategory: StateFlow<List<Category>> = selectedCategoryId.flatMapLatest { catId ->
         if (catId != null) repository.observeTypes(catId) else flowOf(emptyList())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val pinnedCategoryIds: StateFlow<List<String>> = themePreferences.pinnedCategoryIds
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), listOf("cat_novel", "cat_manga", "cat_anime", "cat_movie"))
+
+    val pinnedCategories: StateFlow<List<Category>> = combine(topLevelCategories, pinnedCategoryIds) { cats, pinnedIds ->
+        val catMap = cats.associateBy { it.id }
+        val pinned = pinnedIds.mapNotNull { catMap[it] }
+        if (pinned.size >= 4) {
+            pinned.take(4)
+        } else {
+            val remaining = cats.filter { it.id !in pinnedIds }
+            (pinned + remaining).take(4)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    init {
+        viewModelScope.launch {
+            val lastCat = themePreferences.lastUsedCategory.firstOrNull()
+            if (lastCat != null) {
+                selectedCategoryId.value = lastCat
+                val legacyCat = lastCat.removePrefix("cat_").removePrefix("typ_").substringBefore("_").let {
+                    MediaCategory.fromString(it)
+                }
+                mutableFilterState.update { it.copy(category = legacyCat) }
+            }
+        }
+    }
 
     private val sortField = themePreferences.sortField
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SortField.DATE_ADDED)
@@ -242,6 +270,21 @@ class DexViewModel(
             MediaCategory.fromString(it)
         }
         mutableFilterState.update { it.copy(category = legacyCat, genres = emptySet(), tags = emptySet()) }
+        viewModelScope.launch {
+            themePreferences.setLastUsedCategory(categoryId)
+        }
+    }
+
+    fun setPinnedCategories(categoryIds: List<String>) {
+        viewModelScope.launch {
+            themePreferences.setPinnedCategoryIds(categoryIds)
+        }
+    }
+
+    fun updateCategory(category: Category) {
+        viewModelScope.launch {
+            repository.updateCategory(category)
+        }
     }
 
     fun selectSubtypeId(subtypeId: String?) {
