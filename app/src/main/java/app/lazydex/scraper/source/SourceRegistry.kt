@@ -22,9 +22,13 @@ class SourceRegistry(
     }
 
     fun findSourceForUrl(url: String): Source? {
-        return sources.firstOrNull { it.urlPattern.matches(url) }
-            ?: sources.firstOrNull { it is GenericSource }
-            ?: sources.firstOrNull()
+        val specificSource = sources.firstOrNull { it !is GenericSource && it.baseUrl.isNotBlank() && it.urlPattern.matches(url) }
+        if (specificSource != null) return specificSource
+
+        val nonGenericFallback = sources.firstOrNull { it !is GenericSource && it.urlPattern.matches(url) }
+        if (nonGenericFallback != null) return nonGenericFallback
+
+        return sources.firstOrNull { it is GenericSource } ?: sources.firstOrNull()
     }
 
     fun getSearchableSources(): List<Source> {

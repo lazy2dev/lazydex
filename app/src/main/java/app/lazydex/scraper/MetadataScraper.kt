@@ -4,6 +4,7 @@ import app.lazydex.scraper.source.ScrapedMetadata
 import app.lazydex.scraper.source.SourceRegistry
 import app.lazydex.util.UrlNormalizer
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.currentCoroutineContext
@@ -31,22 +32,35 @@ class SafeDns : Dns {
 }
 
 class MetadataScraper(
-    private val sourceRegistry: SourceRegistry
+    private val sourceRegistry: SourceRegistry,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
 
     suspend fun scrape(url: String): Result<ScrapedMetadata> = withTimeout(30_000L) {
-        withContext(Dispatchers.IO) {
+        withContext(ioDispatcher) {
             try {
                 val normalizedUrl = UrlNormalizer.normalize(url)
                 if (!validateUrl(normalizedUrl)) {
-                    return@withContext Result.failure(IllegalArgumentException("Invalid URL or unsafe format. Only public HTTPS URLs are supported."))
+                    return@withContext Result.failure(IllegalArgumentException("Invalid URL or unsafe format. Only public HTTP/HTTPS URLs are supported."))
                 }
 
-                val metadata = sourceRegistry.scrape(normalizedUrl)
-                if (metadata != null && metadata.title.isNotBlank()) {
-                    Result.success(metadata)
+                var metadata = sourceRegistry.scrape(normalizedUrl)
+                if (metadata == null || metadata.title.isBlank()) {
+                    if (url != normalizedUrl) {
+                        metadata = sourceRegistry.scrape(url)
+                    }
+                }
+
+                val hasValidContent = metadata != null && (
+                    (metadata.title.isNotBlank() && !metadata.title.equals("Untitled", ignoreCase = true)) ||
+                    metadata.description.isNotBlank() ||
+                    metadata.author.isNotBlank()
+                )
+
+                if (hasValidContent) {
+                    Result.success(metadata!!)
                 } else {
-                    Result.failure(IOException("Failed to scrape metadata from URL"))
+                    Result.failure(IOException("Failed to scrape metadata from URL: $url"))
                 }
             } catch (e: TimeoutCancellationException) {
                 Result.failure(Exception("Request timed out. The site may be slow or unreachable.", e))
@@ -60,7 +74,7 @@ class MetadataScraper(
     }
 
     private fun validateUrl(url: String): Boolean {
-        if (!url.startsWith("https://", ignoreCase = true)) return false
+        if (!url.startsWith("https://", ignoreCase = true) && !url.startsWith("http://", ignoreCase = true)) return false
         if (url.length > 2048) return false
         val host = url.toHttpUrlOrNull()?.host ?: return false
         if (host.matches(Regex("""^(\d{1,3}\.){3}\d{1,3}$""")) || host.startsWith("[") && host.endsWith("]")) return false

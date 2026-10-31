@@ -12,4 +12,5 @@ interface Source {
 
     suspend fun scrape(url: String): ScrapedMetadata?
     suspend fun search(query: String): List<SearchResult>
+    suspend fun getPopular(page: Int = 1): List<SearchResult> = emptyList()
 }

@@ -6,7 +6,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import app.lazydex.data.local.LazyDexDatabase
 import app.lazydex.data.local.MIGRATION_1_2
 import app.lazydex.data.local.MIGRATION_2_3
+import app.lazydex.data.local.MIGRATION_3_4
+import app.lazydex.data.local.MIGRATION_4_5
 import app.lazydex.data.local.ThemePreferences
+import app.lazydex.data.local.setupV5TriggersAndSeeds
 import app.lazydex.data.repository.MediaRepositoryImpl
 import app.lazydex.domain.repository.MediaRepository
 import app.lazydex.scraper.MetadataScraper
@@ -26,8 +29,6 @@ import org.koin.dsl.module
 import java.io.File
 import java.time.Duration
 
-import app.lazydex.data.local.MIGRATION_3_4
-
 val databaseModule = module {
     single {
         Room.databaseBuilder(
@@ -36,9 +37,14 @@ val databaseModule = module {
             "lazydex_db"
         )
         .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
         .fallbackToDestructiveMigrationOnDowngrade()
         .addCallback(object : RoomDatabase.Callback() {
+            override fun onCreate(db: SupportSQLiteDatabase) {
+                super.onCreate(db)
+                db.setupV5TriggersAndSeeds()
+            }
+
             override fun onDestructiveMigration(db: SupportSQLiteDatabase) {
                 super.onDestructiveMigration(db)
                 android.util.Log.w("LazyDexDatabase", "Room database was wiped due to a destructive migration!")
@@ -48,6 +54,12 @@ val databaseModule = module {
     }
 
     single { get<LazyDexDatabase>().mediaItemDao() }
+    single { get<LazyDexDatabase>().categoryDao() }
+    single { get<LazyDexDatabase>().mediaPartDao() }
+    single { get<LazyDexDatabase>().mediaLinkDao() }
+    single { get<LazyDexDatabase>().activityDao() }
+    single { get<LazyDexDatabase>().syncOutboxDao() }
+    single { get<LazyDexDatabase>().appSettingDao() }
     single { get<LazyDexDatabase>().extensionRepoDao() }
     single { get<LazyDexDatabase>().installedExtensionDao() }
 }
@@ -55,7 +67,14 @@ val databaseModule = module {
 val repositoryModule = module {
     single<MediaRepository> {
         MediaRepositoryImpl(
+            db = get(),
             dao = get(),
+            categoryDao = get(),
+            partDao = get(),
+            linkDao = get(),
+            activityDao = get(),
+            outboxDao = get(),
+            settingDao = get(),
             localCoversDir = get(named("coversDir"))
         )
     }

@@ -1,4 +1,4 @@
-package app.lazydex.ui.addedit
+﻿package app.lazydex.ui.addedit
 
 import android.app.DatePickerDialog
 import android.content.Intent
@@ -509,6 +509,80 @@ fun UnifiedAddEditScreen(
                         val total = state.parsedTotal
                         val remaining = if (total != null && total >= current) "${total - current} remaining" else "Ongoing tracker"
                         val pct = if (total != null && total > 0) ((current * 100) / total).coerceIn(0, 100) else null
+                        // Consumption Console: Read vs Listen mode & audio playback metrics
+                        val config = state.resolvedConfig
+                        val hasAudio = config?.hasAudioSpeed == true || state.category == MediaCategory.NOVEL
+                        val hasCharEst = config?.hasCharEstimate == true || state.category == MediaCategory.NOVEL
+
+                        if (hasAudio) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        FilterChip(
+                                            selected = state.actionOverride != "Listen",
+                                            onClick = { viewModel.updateActionOverride("Read") },
+                                            label = { Text("📖 Reading") }
+                                        )
+                                        FilterChip(
+                                            selected = state.actionOverride == "Listen",
+                                            onClick = { viewModel.updateActionOverride("Listen") },
+                                            label = { Text("🎧 Listening (TTS)") }
+                                        )
+                                    }
+
+                                    if (state.actionOverride == "Listen") {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text("Speed:", style = MaterialTheme.typography.labelMedium)
+                                            listOf(1.0, 1.25, 1.5, 1.75, 2.0).forEach { spd ->
+                                                FilterChip(
+                                                    selected = state.playbackSpeed == spd,
+                                                    onClick = { viewModel.updatePlaybackSpeed(spd) },
+                                                    label = { Text("${spd}x") }
+                                                )
+                                            }
+                                        }
+
+                                        val (_, listenMins) = state.timeStats
+                                        if (listenMins > 0) {
+                                            val hrs = (listenMins / 60).toInt()
+                                            val mins = (listenMins % 60).toInt()
+                                            Text(
+                                                text = "⏱ ~$hrs hrs $mins mins listened",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                    }
+
+                                    if (hasCharEst) {
+                                        OutlinedTextField(
+                                            value = state.avgChapterLength,
+                                            onValueChange = { viewModel.updateAvgChapterLength(it) },
+                                            label = { Text("Avg Chapter Length (chars/words)") },
+                                            placeholder = { Text("e.g. 3000") },
+                                            singleLine = true,
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
+                        }
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -989,11 +1063,11 @@ fun UnifiedAddEditScreen(
                         val ratingSentiment = remember(state.rating) {
                             when {
                                 state.rating == null -> "Unrated"
-                                state.rating!! >= 5.0 -> "Masterpiece • Highly Recommended"
-                                state.rating!! >= 4.0 -> "Great • Well worth the time"
-                                state.rating!! >= 3.0 -> "Good • Decent experience"
-                                state.rating!! >= 2.0 -> "Average • Has notable flaws"
-                                else -> "Poor • Disappointing"
+                                state.rating!! >= 5.0 -> "Masterpiece â€¢ Highly Recommended"
+                                state.rating!! >= 4.0 -> "Great â€¢ Well worth the time"
+                                state.rating!! >= 3.0 -> "Good â€¢ Decent experience"
+                                state.rating!! >= 2.0 -> "Average â€¢ Has notable flaws"
+                                else -> "Poor â€¢ Disappointing"
                             }
                         }
 

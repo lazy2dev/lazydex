@@ -636,7 +636,7 @@ private fun AvailableExtensionsTab(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "LazyDex ships with zero built-in scrapers. Bring your own repository to get started.",
+                    "Add extension repositories to discover and install community sources alongside built-in sources.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center

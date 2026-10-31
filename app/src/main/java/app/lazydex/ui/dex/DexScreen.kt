@@ -1,5 +1,10 @@
 package app.lazydex.ui.dex
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,12 +15,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -24,18 +32,18 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -58,12 +66,13 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.lazydex.data.local.LibraryDisplayMode
+import app.lazydex.domain.model.Category
 import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.StatusFilter
+import app.lazydex.ui.components.CategoryCreatorSheet
 import app.lazydex.ui.components.DexSettingsSheet
 import app.lazydex.ui.components.EmptyState
 import app.lazydex.ui.components.MediaCard
-import app.lazydex.ui.components.Pill
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,6 +90,9 @@ fun DexScreen(
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     val filterSheetState = rememberModalBottomSheetState()
 
+    var showCategoryCreatorSheet by rememberSaveable { mutableStateOf(false) }
+    var categoryToCreateTypeUnder by remember { mutableStateOf<Category?>(null) }
+
     var isSearching by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
 
@@ -91,12 +103,13 @@ fun DexScreen(
         } else {
             uiState.items.filter { item ->
                 item.title.contains(query, ignoreCase = true) ||
-                        (item.author?.contains(query, ignoreCase = true) == true)
+                        (item.author.contains(query, ignoreCase = true))
             }
         }
     }
 
-    val isFilterActive = uiState.selectedCategory != null ||
+    val isFilterActive = uiState.selectedCategoryId != null ||
+            uiState.selectedSubtypeId != null ||
             uiState.selectedStatus != StatusFilter.ALL ||
             uiState.selectedGenres.isNotEmpty() ||
             uiState.selectedTags.isNotEmpty() ||
@@ -104,23 +117,6 @@ fun DexScreen(
             uiState.minRating != null ||
             uiState.maxRating != null ||
             uiState.dateRangeStart != null
-
-    val categories = remember {
-        listOf(
-            null to "All",
-            MediaCategory.NOVEL to "Novels",
-            MediaCategory.MANGA to "Manga",
-            MediaCategory.ANIME to "Anime",
-            MediaCategory.GAME to "Games",
-            MediaCategory.MOVIE to "Movies",
-            MediaCategory.TV to "TV"
-        )
-    }
-
-    val selectedTabIndex = remember(uiState.selectedCategory) {
-        val idx = categories.indexOfFirst { it.first == uiState.selectedCategory }
-        if (idx >= 0) idx else 0
-    }
 
     Scaffold(
         topBar = {
@@ -209,49 +205,107 @@ fun DexScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Komikku-style Category Tab Row with Item Counts
+            // Adaptive Two-Tier Category Rail
             if (uiState.showCategoryTabs) {
-                ScrollableTabRow(
-                    selectedTabIndex = selectedTabIndex,
-                    edgePadding = 0.dp,
-                    containerColor = MaterialTheme.colorScheme.background,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    indicator = { tabPositions ->
-                        if (selectedTabIndex < tabPositions.size) {
-                            TabRowDefaults.SecondaryIndicator(
-                                modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    },
-                    divider = {}
+                // Tier 1: Top-level category pills
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    categories.forEachIndexed { index, pair ->
-                        val cat = pair.first
-                        val label = pair.second
-                        val isSelected = selectedTabIndex == index
-                        val count = if (cat == null) uiState.totalCount else (uiState.perCategoryCounts[cat] ?: 0)
-                        Tab(
-                            selected = isSelected,
-                            onClick = { viewModel.selectCategory(cat) },
-                            text = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = label,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    if (uiState.showItemCount && count > 0) {
-                                        Pill(
-                                            text = "$count",
-                                            fontSize = 10.sp
-                                        )
-                                    }
-                                }
-                            }
+                    FilterChip(
+                        selected = uiState.selectedCategoryId == null,
+                        onClick = { viewModel.selectCategoryId(null) },
+                        label = { Text("All (${uiState.totalCount})") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    )
+
+                    uiState.topLevelCategories.forEach { cat ->
+                        FilterChip(
+                            selected = uiState.selectedCategoryId == cat.id,
+                            onClick = { viewModel.selectCategoryId(cat.id) },
+                            label = { Text(cat.name) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
                         )
                     }
+
+                    AssistChip(
+                        onClick = {
+                            categoryToCreateTypeUnder = null
+                            showCategoryCreatorSheet = true
+                        },
+                        label = { Text("+ Category") },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    )
                 }
+
+                // Tier 2: Subtypes Rail with smooth animation
+                AnimatedVisibility(
+                    visible = uiState.selectedCategoryId != null && uiState.subtypesForSelectedCategory.isNotEmpty(),
+                    enter = expandVertically(tween(200)),
+                    exit = shrinkVertically(tween(200))
+                ) {
+                    val activeParent = uiState.topLevelCategories.firstOrNull { it.id == uiState.selectedCategoryId }
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            FilterChip(
+                                selected = uiState.selectedSubtypeId == null,
+                                onClick = { viewModel.selectSubtypeId(null) },
+                                label = { Text("All ${activeParent?.name ?: ""}") }
+                            )
+
+                            uiState.subtypesForSelectedCategory.forEach { sub ->
+                                FilterChip(
+                                    selected = uiState.selectedSubtypeId == sub.id,
+                                    onClick = { viewModel.selectSubtypeId(sub.id) },
+                                    label = { Text(sub.name) }
+                                )
+                            }
+
+                            AssistChip(
+                                onClick = {
+                                    categoryToCreateTypeUnder = activeParent
+                                    showCategoryCreatorSheet = true
+                                },
+                                label = { Text("+ Type") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+
                 HorizontalDivider()
             }
 
@@ -386,6 +440,19 @@ fun DexScreen(
             showItemCount = uiState.showItemCount,
             onToggleShowItemCount = { viewModel.setShowItemCount(it) },
             onClearAll = { viewModel.clearFilters() }
+        )
+    }
+
+    if (showCategoryCreatorSheet) {
+        CategoryCreatorSheet(
+            parentCategory = categoryToCreateTypeUnder,
+            onDismiss = {
+                showCategoryCreatorSheet = false
+                categoryToCreateTypeUnder = null
+            },
+            onSaveCategory = { cat ->
+                viewModel.createCategory(cat)
+            }
         )
     }
 }

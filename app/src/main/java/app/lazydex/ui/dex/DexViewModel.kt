@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.lazydex.data.local.LibraryDisplayMode
 import app.lazydex.data.local.ThemePreferences
+import app.lazydex.domain.model.Category
 import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.SortDirection
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -26,6 +28,10 @@ data class DexUiState(
     val totalCount: Int = 0,
     val selectedCategory: MediaCategory? = null,
     val selectedStatus: StatusFilter = StatusFilter.ALL,
+    val topLevelCategories: List<Category> = emptyList(),
+    val selectedCategoryId: String? = null,
+    val subtypesForSelectedCategory: List<Category> = emptyList(),
+    val selectedSubtypeId: String? = null,
     val sortField: SortField = SortField.DATE_ADDED,
     val sortDirection: SortDirection = SortDirection.DESCENDING,
     val selectedGenres: Set<String> = emptySet(),
@@ -52,8 +58,8 @@ data class DexUiState(
 private data class MutableFilterState(
     val category: MediaCategory? = null,
     val status: StatusFilter = StatusFilter.ALL,
-    val genres: Set<String> = emptySet(),   // lowercase keys
-    val tags: Set<String> = emptySet()      // lowercase keys
+    val genres: Set<String> = emptySet(),
+    val tags: Set<String> = emptySet()
 )
 
 private data class FilterBundle(
@@ -91,6 +97,16 @@ class DexViewModel(
 ) : ViewModel() {
 
     private val mutableFilterState = MutableStateFlow(MutableFilterState())
+    private val selectedCategoryId = MutableStateFlow<String?>(null)
+    private val selectedSubtypeId = MutableStateFlow<String?>(null)
+
+    val topLevelCategories: StateFlow<List<Category>> = repository.observeTopLevelCategories()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val subtypesForSelectedCategory: StateFlow<List<Category>> = selectedCategoryId.flatMapLatest { catId ->
+        if (catId != null) repository.observeTypes(catId) else flowOf(emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val sortField = themePreferences.sortField
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SortField.DATE_ADDED)
     private val sortDirection = themePreferences.sortDirection
@@ -116,9 +132,13 @@ class DexViewModel(
         repository.observeDistinctTags(cat)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val dbFiltered = selectedCategory.flatMapLatest { cat ->
+    private val activeTargetCategoryId = combine(selectedCategoryId, selectedSubtypeId) { catId, subId ->
+        subId ?: catId
+    }
+
+    private val dbFiltered = activeTargetCategoryId.flatMapLatest { targetId ->
         selectedStatus.flatMapLatest { stat ->
-            repository.observeFiltered(cat, stat)
+            repository.observeFilteredByCategoryId(targetId, stat)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -149,8 +169,25 @@ class DexViewModel(
         filterState,
         advancedFilterState,
         combine(sortField, sortDirection, randomSeed) { f, d, r -> SortBundle(f, d, r) },
-        metadataState
-    ) { items, fs, afs, ss, meta ->
+        metadataState,
+        topLevelCategories,
+        subtypesForSelectedCategory,
+        selectedCategoryId,
+        selectedSubtypeId
+    ) { args: Array<Any?> ->
+        @Suppress("UNCHECKED_CAST")
+        val items = args[0] as List<MediaItem>
+        val fs = args[1] as FilterBundle
+        val afs = args[2] as AdvancedFilterBundle
+        val ss = args[3] as SortBundle
+        val meta = args[4] as MetadataBundle
+        @Suppress("UNCHECKED_CAST")
+        val topCats = args[5] as List<Category>
+        @Suppress("UNCHECKED_CAST")
+        val subCats = args[6] as List<Category>
+        val selCatId = args[7] as String?
+        val selSubId = args[8] as String?
+
         val filtered = items.filter { item ->
             (fs.selectedGenres.isEmpty() || item.genres.any { it.lowercase() in fs.selectedGenres }) &&
             (fs.selectedTags.isEmpty() || item.tags.any { it.lowercase() in fs.selectedTags }) &&
@@ -165,6 +202,10 @@ class DexViewModel(
             items = sortItems(filtered, ss.field, ss.direction, ss.randomSeed),
             selectedCategory = fs.category,
             selectedStatus = fs.status,
+            topLevelCategories = topCats,
+            selectedCategoryId = selCatId,
+            subtypesForSelectedCategory = subCats,
+            selectedSubtypeId = selSubId,
             sortField = ss.field,
             sortDirection = ss.direction,
             selectedGenres = fs.selectedGenres,
@@ -193,6 +234,37 @@ class DexViewModel(
         )
     }
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DexUiState())
+
+    fun selectCategoryId(categoryId: String?) {
+        selectedCategoryId.value = categoryId
+        selectedSubtypeId.value = null
+        val legacyCat = categoryId?.removePrefix("cat_")?.removePrefix("typ_")?.substringBefore("_")?.let {
+            MediaCategory.fromString(it)
+        }
+        mutableFilterState.update { it.copy(category = legacyCat, genres = emptySet(), tags = emptySet()) }
+    }
+
+    fun selectSubtypeId(subtypeId: String?) {
+        selectedSubtypeId.value = subtypeId
+    }
+
+    fun createCategory(category: Category) {
+        viewModelScope.launch {
+            repository.addCategory(category)
+        }
+    }
+
+    fun deleteCategory(categoryId: String) {
+        viewModelScope.launch {
+            repository.deleteCategory(categoryId)
+        }
+    }
+
+    fun incrementProgress(id: String, delta: Double = 1.0, mode: String? = null, speed: Double = 1.0) {
+        viewModelScope.launch {
+            repository.incrementProgress(id, delta, mode, speed)
+        }
+    }
 
     fun setShowItemCount(enabled: Boolean) {
         viewModelScope.launch {
@@ -237,7 +309,16 @@ class DexViewModel(
     }
 
     fun selectCategory(category: MediaCategory?) {
-        mutableFilterState.update { it.copy(category = category, genres = emptySet(), tags = emptySet()) }
+        val catId = when (category) {
+            MediaCategory.NOVEL -> "cat_novel"
+            MediaCategory.MANGA -> "cat_manga"
+            MediaCategory.ANIME -> "cat_anime"
+            MediaCategory.GAME -> "cat_game"
+            MediaCategory.MOVIE -> "cat_movie"
+            MediaCategory.TV -> "cat_tv"
+            null -> null
+        }
+        selectCategoryId(catId)
     }
 
     fun selectStatus(status: StatusFilter) {
@@ -299,6 +380,8 @@ class DexViewModel(
 
     fun clearFilters() {
         mutableFilterState.update { MutableFilterState() }
+        selectedCategoryId.value = null
+        selectedSubtypeId.value = null
         authorQuery.value = ""
         minRating.value = null
         maxRating.value = null
