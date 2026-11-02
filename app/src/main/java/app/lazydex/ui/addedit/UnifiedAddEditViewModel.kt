@@ -420,7 +420,7 @@ class UnifiedAddEditViewModel(
         }
     }
 
-    fun save() {
+    fun save(exitOnSuccess: Boolean = true) {
         val state = _formState.value
         if (state.isTitleBlank) {
             _formState.value = _formState.value.copy(errorMsg = "Title is required")
@@ -504,12 +504,18 @@ class UnifiedAddEditViewModel(
             }
 
             try {
-                if (state.isNew) {
+                val savedItem = if (state.isNew) {
                     repository.add(item)
                 } else {
                     repository.update(item)
+                    item
                 }
-                _formState.value = _formState.value.copy(isDone = true)
+                originalItem = savedItem
+                if (exitOnSuccess) {
+                    _formState.value = _formState.value.copy(id = savedItem.id, isDone = true, isSaving = false)
+                } else {
+                    _formState.value = _formState.value.copy(id = savedItem.id, isNew = false, isSaving = false)
+                }
             } catch (e: DuplicateUrlException) {
                 _formState.value = _formState.value.copy(
                     errorMsg = "A media tracker with this URL already exists.",
@@ -522,6 +528,12 @@ class UnifiedAddEditViewModel(
                 )
             }
         }
+    }
+
+    fun autoSave() {
+        val state = _formState.value
+        if (state.isNew || state.isTitleBlank || state.id.isBlank()) return
+        save(exitOnSuccess = false)
     }
 
     fun deleteItem() {
