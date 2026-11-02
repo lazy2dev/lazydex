@@ -1,4 +1,4 @@
-package app.lazydex.ui.addedit
+package app.lazydex.ui.details
 
 import androidx.lifecycle.SavedStateHandle
 import app.lazydex.domain.model.MediaCategory
@@ -9,22 +9,23 @@ import app.lazydex.domain.model.UserStatus
 import app.lazydex.domain.repository.MediaRepository
 import app.lazydex.scraper.MetadataScraper
 import app.lazydex.scraper.source.SourceRegistry
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import okhttp3.OkHttpClient
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import java.io.File
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-class UnifiedAddEditViewModelTest {
+class MediaDetailsViewModelTest {
 
     private class FakeRepository : MediaRepository {
         val items = mutableListOf<MediaItem>()
@@ -61,12 +62,12 @@ class UnifiedAddEditViewModelTest {
 
     private val testDispatcher = kotlinx.coroutines.test.UnconfinedTestDispatcher()
 
-    @org.junit.Before
+    @Before
     fun setUp() {
         kotlinx.coroutines.Dispatchers.setMain(testDispatcher)
     }
 
-    @org.junit.After
+    @After
     fun tearDown() {
         kotlinx.coroutines.Dispatchers.resetMain()
     }
@@ -74,7 +75,7 @@ class UnifiedAddEditViewModelTest {
     @Test
     fun newEntry_startsBlank_saveWithoutTitleSetsError() = runTest {
         val repo = FakeRepository()
-        val vm = UnifiedAddEditViewModel(
+        val vm = MediaDetailsViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList())),
@@ -82,23 +83,23 @@ class UnifiedAddEditViewModelTest {
             cacheDir = File(".")
         )
 
-        val state = vm.formState.value
+        val state = vm.uiState.value
         assertTrue(state.isNew)
         assertTrue(state.isTitleBlank)
         assertFalse(state.canSave)
 
         // Attempt save without title
         vm.save()
-        assertEquals("Title is required", vm.formState.value.errorMsg)
-        assertFalse(vm.formState.value.isDone)
+        assertEquals("Title is required", vm.uiState.value.errorMsg)
+        assertFalse(vm.uiState.value.isDone)
 
         // Enter title and save
         vm.updateTitle("Lord of the Mysteries")
-        assertNull(vm.formState.value.errorMsg)
-        assertTrue(vm.formState.value.canSave)
+        assertNull(vm.uiState.value.errorMsg)
+        assertTrue(vm.uiState.value.canSave)
 
         vm.save()
-        assertTrue(vm.formState.value.isDone)
+        assertTrue(vm.uiState.value.isDone)
         assertEquals(1, repo.items.size)
         assertEquals("Lord of the Mysteries", repo.items[0].title)
     }
@@ -118,7 +119,7 @@ class UnifiedAddEditViewModelTest {
         )
         repo.items.add(existing)
 
-        val vm = UnifiedAddEditViewModel(
+        val vm = MediaDetailsViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList())),
@@ -127,7 +128,7 @@ class UnifiedAddEditViewModelTest {
         )
 
         vm.initialize("existing-1", null)
-        val state = vm.formState.value
+        val state = vm.uiState.value
         assertFalse(state.isNew)
         assertEquals("Omniscient Reader", state.title)
         assertEquals("100", state.currentProgress)
@@ -137,7 +138,7 @@ class UnifiedAddEditViewModelTest {
     @Test
     fun save_withMetadataAndFormat_preservesRomajiNativeAndSecondaryProgress() = runTest {
         val repo = FakeRepository()
-        val vm = UnifiedAddEditViewModel(
+        val vm = MediaDetailsViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList())),
@@ -159,10 +160,10 @@ class UnifiedAddEditViewModelTest {
         vm.addGenre("Fantasy")
         vm.addTag("Magic")
 
-        assertTrue(vm.formState.value.hasSecondaryProgress)
+        assertTrue(vm.uiState.value.hasSecondaryProgress)
         vm.save()
 
-        assertTrue(vm.formState.value.isDone)
+        assertTrue(vm.uiState.value.isDone)
         assertEquals(1, repo.items.size)
         val saved = repo.items[0]
         assertEquals("The Beginning After the End", saved.title)
@@ -177,4 +178,70 @@ class UnifiedAddEditViewModelTest {
         assertTrue(saved.genres.contains("Action"))
         assertTrue(saved.tags.contains("Magic"))
     }
+
+    @Test
+    fun autoSave_existingItem_updatesDatabaseWithoutExiting() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "existing-2",
+            category = MediaCategory.MANGA,
+            title = "Solo Leveling",
+            currentProgress = 50,
+            totalItems = 200,
+            userStatus = UserStatus.READING,
+            lastUpdated = 100L,
+            dateAdded = 100L
+        )
+        repo.items.add(existing)
+
+        val vm = MediaDetailsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList())),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+
+        vm.initialize("existing-2", null)
+        vm.updateCurrentProgress("55")
+        vm.updateRating(4.5)
+        vm.autoSave()
+
+        assertFalse(vm.uiState.value.isDone) // Must stay on screen
+        assertFalse(vm.uiState.value.isNew)
+        val updated = repo.items.find { it.id == "existing-2" }
+        assertEquals(55, updated?.currentProgress)
+        assertEquals(4.5, updated?.rating)
+    }
+
+    @Test
+    fun deleteItem_removesFromRepositoryAndSetsDone() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "existing-3",
+            category = MediaCategory.ANIME,
+            title = "Frieren",
+            currentProgress = 28,
+            totalItems = 28,
+            userStatus = UserStatus.COMPLETED,
+            lastUpdated = 100L,
+            dateAdded = 100L
+        )
+        repo.items.add(existing)
+
+        val vm = MediaDetailsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList())),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+
+        vm.initialize("existing-3", null)
+        vm.deleteItem()
+
+        assertTrue(vm.uiState.value.isDone)
+        assertTrue(repo.items.isEmpty())
+    }
 }
+

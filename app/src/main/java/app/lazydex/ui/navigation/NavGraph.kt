@@ -6,7 +6,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
-import app.lazydex.ui.addedit.UnifiedAddEditScreen
+import app.lazydex.ui.details.MediaDetailsScreen
 import app.lazydex.ui.settings.AboutScreen
 import app.lazydex.ui.settings.AppearanceScreen
 import app.lazydex.ui.settings.DataAndStorageScreen
@@ -17,7 +17,7 @@ import kotlinx.serialization.Serializable
 object MainShellRoute
 
 @Serializable
-data class AddEditRoute(
+data class MediaDetailsRoute(
     val itemId: String? = null,
     val initialUrl: String? = null
 )
@@ -67,10 +67,10 @@ fun LazyDexNavGraph(
                     navController.navigate(AboutRoute)
                 },
                 onNavigateToAddItem = { initialUrl ->
-                    navController.navigate(AddEditRoute(itemId = null, initialUrl = initialUrl))
+                    navController.navigate(MediaDetailsRoute(itemId = null, initialUrl = initialUrl))
                 },
                 onNavigateToEditItem = { itemId ->
-                    navController.navigate(AddEditRoute(itemId = itemId, initialUrl = null))
+                    navController.navigate(MediaDetailsRoute(itemId = itemId, initialUrl = null))
                 }
             )
         }
@@ -85,9 +85,9 @@ fun LazyDexNavGraph(
             )
         }
 
-        composable<AddEditRoute> { backStackEntry ->
-            val route = backStackEntry.toRoute<AddEditRoute>()
-            UnifiedAddEditScreen(
+        composable<MediaDetailsRoute> { backStackEntry ->
+            val route = backStackEntry.toRoute<MediaDetailsRoute>()
+            MediaDetailsScreen(
                 itemId = route.itemId,
                 initialUrl = route.initialUrl,
                 onBack = {

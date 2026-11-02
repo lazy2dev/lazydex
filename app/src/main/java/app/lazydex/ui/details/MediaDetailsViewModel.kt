@@ -1,17 +1,17 @@
-package app.lazydex.ui.addedit
+package app.lazydex.ui.details
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.lazydex.domain.model.Category
 import app.lazydex.domain.model.MediaCategory
-import app.lazydex.ui.components.formatProgress
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.ResolvedCategoryConfig
 import app.lazydex.domain.model.UserStatus
 import app.lazydex.domain.repository.DuplicateUrlException
 import app.lazydex.domain.repository.MediaRepository
 import app.lazydex.scraper.MetadataScraper
+import app.lazydex.ui.components.formatProgress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,7 +25,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.util.UUID
 
-data class AddEditFormState(
+data class MediaDetailsUiState(
     val id: String = "",
     val category: MediaCategory = MediaCategory.NOVEL,
     val formatId: String? = null,
@@ -63,7 +63,7 @@ data class AddEditFormState(
     val isDone: Boolean = false,
     val showDeleteConfirm: Boolean = false,
     val showDiscardConfirm: Boolean = false,
-    val isNew: Boolean = true
+    val isNew: Boolean = true,
 ) {
     val parsedSecondaryProgress: Double? get() = secondaryProgress.trim().toDoubleOrNull()
     val parsedSecondaryTotal: Double? get() = secondaryProgressTotal.trim().takeIf { it.isNotEmpty() }?.toDoubleOrNull()
@@ -72,9 +72,8 @@ data class AddEditFormState(
             ((parsedSecondaryProgress ?: 0.0) > 0.0) ||
             ((parsedSecondaryTotal ?: 0.0) > 0.0) ||
             formatId in setOf("typ_novel_ln", "typ_manga_jp", "cat_tv", "typ_anime_series")
-    // Form level validation checks
+
     val isTitleBlank: Boolean get() = title.trim().isBlank()
-    
     val parsedProgress: Int? get() = currentProgress.trim().toIntOrNull()
     val parsedTotal: Int? get() = totalItems.trim().takeIf { it.isNotEmpty() }?.toIntOrNull()
 
@@ -100,22 +99,21 @@ data class AddEditFormState(
     }
 
     val canSave: Boolean get() = !isTitleBlank && !isProgressInvalid && !isTotalInvalid && !isUrlInvalid && !isScraping && !isSaving
-    val isFormValid: Boolean get() = canSave
 }
 
-class UnifiedAddEditViewModel(
+class MediaDetailsViewModel(
     savedStateHandle: SavedStateHandle,
     private val repository: MediaRepository,
     private val scraper: MetadataScraper,
     private val okHttpClient: OkHttpClient,
-    private val cacheDir: File
+    private val cacheDir: File,
 ) : ViewModel() {
 
     private val itemId: String? = savedStateHandle["itemId"]
     private val initialUrl: String? = savedStateHandle["initialUrl"]
 
-    private val _formState = MutableStateFlow(AddEditFormState())
-    val formState: StateFlow<AddEditFormState> = _formState.asStateFlow()
+    private val _uiState = MutableStateFlow(MediaDetailsUiState())
+    val uiState: StateFlow<MediaDetailsUiState> = _uiState.asStateFlow()
 
     private var originalItem: MediaItem? = null
 
@@ -127,7 +125,7 @@ class UnifiedAddEditViewModel(
         val effectiveUrl = initialUrl?.takeIf { it.isNotBlank() }
         val effectiveId = id?.takeIf { it.isNotBlank() }
 
-        _formState.value = _formState.value.copy(isNew = effectiveId == null)
+        _uiState.value = _uiState.value.copy(isNew = effectiveId == null)
 
         effectiveUrl?.let { url ->
             updateSourceUrl(url)
@@ -135,7 +133,7 @@ class UnifiedAddEditViewModel(
         }
 
         viewModelScope.launch {
-            val initialCatId = when (_formState.value.category) {
+            val initialCatId = when (_uiState.value.category) {
                 MediaCategory.NOVEL -> "cat_novel"
                 MediaCategory.MANGA -> "cat_manga"
                 MediaCategory.ANIME -> "cat_anime"
@@ -144,16 +142,16 @@ class UnifiedAddEditViewModel(
                 MediaCategory.TV -> "cat_tv"
             }
             val config = repository.getResolvedConfig(initialCatId)
-            _formState.value = _formState.value.copy(resolvedConfig = config)
+            _uiState.value = _uiState.value.copy(resolvedConfig = config)
             repository.observeTypes(initialCatId).collect { types ->
-                _formState.value = _formState.value.copy(availableFormats = types)
+                _uiState.value = _uiState.value.copy(availableFormats = types)
             }
         }
 
         effectiveId?.let { targetId ->
             viewModelScope.launch {
                 repository.observeById(targetId).collect { item ->
-                    if (item != null && !_formState.value.isSaving && !_formState.value.isScraping) {
+                    if (item != null && !_uiState.value.isSaving && !_uiState.value.isScraping) {
                         originalItem = item
                         val config = repository.getResolvedConfig(item.categoryId)
                         val timeSpent = repository.getTimeSpentMinutes(item.id)
@@ -168,7 +166,7 @@ class UnifiedAddEditViewModel(
                         val romaji = item.alternativeTitles.getOrNull(0) ?: ""
                         val native = item.alternativeTitles.getOrNull(2) ?: ""
                         val banner = item.getExtra("banner_image")
-                        _formState.value = _formState.value.copy(
+                        _uiState.value = _uiState.value.copy(
                             id = item.id,
                             category = item.category,
                             formatId = item.categoryId,
@@ -198,10 +196,10 @@ class UnifiedAddEditViewModel(
                             description = item.description,
                             startDate = item.startDate,
                             endDate = item.endDate,
-                            isNew = false
+                            isNew = false,
                         )
                         repository.observeTypes(topCatId).collect { types ->
-                            _formState.value = _formState.value.copy(availableFormats = types)
+                            _uiState.value = _uiState.value.copy(availableFormats = types)
                         }
                     }
                 }
@@ -210,7 +208,7 @@ class UnifiedAddEditViewModel(
     }
 
     fun updateTitle(title: String) {
-        _formState.value = _formState.value.copy(title = title, errorMsg = null)
+        _uiState.value = _uiState.value.copy(title = title, errorMsg = null)
     }
 
     fun updateCategory(category: MediaCategory) {
@@ -224,16 +222,16 @@ class UnifiedAddEditViewModel(
         }
         viewModelScope.launch {
             val config = repository.getResolvedConfig(catId)
-            _formState.value = _formState.value.copy(category = category, formatId = null, resolvedConfig = config)
+            _uiState.value = _uiState.value.copy(category = category, formatId = null, resolvedConfig = config)
             repository.observeTypes(catId).collect { types ->
-                _formState.value = _formState.value.copy(availableFormats = types)
+                _uiState.value = _uiState.value.copy(availableFormats = types)
             }
         }
     }
 
     fun updateFormatId(formatId: String?) {
         viewModelScope.launch {
-            val catId = formatId ?: when (_formState.value.category) {
+            val catId = formatId ?: when (_uiState.value.category) {
                 MediaCategory.NOVEL -> "cat_novel"
                 MediaCategory.MANGA -> "cat_manga"
                 MediaCategory.ANIME -> "cat_anime"
@@ -242,142 +240,122 @@ class UnifiedAddEditViewModel(
                 MediaCategory.TV -> "cat_tv"
             }
             val config = repository.getResolvedConfig(catId)
-            _formState.value = _formState.value.copy(formatId = formatId, resolvedConfig = config)
+            _uiState.value = _uiState.value.copy(formatId = formatId, resolvedConfig = config)
         }
     }
 
     fun updateBannerImage(url: String?) {
-        _formState.value = _formState.value.copy(bannerImage = url)
+        _uiState.value = _uiState.value.copy(bannerImage = url)
     }
 
     fun updateTitleRomaji(title: String) {
-        _formState.value = _formState.value.copy(titleRomaji = title)
+        _uiState.value = _uiState.value.copy(titleRomaji = title)
     }
 
     fun updateTitleNative(title: String) {
-        _formState.value = _formState.value.copy(titleNative = title)
+        _uiState.value = _uiState.value.copy(titleNative = title)
     }
-
-    fun updateSecondaryProgress(progress: String) {
-        _formState.value = _formState.value.copy(secondaryProgress = progress)
-    }
-
-    fun updateSecondaryProgressTotal(total: String) {
-        _formState.value = _formState.value.copy(secondaryProgressTotal = total)
-    }
-
-    fun updateActionOverride(mode: String?) {
-        _formState.value = _formState.value.copy(actionOverride = mode)
-    }
-
-    fun updatePlaybackSpeed(speed: Double) {
-        _formState.value = _formState.value.copy(playbackSpeed = speed)
-    }
-
-    fun updateAvgChapterLength(length: String) {
-        _formState.value = _formState.value.copy(avgChapterLength = length)
-    }
-
-    fun updateAlternativeTitles(titles: List<String>) {
-        _formState.value = _formState.value.copy(alternativeTitles = titles)
-    }
-
-    fun updateAltTitles(titles: List<String>) = updateAlternativeTitles(titles)
 
     fun updateSourceUrl(url: String) {
-        _formState.value = _formState.value.copy(sourceUrl = url, errorMsg = null)
+        _uiState.value = _uiState.value.copy(sourceUrl = url, errorMsg = null)
     }
 
     fun updateCoverImagePath(path: String) {
-        _formState.value = _formState.value.copy(coverImagePath = path)
+        _uiState.value = _uiState.value.copy(coverImagePath = path)
     }
 
     fun updateCoverImageUrl(url: String) {
-        _formState.value = _formState.value.copy(coverImageUrl = url)
+        _uiState.value = _uiState.value.copy(coverImageUrl = url)
     }
 
     fun updateCurrentProgress(progress: String) {
-        _formState.value = _formState.value.copy(currentProgress = progress)
+        _uiState.value = _uiState.value.copy(currentProgress = progress, errorMsg = null)
     }
-
-    fun updateProgress(progress: String) = updateCurrentProgress(progress)
 
     fun updateTotalItems(total: String) {
-        _formState.value = _formState.value.copy(totalItems = total)
+        _uiState.value = _uiState.value.copy(totalItems = total, errorMsg = null)
     }
 
-    fun updateTotal(total: String) = updateTotalItems(total)
+    fun updateSecondaryProgress(progress: String) {
+        _uiState.value = _uiState.value.copy(secondaryProgress = progress)
+    }
+
+    fun updateSecondaryProgressTotal(total: String) {
+        _uiState.value = _uiState.value.copy(secondaryProgressTotal = total)
+    }
+
+    fun updateActionOverride(action: String?) {
+        _uiState.value = _uiState.value.copy(actionOverride = action)
+    }
+
+    fun updatePlaybackSpeed(speed: Double) {
+        _uiState.value = _uiState.value.copy(playbackSpeed = speed)
+    }
+
+    fun updateAvgChapterLength(length: String) {
+        _uiState.value = _uiState.value.copy(avgChapterLength = length)
+    }
 
     fun updateUserStatus(status: UserStatus) {
-        _formState.value = _formState.value.copy(userStatus = status)
+        _uiState.value = _uiState.value.copy(userStatus = status)
     }
 
-    fun updateStatus(status: UserStatus) = updateUserStatus(status)
-
     fun updateRating(rating: Double?) {
-        _formState.value = _formState.value.copy(rating = rating)
+        _uiState.value = _uiState.value.copy(rating = rating)
     }
 
     fun updateNotes(notes: String) {
-        _formState.value = _formState.value.copy(notes = notes)
-    }
-
-    fun updateGenres(genres: List<String>) {
-        _formState.value = _formState.value.copy(genres = genres)
+        _uiState.value = _uiState.value.copy(notes = notes)
     }
 
     fun addGenre(genre: String) {
         val trimmed = genre.trim()
-        if (trimmed.isNotBlank() && !_formState.value.genres.contains(trimmed)) {
-            _formState.value = _formState.value.copy(genres = _formState.value.genres + trimmed)
+        if (trimmed.isNotEmpty() && trimmed !in _uiState.value.genres) {
+            _uiState.value = _uiState.value.copy(genres = _uiState.value.genres + trimmed)
         }
     }
 
     fun removeGenre(genre: String) {
-        _formState.value = _formState.value.copy(genres = _formState.value.genres - genre)
-    }
-
-    fun updateTags(tags: List<String>) {
-        _formState.value = _formState.value.copy(tags = tags)
+        _uiState.value = _uiState.value.copy(genres = _uiState.value.genres - genre)
     }
 
     fun addTag(tag: String) {
         val trimmed = tag.trim()
-        if (trimmed.isNotBlank() && !_formState.value.tags.contains(trimmed)) {
-            _formState.value = _formState.value.copy(tags = _formState.value.tags + trimmed)
+        if (trimmed.isNotEmpty() && trimmed !in _uiState.value.tags) {
+            _uiState.value = _uiState.value.copy(tags = _uiState.value.tags + trimmed)
         }
     }
 
     fun removeTag(tag: String) {
-        _formState.value = _formState.value.copy(tags = _formState.value.tags - tag)
+        _uiState.value = _uiState.value.copy(tags = _uiState.value.tags - tag)
     }
 
     fun updateAuthor(author: String) {
-        _formState.value = _formState.value.copy(author = author)
+        _uiState.value = _uiState.value.copy(author = author)
     }
 
     fun updateDescription(description: String) {
-        _formState.value = _formState.value.copy(description = description)
+        _uiState.value = _uiState.value.copy(description = description)
     }
 
     fun updateStartDate(date: Long?) {
-        _formState.value = _formState.value.copy(startDate = date)
+        _uiState.value = _uiState.value.copy(startDate = date)
     }
 
     fun updateEndDate(date: Long?) {
-        _formState.value = _formState.value.copy(endDate = date)
+        _uiState.value = _uiState.value.copy(endDate = date)
     }
 
     fun setError(message: String?) {
-        _formState.value = _formState.value.copy(errorMsg = message)
+        _uiState.value = _uiState.value.copy(errorMsg = message)
     }
 
     fun scrapeUrl(urlOverride: String? = null) {
-        val rawUrl = urlOverride ?: _formState.value.sourceUrl
+        val rawUrl = urlOverride ?: _uiState.value.sourceUrl
         val trimmed = rawUrl.trim()
         if (trimmed.isEmpty()) return
 
-        _formState.value = _formState.value.copy(isScraping = true, scrapeError = null)
+        _uiState.value = _uiState.value.copy(isScraping = true, scrapeError = null)
 
         viewModelScope.launch {
             try {
@@ -387,15 +365,15 @@ class UnifiedAddEditViewModel(
                         downloadImageToTemp(coverUrl)
                     }
 
-                    _formState.value = _formState.value.copy(
-                        title = metadata.title.takeIf { it.isNotBlank() } ?: _formState.value.title,
-                        description = metadata.description.takeIf { it.isNotBlank() } ?: _formState.value.description,
-                        author = metadata.author.takeIf { it.isNotBlank() } ?: _formState.value.author,
-                        coverImageUrl = metadata.imageUrl ?: _formState.value.coverImageUrl,
-                        coverImagePath = downloadedCover?.absolutePath ?: _formState.value.coverImagePath,
-                        genres = if (metadata.genres.isNotEmpty()) metadata.genres else _formState.value.genres,
-                        tags = if (metadata.tags.isNotEmpty()) metadata.tags else _formState.value.tags,
-                        isScraping = false
+                    _uiState.value = _uiState.value.copy(
+                        title = metadata.title.takeIf { it.isNotBlank() } ?: _uiState.value.title,
+                        description = metadata.description.takeIf { it.isNotBlank() } ?: _uiState.value.description,
+                        author = metadata.author.takeIf { it.isNotBlank() } ?: _uiState.value.author,
+                        coverImageUrl = metadata.imageUrl ?: _uiState.value.coverImageUrl,
+                        coverImagePath = downloadedCover?.absolutePath ?: _uiState.value.coverImagePath,
+                        genres = if (metadata.genres.isNotEmpty()) metadata.genres else _uiState.value.genres,
+                        tags = if (metadata.tags.isNotEmpty()) metadata.tags else _uiState.value.tags,
+                        isScraping = false,
                     )
 
                     metadata.category?.let { cat ->
@@ -406,41 +384,41 @@ class UnifiedAddEditViewModel(
                         }
                     }
                 }.onFailure { exception ->
-                    _formState.value = _formState.value.copy(
+                    _uiState.value = _uiState.value.copy(
                         isScraping = false,
-                        scrapeError = exception.message ?: "Failed to scrape metadata"
+                        scrapeError = exception.message ?: "Failed to scrape metadata",
                     )
                 }
             } catch (e: Exception) {
-                _formState.value = _formState.value.copy(
+                _uiState.value = _uiState.value.copy(
                     isScraping = false,
-                    scrapeError = e.message ?: "Failed to scrape metadata"
+                    scrapeError = e.message ?: "Failed to scrape metadata",
                 )
             }
         }
     }
 
     fun save(exitOnSuccess: Boolean = true) {
-        val state = _formState.value
+        val state = _uiState.value
         if (state.isTitleBlank) {
-            _formState.value = _formState.value.copy(errorMsg = "Title is required")
+            _uiState.value = _uiState.value.copy(errorMsg = "Title is required")
             return
         }
         if (state.isProgressInvalid) {
-            _formState.value = _formState.value.copy(errorMsg = "Progress cannot exceed total items")
+            _uiState.value = _uiState.value.copy(errorMsg = "Progress cannot exceed total items")
             return
         }
         if (state.isTotalInvalid) {
-            _formState.value = _formState.value.copy(errorMsg = "Total items cannot be negative")
+            _uiState.value = _uiState.value.copy(errorMsg = "Total items cannot be negative")
             return
         }
         if (state.isUrlInvalid) {
-            _formState.value = _formState.value.copy(errorMsg = "Source URL must start with http:// or https://")
+            _uiState.value = _uiState.value.copy(errorMsg = "Source URL must start with http:// or https://")
             return
         }
         if (state.isSaving || state.isScraping) return
 
-        _formState.value = _formState.value.copy(isSaving = true, errorMsg = null)
+        _uiState.value = _uiState.value.copy(isSaving = true, errorMsg = null)
 
         viewModelScope.launch {
             val totalVal = state.parsedTotal
@@ -466,23 +444,21 @@ class UnifiedAddEditViewModel(
                 emptyList()
             }
 
-            val secProg = state.parsedSecondaryProgress ?: 0.0
-            val secTotal = state.parsedSecondaryTotal
-
             var item = MediaItem(
-                id = state.id,
+                id = state.id.ifBlank { UUID.randomUUID().toString() },
                 categoryId = catId,
-                title = state.title,
+                category = state.category,
+                title = state.title.trim(),
                 alternativeTitles = altTitles,
                 sourceUrl = state.sourceUrl.trim().ifEmpty { null },
                 coverImagePath = state.coverImagePath,
-                coverImageUrl = state.coverImageUrl.trim().ifEmpty { null },
+                coverImageUrl = state.coverImageUrl.ifEmpty { null },
                 currentProgress = progressVal,
                 totalItems = totalVal,
                 progress = progressVal.toDouble(),
                 progressTotal = totalVal?.toDouble(),
-                secondaryProgress = secProg,
-                secondaryProgressTotal = secTotal,
+                secondaryProgress = state.parsedSecondaryProgress ?: 0.0,
+                secondaryProgressTotal = state.parsedSecondaryTotal,
                 actionOverride = state.actionOverride,
                 playbackSpeed = state.playbackSpeed,
                 avgChapterLength = state.avgChapterLength.toIntOrNull(),
@@ -491,12 +467,12 @@ class UnifiedAddEditViewModel(
                 notes = state.notes,
                 genres = state.genres,
                 tags = state.tags,
-                author = state.author,
-                description = state.description,
+                author = state.author.trim(),
+                description = state.description.trim(),
                 startDate = state.startDate,
                 endDate = state.endDate,
                 lastUpdated = System.currentTimeMillis(),
-                dateAdded = originalItem?.dateAdded ?: System.currentTimeMillis()
+                dateAdded = originalItem?.dateAdded ?: System.currentTimeMillis(),
             )
 
             if (!state.bannerImage.isNullOrBlank()) {
@@ -512,52 +488,52 @@ class UnifiedAddEditViewModel(
                 }
                 originalItem = savedItem
                 if (exitOnSuccess) {
-                    _formState.value = _formState.value.copy(id = savedItem.id, isDone = true, isSaving = false)
+                    _uiState.value = _uiState.value.copy(id = savedItem.id, isDone = true, isSaving = false)
                 } else {
-                    _formState.value = _formState.value.copy(id = savedItem.id, isNew = false, isSaving = false)
+                    _uiState.value = _uiState.value.copy(id = savedItem.id, isNew = false, isSaving = false)
                 }
             } catch (e: DuplicateUrlException) {
-                _formState.value = _formState.value.copy(
+                _uiState.value = _uiState.value.copy(
                     errorMsg = "A media tracker with this URL already exists.",
-                    isSaving = false
+                    isSaving = false,
                 )
             } catch (e: Exception) {
-                _formState.value = _formState.value.copy(
+                _uiState.value = _uiState.value.copy(
                     errorMsg = e.message ?: "Failed to save media item.",
-                    isSaving = false
+                    isSaving = false,
                 )
             }
         }
     }
 
     fun autoSave() {
-        val state = _formState.value
+        val state = _uiState.value
         if (state.isNew || state.isTitleBlank || state.id.isBlank()) return
         save(exitOnSuccess = false)
     }
 
     fun deleteItem() {
-        val id = _formState.value.id
+        val id = _uiState.value.id
         if (id.isEmpty()) return
-        
-        _formState.value = _formState.value.copy(isSaving = true, showDeleteConfirm = false)
+
+        _uiState.value = _uiState.value.copy(isSaving = true, showDeleteConfirm = false)
         viewModelScope.launch {
             try {
                 repository.delete(id)
-                _formState.value = _formState.value.copy(isDone = true)
+                _uiState.value = _uiState.value.copy(isDone = true)
             } catch (e: Exception) {
-                _formState.value = _formState.value.copy(
+                _uiState.value = _uiState.value.copy(
                     errorMsg = e.message ?: "Failed to delete item",
-                    isSaving = false
+                    isSaving = false,
                 )
             }
         }
     }
 
     fun checkBackPressAllowed(): Boolean {
-        if (_formState.value.isDone) return true
-        
-        val state = _formState.value
+        if (_uiState.value.isDone) return true
+
+        val state = _uiState.value
         val isDirty = if (state.isNew) {
             state.title.isNotBlank() || state.sourceUrl.isNotBlank() || state.notes.isNotBlank()
         } else {
@@ -588,7 +564,7 @@ class UnifiedAddEditViewModel(
         }
 
         if (isDirty) {
-            _formState.value = _formState.value.copy(showDiscardConfirm = true)
+            _uiState.value = _uiState.value.copy(showDiscardConfirm = true)
             return false
         }
         return true
@@ -597,11 +573,11 @@ class UnifiedAddEditViewModel(
     fun onBackPress(): Boolean = checkBackPressAllowed()
 
     fun dismissDiscardConfirm() {
-        _formState.value = _formState.value.copy(showDiscardConfirm = false)
+        _uiState.value = _uiState.value.copy(showDiscardConfirm = false)
     }
 
     fun showDeleteConfirm(show: Boolean) {
-        _formState.value = _formState.value.copy(showDeleteConfirm = show)
+        _uiState.value = _uiState.value.copy(showDeleteConfirm = show)
     }
 
     private suspend fun downloadImageToTemp(url: String): File? = withContext(Dispatchers.IO) {
@@ -633,3 +609,4 @@ class UnifiedAddEditViewModel(
         }
     }
 }
+

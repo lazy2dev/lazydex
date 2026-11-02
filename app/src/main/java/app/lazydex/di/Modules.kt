@@ -21,7 +21,7 @@ import app.lazydex.scraper.MetadataScraper
 import app.lazydex.scraper.SafeDns
 import app.lazydex.scraper.source.GenericSource
 import app.lazydex.scraper.source.SourceRegistry
-import app.lazydex.ui.addedit.UnifiedAddEditViewModel
+import app.lazydex.ui.details.MediaDetailsViewModel
 import app.lazydex.ui.browser.BrowserViewModel
 import app.lazydex.ui.dex.DexViewModel
 import app.lazydex.ui.settings.SettingsViewModel
@@ -164,7 +164,7 @@ val viewModelModule = module {
     viewModel { StatisticsViewModel(get()) }
     viewModel { BrowserViewModel(get(), get(), get()) }
     viewModel {
-        UnifiedAddEditViewModel(
+        MediaDetailsViewModel(
             savedStateHandle = get(),
             repository = get(),
             scraper = get(),
