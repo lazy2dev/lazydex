@@ -95,7 +95,7 @@ interface MediaItemDao {
           (SELECT COUNT(*) FROM active_media_items) as totalCount,
           (SELECT COUNT(*) FROM active_media_items WHERE userStatus = 'COMPLETED') as completedCount,
           (SELECT CAST(COALESCE(SUM(progress), 0) AS INTEGER) FROM active_media_items) as totalProgress,
-          (SELECT AVG(rating) FROM active_media_items WHERE rating IS NOT NULL) as meanRating,
+          (SELECT AVG(scoreRaw) / 20.0 FROM active_media_items WHERE scoreRaw IS NOT NULL) as meanRating,
           (SELECT COUNT(*) FROM active_media_items WHERE userStatus IN ('READING', 'WATCHING', 'PLAYING', 'IN_PROGRESS')) as inProgressCount,
           (SELECT COUNT(*) FROM active_media_items WHERE categoryId = 'cat_novel' OR categoryId IN (SELECT id FROM categories WHERE parentId = 'cat_novel')) as novelCount,
           (SELECT COUNT(*) FROM active_media_items WHERE categoryId = 'cat_manga' OR categoryId IN (SELECT id FROM categories WHERE parentId = 'cat_manga')) as mangaCount,

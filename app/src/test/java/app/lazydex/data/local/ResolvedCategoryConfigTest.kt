@@ -30,7 +30,7 @@ class ResolvedCategoryConfigTest {
                 unitName = cat.unitName ?: parent.unitName ?: "Item",
                 secondaryUnitName = secUnit,
                 actionVerb = cat.actionVerb ?: parent.actionVerb ?: "Consume",
-                hasParts = (cat.hasParts ?: parent.hasParts ?: 0) == 1,
+                hasSecondaryProgress = (cat.hasParts ?: parent.hasParts ?: 0) == 1,
                 hasCharEstimate = (cat.hasCharEstimate ?: parent.hasCharEstimate ?: 0) == 1,
                 hasAudioSpeed = (cat.hasAudioSpeed ?: parent.hasAudioSpeed ?: 0) == 1,
                 lengthUnit = LengthUnit.valueOf(cat.lengthUnit ?: parent.lengthUnit ?: "WORDS")
@@ -44,7 +44,7 @@ class ResolvedCategoryConfigTest {
                 unitName = cat.unitName ?: "Item",
                 secondaryUnitName = cat.secondaryUnitName?.takeIf { it != "" },
                 actionVerb = cat.actionVerb ?: "Consume",
-                hasParts = (cat.hasParts ?: 0) == 1,
+                hasSecondaryProgress = (cat.hasParts ?: 0) == 1,
                 hasCharEstimate = (cat.hasCharEstimate ?: 0) == 1,
                 hasAudioSpeed = (cat.hasAudioSpeed ?: 0) == 1,
                 lengthUnit = LengthUnit.valueOf(cat.lengthUnit ?: "WORDS")
@@ -62,7 +62,7 @@ class ResolvedCategoryConfigTest {
             unitName = "Chapter",
             secondaryUnitName = "",
             actionVerb = "Read",
-            hasParts = 0,
+            hasSecondaryProgress = 0,
             hasCharEstimate = 1,
             hasAudioSpeed = 1,
             lengthUnit = "WORDS",
@@ -94,7 +94,7 @@ class ResolvedCategoryConfigTest {
             unitName = "Chapter",
             secondaryUnitName = "",
             actionVerb = "Read",
-            hasParts = 0,
+            hasSecondaryProgress = 0,
             hasCharEstimate = 1,
             hasAudioSpeed = 1,
             lengthUnit = "WORDS",
@@ -109,7 +109,7 @@ class ResolvedCategoryConfigTest {
             unitName = null,
             secondaryUnitName = null,
             actionVerb = null,
-            hasParts = null,
+            hasSecondaryProgress = null,
             hasCharEstimate = null,
             hasAudioSpeed = null,
             lengthUnit = "CHARS", // overridden
@@ -140,7 +140,7 @@ class ResolvedCategoryConfigTest {
             unitName = "Chapter",
             secondaryUnitName = "",
             actionVerb = "Read",
-            hasParts = 0,
+            hasSecondaryProgress = 0,
             hasCharEstimate = 1,
             hasAudioSpeed = 1,
             lengthUnit = "WORDS",
@@ -155,7 +155,7 @@ class ResolvedCategoryConfigTest {
             unitName = null,
             secondaryUnitName = "Volume", // overridden
             actionVerb = null,
-            hasParts = 1,                 // overridden
+            hasSecondaryProgress = 1,                 // overridden
             hasCharEstimate = null,
             hasAudioSpeed = null,
             lengthUnit = null,
@@ -179,7 +179,7 @@ class ResolvedCategoryConfigTest {
             unitName = "Episode",
             secondaryUnitName = "Season", // parent has Season
             actionVerb = "Watch",
-            hasParts = 1,
+            hasSecondaryProgress = 1,
             hasCharEstimate = 0,
             hasAudioSpeed = 0,
             lengthUnit = "WORDS",
@@ -194,7 +194,7 @@ class ResolvedCategoryConfigTest {
             unitName = "Minute",
             secondaryUnitName = "", // explicitly none
             actionVerb = null,
-            hasParts = 0,
+            hasSecondaryProgress = 0,
             hasCharEstimate = null,
             hasAudioSpeed = null,
             lengthUnit = null,

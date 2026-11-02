@@ -19,7 +19,8 @@ import androidx.room.PrimaryKey
     indices = [
         Index(value = ["mediaId", "kind", "providerId"], unique = true),
         Index(value = ["mediaId"]),
-        Index(value = ["providerId", "remoteId"])
+        Index(value = ["providerId", "remoteId"]),
+        Index(value = ["syncStatus"])
     ]
 )
 data class MediaLinkEntity(
@@ -28,11 +29,12 @@ data class MediaLinkEntity(
     val kind: String,
     val providerId: String,
     val remoteId: String?,
+    val remoteMediaListId: String? = null,
     val url: String?,
     @ColumnInfo(defaultValue = "LINKED") val state: String = "LINKED",
+    @ColumnInfo(defaultValue = "SYNCED") val syncStatus: String = "SYNCED",
     val lastSyncedAt: Long? = null,
     @ColumnInfo(defaultValue = "{}") val syncedSnapshot: String = "{}",
     val createdAt: Long,
     val updatedAt: Long
 )
-

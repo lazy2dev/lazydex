@@ -8,9 +8,14 @@ import app.lazydex.data.local.MIGRATION_1_2
 import app.lazydex.data.local.MIGRATION_2_3
 import app.lazydex.data.local.MIGRATION_3_4
 import app.lazydex.data.local.MIGRATION_4_5
+import app.lazydex.data.local.MIGRATION_5_6
 import app.lazydex.data.local.ThemePreferences
 import app.lazydex.data.local.setupV5TriggersAndSeeds
 import app.lazydex.data.repository.MediaRepositoryImpl
+import app.lazydex.data.tracker.anilist.AnilistGraphQLClient
+import app.lazydex.data.tracker.anilist.AnilistTokenStore
+import app.lazydex.data.tracker.anilist.TokenBucketLimiter
+import app.lazydex.data.tracker.sync.AnilistSyncEngine
 import app.lazydex.domain.repository.MediaRepository
 import app.lazydex.scraper.MetadataScraper
 import app.lazydex.scraper.SafeDns
@@ -37,7 +42,7 @@ val databaseModule = module {
             "lazydex_db"
         )
         .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
         .fallbackToDestructiveMigrationOnDowngrade()
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
@@ -55,7 +60,7 @@ val databaseModule = module {
 
     single { get<LazyDexDatabase>().mediaItemDao() }
     single { get<LazyDexDatabase>().categoryDao() }
-    single { get<LazyDexDatabase>().mediaPartDao() }
+    // mediaPartDao retired in V6
     single { get<LazyDexDatabase>().mediaLinkDao() }
     single { get<LazyDexDatabase>().activityDao() }
     single { get<LazyDexDatabase>().syncOutboxDao() }
@@ -70,18 +75,39 @@ val repositoryModule = module {
             db = get(),
             dao = get(),
             categoryDao = get(),
-            partDao = get(),
             linkDao = get(),
             activityDao = get(),
             outboxDao = get(),
             settingDao = get(),
-            localCoversDir = get(named("coversDir"))
+            localCoversDir = get(named("coversDir")),
+            syncEngine = getOrNull()
+        )
+    }
+}
+
+val trackerModule = module {
+    single { TokenBucketLimiter() }
+    single {
+        AnilistGraphQLClient(
+            okHttpClient = get(),
+            tokenStore = get(),
+            limiter = get()
+        )
+    }
+    single {
+        AnilistSyncEngine(
+            client = get(),
+            db = get(),
+            mediaItemDao = get(),
+            mediaLinkDao = get(),
+            tokenStore = get()
         )
     }
 }
 
 val preferencesModule = module {
     single { ThemePreferences(androidContext()) }
+    single { AnilistTokenStore(androidContext()) }
 }
 
 val scraperModule = module {
@@ -151,7 +177,10 @@ val viewModelModule = module {
             repository = get(),
             themePreferences = get(),
             localCoversDir = get(named("coversDir")),
-            cacheDir = get(named("cacheDir"))
+            cacheDir = get(named("cacheDir")),
+            tokenStore = get(),
+            syncEngine = get(),
+            client = get()
         )
     }
     viewModel { app.lazydex.ui.settings.extensions.ExtensionViewModel(get()) }
@@ -161,6 +190,7 @@ val appModule = listOf(
     databaseModule,
     repositoryModule,
     preferencesModule,
+    trackerModule,
     scraperModule,
     extensionModule,
     storageModule,

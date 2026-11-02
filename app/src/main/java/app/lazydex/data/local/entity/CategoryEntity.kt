@@ -28,7 +28,7 @@ data class CategoryEntity(
     val unitName: String?,
     val secondaryUnitName: String?,
     val actionVerb: String?,
-    val hasParts: Int?,
+    val hasSecondaryProgress: Int?,
     val hasCharEstimate: Int?,
     val hasAudioSpeed: Int?,
     val lengthUnit: String?,
@@ -36,5 +36,6 @@ data class CategoryEntity(
     val createdAt: Long,
     val updatedAt: Long,
     val deletedAt: Long? = null
-)
-
+) {
+    val hasParts: Int? get() = hasSecondaryProgress
+}

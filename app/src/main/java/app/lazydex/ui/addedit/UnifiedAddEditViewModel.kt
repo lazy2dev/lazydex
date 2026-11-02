@@ -3,7 +3,9 @@ package app.lazydex.ui.addedit
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.lazydex.domain.model.Category
 import app.lazydex.domain.model.MediaCategory
+import app.lazydex.ui.components.formatProgress
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.ResolvedCategoryConfig
 import app.lazydex.domain.model.UserStatus
@@ -26,13 +28,20 @@ import java.util.UUID
 data class AddEditFormState(
     val id: String = "",
     val category: MediaCategory = MediaCategory.NOVEL,
+    val formatId: String? = null,
+    val availableFormats: List<Category> = emptyList(),
     val title: String = "",
+    val titleRomaji: String = "",
+    val titleNative: String = "",
     val alternativeTitles: List<String> = emptyList(),
     val sourceUrl: String = "",
     val coverImagePath: String = "",
     val coverImageUrl: String = "",
+    val bannerImage: String? = null,
     val currentProgress: String = "0",
     val totalItems: String = "",
+    val secondaryProgress: String = "0",
+    val secondaryProgressTotal: String = "",
     val actionOverride: String? = null,
     val playbackSpeed: Double = 1.0,
     val avgChapterLength: String = "",
@@ -56,6 +65,13 @@ data class AddEditFormState(
     val showDiscardConfirm: Boolean = false,
     val isNew: Boolean = true
 ) {
+    val parsedSecondaryProgress: Double? get() = secondaryProgress.trim().toDoubleOrNull()
+    val parsedSecondaryTotal: Double? get() = secondaryProgressTotal.trim().takeIf { it.isNotEmpty() }?.toDoubleOrNull()
+
+    val hasSecondaryProgress: Boolean get() = (resolvedConfig?.hasSecondaryProgress == true) ||
+            ((parsedSecondaryProgress ?: 0.0) > 0.0) ||
+            ((parsedSecondaryTotal ?: 0.0) > 0.0) ||
+            formatId in setOf("typ_novel_ln", "typ_manga_jp", "cat_tv", "typ_anime_series")
     // Form level validation checks
     val isTitleBlank: Boolean get() = title.trim().isBlank()
     
@@ -129,6 +145,9 @@ class UnifiedAddEditViewModel(
             }
             val config = repository.getResolvedConfig(initialCatId)
             _formState.value = _formState.value.copy(resolvedConfig = config)
+            repository.observeTypes(initialCatId).collect { types ->
+                _formState.value = _formState.value.copy(availableFormats = types)
+            }
         }
 
         effectiveId?.let { targetId ->
@@ -138,16 +157,33 @@ class UnifiedAddEditViewModel(
                         originalItem = item
                         val config = repository.getResolvedConfig(item.categoryId)
                         val timeSpent = repository.getTimeSpentMinutes(item.id)
+                        val topCatId = when (item.category) {
+                            MediaCategory.NOVEL -> "cat_novel"
+                            MediaCategory.MANGA -> "cat_manga"
+                            MediaCategory.ANIME -> "cat_anime"
+                            MediaCategory.GAME -> "cat_game"
+                            MediaCategory.MOVIE -> "cat_movie"
+                            MediaCategory.TV -> "cat_tv"
+                        }
+                        val romaji = item.alternativeTitles.getOrNull(0) ?: ""
+                        val native = item.alternativeTitles.getOrNull(2) ?: ""
+                        val banner = item.getExtra("banner_image")
                         _formState.value = _formState.value.copy(
                             id = item.id,
                             category = item.category,
+                            formatId = item.categoryId,
                             title = item.title,
+                            titleRomaji = romaji,
+                            titleNative = native,
+                            bannerImage = banner,
                             alternativeTitles = item.alternativeTitles,
                             sourceUrl = item.sourceUrl ?: "",
                             coverImagePath = item.coverImagePath,
                             coverImageUrl = item.coverImageUrl ?: "",
                             currentProgress = item.currentProgress.toString(),
                             totalItems = item.totalItems?.toString() ?: "",
+                            secondaryProgress = formatProgress(item.secondaryProgress),
+                            secondaryProgressTotal = item.secondaryProgressTotal?.let { formatProgress(it) } ?: "",
                             actionOverride = item.actionOverride,
                             playbackSpeed = item.playbackSpeed,
                             avgChapterLength = item.avgChapterLength?.toString() ?: "",
@@ -164,6 +200,9 @@ class UnifiedAddEditViewModel(
                             endDate = item.endDate,
                             isNew = false
                         )
+                        repository.observeTypes(topCatId).collect { types ->
+                            _formState.value = _formState.value.copy(availableFormats = types)
+                        }
                     }
                 }
             }
@@ -185,8 +224,46 @@ class UnifiedAddEditViewModel(
         }
         viewModelScope.launch {
             val config = repository.getResolvedConfig(catId)
-            _formState.value = _formState.value.copy(category = category, resolvedConfig = config)
+            _formState.value = _formState.value.copy(category = category, formatId = null, resolvedConfig = config)
+            repository.observeTypes(catId).collect { types ->
+                _formState.value = _formState.value.copy(availableFormats = types)
+            }
         }
+    }
+
+    fun updateFormatId(formatId: String?) {
+        viewModelScope.launch {
+            val catId = formatId ?: when (_formState.value.category) {
+                MediaCategory.NOVEL -> "cat_novel"
+                MediaCategory.MANGA -> "cat_manga"
+                MediaCategory.ANIME -> "cat_anime"
+                MediaCategory.GAME -> "cat_game"
+                MediaCategory.MOVIE -> "cat_movie"
+                MediaCategory.TV -> "cat_tv"
+            }
+            val config = repository.getResolvedConfig(catId)
+            _formState.value = _formState.value.copy(formatId = formatId, resolvedConfig = config)
+        }
+    }
+
+    fun updateBannerImage(url: String?) {
+        _formState.value = _formState.value.copy(bannerImage = url)
+    }
+
+    fun updateTitleRomaji(title: String) {
+        _formState.value = _formState.value.copy(titleRomaji = title)
+    }
+
+    fun updateTitleNative(title: String) {
+        _formState.value = _formState.value.copy(titleNative = title)
+    }
+
+    fun updateSecondaryProgress(progress: String) {
+        _formState.value = _formState.value.copy(secondaryProgress = progress)
+    }
+
+    fun updateSecondaryProgressTotal(total: String) {
+        _formState.value = _formState.value.copy(secondaryProgressTotal = total)
     }
 
     fun updateActionOverride(mode: String?) {
@@ -369,7 +446,7 @@ class UnifiedAddEditViewModel(
             val totalVal = state.parsedTotal
             val progressVal = state.parsedProgress ?: 0
 
-            val catId = when (state.category) {
+            val catId = state.formatId ?: when (state.category) {
                 MediaCategory.NOVEL -> "cat_novel"
                 MediaCategory.MANGA -> "cat_manga"
                 MediaCategory.ANIME -> "cat_anime"
@@ -378,11 +455,25 @@ class UnifiedAddEditViewModel(
                 MediaCategory.TV -> "cat_tv"
             }
 
-            val item = MediaItem(
+            val romaji = state.titleRomaji.trim().ifEmpty { state.alternativeTitles.getOrNull(0) ?: "" }
+            val english = state.alternativeTitles.getOrNull(1) ?: ""
+            val native = state.titleNative.trim().ifEmpty { state.alternativeTitles.getOrNull(2) ?: "" }
+            val rest = if (state.alternativeTitles.size > 3) state.alternativeTitles.subList(3, state.alternativeTitles.size) else emptyList()
+
+            val altTitles = if (romaji.isNotBlank() || english.isNotBlank() || native.isNotBlank() || rest.isNotEmpty()) {
+                listOf(romaji, english, native) + rest
+            } else {
+                emptyList()
+            }
+
+            val secProg = state.parsedSecondaryProgress ?: 0.0
+            val secTotal = state.parsedSecondaryTotal
+
+            var item = MediaItem(
                 id = state.id,
                 categoryId = catId,
                 title = state.title,
-                alternativeTitles = state.alternativeTitles,
+                alternativeTitles = altTitles,
                 sourceUrl = state.sourceUrl.trim().ifEmpty { null },
                 coverImagePath = state.coverImagePath,
                 coverImageUrl = state.coverImageUrl.trim().ifEmpty { null },
@@ -390,6 +481,8 @@ class UnifiedAddEditViewModel(
                 totalItems = totalVal,
                 progress = progressVal.toDouble(),
                 progressTotal = totalVal?.toDouble(),
+                secondaryProgress = secProg,
+                secondaryProgressTotal = secTotal,
                 actionOverride = state.actionOverride,
                 playbackSpeed = state.playbackSpeed,
                 avgChapterLength = state.avgChapterLength.toIntOrNull(),
@@ -405,6 +498,10 @@ class UnifiedAddEditViewModel(
                 lastUpdated = System.currentTimeMillis(),
                 dateAdded = originalItem?.dateAdded ?: System.currentTimeMillis()
             )
+
+            if (!state.bannerImage.isNullOrBlank()) {
+                item = item.withExtra("banner_image", state.bannerImage!!)
+            }
 
             try {
                 if (state.isNew) {
@@ -457,6 +554,12 @@ class UnifiedAddEditViewModel(
             state.title != orig.title ||
             state.category != orig.category ||
             state.alternativeTitles != orig.alternativeTitles ||
+            state.titleRomaji != (orig.alternativeTitles.getOrNull(0) ?: "") ||
+            state.titleNative != (orig.alternativeTitles.getOrNull(2) ?: "") ||
+            state.formatId != orig.categoryId ||
+            state.bannerImage != orig.getExtra("banner_image") ||
+            state.secondaryProgress != formatProgress(orig.secondaryProgress) ||
+            state.secondaryProgressTotal != (orig.secondaryProgressTotal?.let { formatProgress(it) } ?: "") ||
             state.sourceUrl != (orig.sourceUrl ?: "") ||
             state.coverImageUrl != (orig.coverImageUrl ?: "") ||
             state.currentProgress != orig.currentProgress.toString() ||

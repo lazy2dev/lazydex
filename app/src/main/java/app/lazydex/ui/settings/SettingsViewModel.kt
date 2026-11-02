@@ -10,12 +10,16 @@ import app.lazydex.backup.BackupProcessor
 import app.lazydex.backup.ImportedBackup
 import app.lazydex.data.local.ThemePreferences
 import app.lazydex.data.local.ThemePreset
+import app.lazydex.data.tracker.anilist.AnilistGraphQLClient
+import app.lazydex.data.tracker.anilist.AnilistTokenStore
+import app.lazydex.data.tracker.sync.AnilistSyncEngine
 import app.lazydex.domain.repository.MediaRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -26,6 +30,18 @@ data class StorageStats(
     val availableBytes: Long = 0L,
     val cacheBytes: Long = 0L,
     val coversBytes: Long = 0L
+)
+
+data class TrackingSettingsUiState(
+    val isLoggedIn: Boolean = false,
+    val username: String? = null,
+    val avatarUrl: String? = null,
+    val isSyncing: Boolean = false,
+    val syncCurrent: Int = 0,
+    val syncTotal: Int = 0,
+    val syncError: String? = null,
+    val backgroundSyncEnabled: Boolean = true,
+    val strictAdultContent: Boolean = false
 )
 
 data class SettingsUiState(
@@ -39,7 +55,8 @@ data class SettingsUiState(
     val isImporting: Boolean = false,
     val errorMsg: String? = null,
     val successMsg: String? = null,
-    val showExportCoversDialog: Boolean = false
+    val showExportCoversDialog: Boolean = false,
+    val tracking: TrackingSettingsUiState = TrackingSettingsUiState()
 )
 
 fun formatBytes(bytes: Long): String {
@@ -56,7 +73,10 @@ class SettingsViewModel(
     private val themePreferences: ThemePreferences,
     private val localCoversDir: File,
     private val cacheDir: File,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val tokenStore: AnilistTokenStore? = null,
+    private val syncEngine: AnilistSyncEngine? = null,
+    private val client: AnilistGraphQLClient? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -83,6 +103,23 @@ class SettingsViewModel(
                 _uiState.value = _uiState.value.copy(coverTheming = coverTheme)
             }
         }
+        syncEngine?.let { engine ->
+            viewModelScope.launch {
+                engine.syncProgress.collect { progress ->
+                    _uiState.update { current ->
+                        current.copy(
+                            tracking = current.tracking.copy(
+                                isSyncing = progress.isSyncing,
+                                syncCurrent = progress.current,
+                                syncTotal = progress.total,
+                                syncError = progress.error
+                            )
+                        )
+                    }
+                }
+            }
+        }
+        refreshTrackingState()
         refreshStorageMetrics()
     }
 
@@ -372,5 +409,104 @@ class SettingsViewModel(
                 }
             }
         }
+    }
+
+    // ==================== TRACKING & ANILIST SYNC ====================
+
+    fun refreshTrackingState() {
+        val store = tokenStore ?: return
+        _uiState.update { current ->
+            current.copy(
+                tracking = current.tracking.copy(
+                    isLoggedIn = store.isLoggedIn,
+                    username = store.username,
+                    avatarUrl = store.avatarUrl,
+                    backgroundSyncEnabled = store.backgroundSyncEnabled,
+                    strictAdultContent = !store.displayAdultContent
+                )
+            )
+        }
+    }
+
+    fun syncAniList() {
+        val engine = syncEngine ?: return
+        viewModelScope.launch {
+            try {
+                engine.syncAll()
+            } catch (e: Exception) {
+                _uiState.update { current ->
+                    current.copy(
+                        tracking = current.tracking.copy(
+                            isSyncing = false,
+                            syncError = e.message ?: "Sync failed"
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    fun logoutAniList() {
+        tokenStore?.clear()
+        _uiState.update { current ->
+            current.copy(
+                tracking = current.tracking.copy(
+                    isLoggedIn = false,
+                    username = null,
+                    avatarUrl = null
+                )
+            )
+        }
+    }
+
+    fun loginWithToken(token: String) {
+        val store = tokenStore ?: return
+        val cleanToken = token.trim()
+        if (cleanToken.isBlank()) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(tracking = it.tracking.copy(isSyncing = true, syncError = null)) }
+            try {
+                store.accessToken = cleanToken
+                if (client != null) {
+                    val viewer = withContext(ioDispatcher) {
+                        client.getCurrentUser()
+                    }
+                    store.saveUser(
+                        id = viewer.id,
+                        name = viewer.name,
+                        adult = viewer.options?.displayAdultContent ?: false,
+                        scoreFmt = viewer.mediaListOptions?.scoreFormat
+                    )
+                }
+                refreshTrackingState()
+                _uiState.update { it.copy(tracking = it.tracking.copy(isSyncing = false)) }
+            } catch (e: Exception) {
+                store.clear()
+                _uiState.update {
+                    it.copy(
+                        tracking = it.tracking.copy(
+                            isLoggedIn = false,
+                            isSyncing = false,
+                            syncError = "Login failed: ${e.message}"
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    fun setBackgroundSyncEnabled(enabled: Boolean) {
+        tokenStore?.backgroundSyncEnabled = enabled
+        _uiState.update { it.copy(tracking = it.tracking.copy(backgroundSyncEnabled = enabled)) }
+    }
+
+    fun setStrictAdultContent(enabled: Boolean) {
+        tokenStore?.displayAdultContent = !enabled
+        _uiState.update { it.copy(tracking = it.tracking.copy(strictAdultContent = enabled)) }
+    }
+
+    fun clearSyncError() {
+        _uiState.update { it.copy(tracking = it.tracking.copy(syncError = null)) }
     }
 }

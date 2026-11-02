@@ -1,4 +1,4 @@
-# Phase 0 Foundation Plan v2 (Patched)
+﻿# Phase 0 Foundation Plan v2 (Patched)
 
 > **Status**: Current Active Work Target (supersedes v1)
 > **Scope**: DB V5 migration (table rebuild), 2-tier Category → Type hierarchy with inheritance, capability flags, structure-only parts, event-sourced activity log (listening/reading time), soft deletes + active view, atomic repository rules, unified ItemDetailScreen.

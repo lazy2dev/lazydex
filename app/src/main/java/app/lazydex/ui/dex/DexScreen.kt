@@ -358,6 +358,9 @@ fun DexScreen(
                                         showProgressBadge = uiState.showProgressBadge,
                                         showStatusBadge = uiState.showStatusBadge,
                                         showScoreBadge = uiState.showScoreBadge,
+                                        onIncrementProgress = { viewModel.incrementProgress(item.id) },
+                                        onSetProgress = { newProgress -> viewModel.setProgress(item.id, newProgress) },
+                                        onSetSecondaryProgress = { newSec -> viewModel.setSecondaryProgress(item.id, newSec) },
                                     )
                                 }
                             }
@@ -386,6 +389,9 @@ fun DexScreen(
                                         showProgressBadge = uiState.showProgressBadge,
                                         showStatusBadge = uiState.showStatusBadge,
                                         showScoreBadge = uiState.showScoreBadge,
+                                        onIncrementProgress = { viewModel.incrementProgress(item.id) },
+                                        onSetProgress = { newProgress -> viewModel.setProgress(item.id, newProgress) },
+                                        onSetSecondaryProgress = { newSec -> viewModel.setSecondaryProgress(item.id, newSec) },
                                     )
                                 }
                             }

@@ -11,7 +11,7 @@ import app.lazydex.data.local.dao.AppSettingDao
 import app.lazydex.data.local.dao.CategoryDao
 import app.lazydex.data.local.dao.MediaItemDao
 import app.lazydex.data.local.dao.MediaLinkDao
-import app.lazydex.data.local.dao.MediaPartDao
+// MediaPartDao retired in V6
 import app.lazydex.data.local.dao.SyncOutboxDao
 import app.lazydex.data.local.entity.ActiveMediaItemView
 import app.lazydex.data.local.entity.ActivityEntity
@@ -19,7 +19,7 @@ import app.lazydex.data.local.entity.AppSettingEntity
 import app.lazydex.data.local.entity.CategoryEntity
 import app.lazydex.data.local.entity.MediaItemEntity
 import app.lazydex.data.local.entity.MediaLinkEntity
-import app.lazydex.data.local.entity.MediaPartEntity
+// MediaPartEntity retired in V6
 import app.lazydex.data.local.entity.SyncOutboxEntity
 
 val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -421,6 +421,125 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("PRAGMA defer_foreign_keys = ON;")
+
+        // 1. Drop existing view before swapping media_items
+        db.execSQL("DROP VIEW IF EXISTS active_media_items")
+
+        // 2. Rename categories.hasParts -> hasSecondaryProgress
+        db.execSQL("ALTER TABLE categories RENAME COLUMN hasParts TO hasSecondaryProgress")
+
+        // 3. Alter media_links to add sync tracking columns
+        db.execSQL("ALTER TABLE media_links ADD COLUMN remoteMediaListId TEXT")
+        db.execSQL("ALTER TABLE media_links ADD COLUMN syncStatus TEXT NOT NULL DEFAULT 'SYNCED'")
+
+        // 4. Create media_items_new with V6 schema
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `media_items_new` (
+                `id` TEXT NOT NULL,
+                `categoryId` TEXT NOT NULL,
+                `title` TEXT NOT NULL,
+                `titleEnglish` TEXT,
+                `titleRomaji` TEXT,
+                `titleNative` TEXT,
+                `coverImagePath` TEXT NOT NULL DEFAULT '',
+                `coverImageUrl` TEXT,
+                `bannerImage` TEXT,
+                `description` TEXT NOT NULL DEFAULT '',
+                `author` TEXT NOT NULL DEFAULT '',
+                `userStatus` TEXT NOT NULL,
+                `progress` REAL NOT NULL DEFAULT 0,
+                `progressTotal` REAL,
+                `secondaryProgress` REAL NOT NULL DEFAULT 0,
+                `secondaryProgressTotal` REAL,
+                `scoreRaw` INTEGER,
+                `repeat` INTEGER NOT NULL DEFAULT 0,
+                `notes` TEXT NOT NULL DEFAULT '',
+                `genres` TEXT NOT NULL DEFAULT '[]',
+                `tags` TEXT NOT NULL DEFAULT '[]',
+                `isPrivate` INTEGER NOT NULL DEFAULT 0,
+                `isAdult` INTEGER NOT NULL DEFAULT 0,
+                `startYear` INTEGER,
+                `startMonth` INTEGER,
+                `startDay` INTEGER,
+                `endYear` INTEGER,
+                `endMonth` INTEGER,
+                `endDay` INTEGER,
+                `durationMinutes` INTEGER,
+                `avgChapterLength` INTEGER,
+                `lengthUnitOverride` TEXT,
+                `playbackSpeed` REAL NOT NULL DEFAULT 1.0,
+                `createdAt` INTEGER NOT NULL,
+                `updatedAt` INTEGER NOT NULL,
+                `deletedAt` INTEGER,
+                PRIMARY KEY(`id`),
+                FOREIGN KEY(`categoryId`) REFERENCES `categories`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT
+            )
+            """.trimIndent()
+        )
+
+        // 5. Copy data from V5 media_items into V6 media_items_new
+        // Ratings converted losslessly: rating * 20 (5 stars -> 100 max, NULL preserved)
+        // Dates converted losslessly: epoch ms -> discrete year, month, day via strftime
+        db.execSQL(
+            """
+            INSERT INTO `media_items_new` (
+                `id`, `categoryId`, `title`, `titleEnglish`, `titleRomaji`, `titleNative`,
+                `coverImagePath`, `coverImageUrl`, `bannerImage`, `description`, `author`, `userStatus`,
+                `progress`, `progressTotal`, `secondaryProgress`, `secondaryProgressTotal`,
+                `scoreRaw`, `repeat`, `notes`, `genres`, `tags`, `isPrivate`, `isAdult`,
+                `startYear`, `startMonth`, `startDay`, `endYear`, `endMonth`, `endDay`,
+                `durationMinutes`, `avgChapterLength`, `lengthUnitOverride`, `playbackSpeed`,
+                `createdAt`, `updatedAt`, `deletedAt`
+            )
+            SELECT
+                `id`, `categoryId`, `title`, NULL, NULL, NULL,
+                `coverImagePath`, `coverImageUrl`, NULL, `description`, `author`, `userStatus`,
+                `progress`, `progressTotal`, `secondaryProgress`, `secondaryProgressTotal`,
+                CASE WHEN `rating` IS NOT NULL THEN CAST(ROUND(`rating` * 20) AS INTEGER) ELSE NULL END,
+                0, `notes`, `genres`, `tags`, 0, 0,
+                CASE WHEN `startDate` IS NOT NULL THEN CAST(strftime('%Y', `startDate` / 1000, 'unixepoch') AS INTEGER) ELSE NULL END,
+                CASE WHEN `startDate` IS NOT NULL THEN CAST(strftime('%m', `startDate` / 1000, 'unixepoch') AS INTEGER) ELSE NULL END,
+                CASE WHEN `startDate` IS NOT NULL THEN CAST(strftime('%d', `startDate` / 1000, 'unixepoch') AS INTEGER) ELSE NULL END,
+                CASE WHEN `endDate` IS NOT NULL THEN CAST(strftime('%Y', `endDate` / 1000, 'unixepoch') AS INTEGER) ELSE NULL END,
+                CASE WHEN `endDate` IS NOT NULL THEN CAST(strftime('%m', `endDate` / 1000, 'unixepoch') AS INTEGER) ELSE NULL END,
+                CASE WHEN `endDate` IS NOT NULL THEN CAST(strftime('%d', `endDate` / 1000, 'unixepoch') AS INTEGER) ELSE NULL END,
+                NULL, `avgChapterLength`, `lengthUnitOverride`, `playbackSpeed`,
+                `createdAt`, `updatedAt`, `deletedAt`
+            FROM `media_items`
+            """.trimIndent()
+        )
+
+        // 6. Aggregate existing media_parts counts before dropping table
+        db.execSQL(
+            """
+            UPDATE `media_items_new`
+            SET `secondaryProgressTotal` = (
+                SELECT COUNT(*) FROM `media_parts` WHERE `media_parts`.`mediaId` = `media_items_new`.`id`
+            )
+            WHERE EXISTS (
+                SELECT 1 FROM `media_parts` WHERE `media_parts`.`mediaId` = `media_items_new`.`id`
+            )
+            """.trimIndent()
+        )
+
+        // 7. Drop deprecated tables and swap
+        db.execSQL("DROP TABLE `media_items`")
+        db.execSQL("ALTER TABLE `media_items_new` RENAME TO `media_items`")
+        db.execSQL("DROP TABLE IF EXISTS `media_parts`")
+
+        // 8. Recreate view and performance indexes
+        db.execSQL("CREATE VIEW `active_media_items` AS SELECT * FROM media_items WHERE deletedAt IS NULL")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_media_items_categoryId_userStatus` ON `media_items` (`categoryId`, `userStatus`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_media_items_updatedAt` ON `media_items` (`updatedAt`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_media_items_deletedAt` ON `media_items` (`deletedAt`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_media_links_syncStatus` ON `media_links` (`syncStatus`)")
+    }
+}
+
 fun SupportSQLiteDatabase.setupV5TriggersAndSeeds() {
     val now = System.currentTimeMillis()
     execSQL("DROP INDEX IF EXISTS `index_categories_unique_name`")
@@ -482,7 +601,7 @@ fun SupportSQLiteDatabase.setupV5TriggersAndSeeds() {
         """.trimIndent()
     )
     val seedCategoriesSql = """
-        INSERT OR IGNORE INTO `categories` (`id`, `parentId`, `name`, `icon`, `unitName`, `secondaryUnitName`, `actionVerb`, `hasParts`, `hasCharEstimate`, `hasAudioSpeed`, `lengthUnit`, `sortOrder`, `createdAt`, `updatedAt`, `deletedAt`) VALUES
+        INSERT OR IGNORE INTO `categories` (`id`, `parentId`, `name`, `icon`, `unitName`, `secondaryUnitName`, `actionVerb`, `hasSecondaryProgress`, `hasCharEstimate`, `hasAudioSpeed`, `lengthUnit`, `sortOrder`, `createdAt`, `updatedAt`, `deletedAt`) VALUES
         ('cat_uncategorized', NULL, 'Uncategorized', 'folder', 'Item', '', 'Consume', 0, 0, 0, 'WORDS', 999, $now, $now, NULL),
         ('cat_novel', NULL, 'Novel', 'book', 'Chapter', '', 'Read', 0, 1, 1, 'WORDS', 0, $now, $now, NULL),
         ('typ_novel_cn', 'cat_novel', 'Web Novel (CN)', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'CHARS', 0, $now, $now, NULL),
@@ -518,7 +637,7 @@ fun SupportSQLiteDatabase.setupV5TriggersAndSeeds() {
     entities = [
         CategoryEntity::class,
         MediaItemEntity::class,
-        MediaPartEntity::class,
+        // MediaPartEntity retired in V6
         MediaLinkEntity::class,
         ActivityEntity::class,
         SyncOutboxEntity::class,
@@ -529,14 +648,14 @@ fun SupportSQLiteDatabase.setupV5TriggersAndSeeds() {
     views = [
         ActiveMediaItemView::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class LazyDexDatabase : RoomDatabase() {
     abstract fun categoryDao(): CategoryDao
     abstract fun mediaItemDao(): MediaItemDao
-    abstract fun mediaPartDao(): MediaPartDao
+    // mediaPartDao retired in V6
     abstract fun mediaLinkDao(): MediaLinkDao
     abstract fun activityDao(): ActivityDao
     abstract fun syncOutboxDao(): SyncOutboxDao

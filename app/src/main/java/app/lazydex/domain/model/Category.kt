@@ -13,7 +13,7 @@ data class Category(
     val unitName: String? = null,
     val secondaryUnitName: String? = null,
     val actionVerb: String? = null,
-    val hasParts: Boolean? = null,
+    val hasSecondaryProgress: Boolean? = null,
     val hasCharEstimate: Boolean? = null,
     val hasAudioSpeed: Boolean? = null,
     val lengthUnit: LengthUnit? = null,
@@ -21,7 +21,9 @@ data class Category(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val deletedAt: Long? = null
-)
+) {
+    val hasParts: Boolean? get() = hasSecondaryProgress
+}
 
 data class ResolvedCategoryConfig(
     val categoryId: String,
@@ -29,11 +31,30 @@ data class ResolvedCategoryConfig(
     val displayName: String,
     val icon: String,
     val unitName: String,
-    val secondaryUnitName: String?,   // null = no secondary unit
+    val secondaryUnitName: String?,
     val actionVerb: String,
-    val hasParts: Boolean,
+    val hasSecondaryProgress: Boolean = false,
     val hasCharEstimate: Boolean,
     val hasAudioSpeed: Boolean,
     val lengthUnit: LengthUnit
-)
+) {
+    val hasParts: Boolean get() = hasSecondaryProgress
 
+    constructor(
+        categoryId: String,
+        topLevelId: String,
+        displayName: String,
+        icon: String,
+        unitName: String,
+        secondaryUnitName: String?,
+        actionVerb: String,
+        hasParts: Boolean,
+        hasCharEstimate: Boolean,
+        hasAudioSpeed: Boolean,
+        lengthUnit: LengthUnit,
+        marker: Unit = Unit
+    ) : this(
+        categoryId, topLevelId, displayName, icon, unitName, secondaryUnitName,
+        actionVerb, hasParts, hasCharEstimate, hasAudioSpeed, lengthUnit
+    )
+}

@@ -1,6 +1,5 @@
 package app.lazydex.data.repository
 
-import android.database.sqlite.SQLiteConstraintException
 import androidx.room.withTransaction
 import app.lazydex.data.local.LazyDexDatabase
 import app.lazydex.data.local.converter.Converters
@@ -15,8 +14,8 @@ import app.lazydex.data.local.entity.ActiveMediaItemView
 import app.lazydex.data.local.entity.ActivityEntity
 import app.lazydex.data.local.entity.CategoryEntity
 import app.lazydex.data.local.entity.MediaItemEntity
-import app.lazydex.data.local.entity.MediaPartEntity
 import app.lazydex.data.local.entity.SyncOutboxEntity
+import app.lazydex.data.tracker.sync.AnilistSyncEngine
 import app.lazydex.domain.model.ActivityLog
 import app.lazydex.domain.model.Category
 import app.lazydex.domain.model.LengthUnit
@@ -27,31 +26,51 @@ import app.lazydex.domain.model.MediaStats
 import app.lazydex.domain.model.ResolvedCategoryConfig
 import app.lazydex.domain.model.StatusFilter
 import app.lazydex.domain.model.UserStatus
-import app.lazydex.domain.repository.DuplicateUrlException
-import app.lazydex.domain.repository.ImportFailedException
 import app.lazydex.domain.repository.MediaRepository
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.Calendar
+import java.util.TimeZone
 import java.util.UUID
 
 class MediaRepositoryImpl(
-    private val db: LazyDexDatabase,
+    private val db: LazyDexDatabase? = null,
     private val dao: MediaItemDao,
     private val categoryDao: CategoryDao,
-    private val partDao: MediaPartDao,
     private val linkDao: MediaLinkDao,
     private val activityDao: ActivityDao,
     private val outboxDao: SyncOutboxDao,
     private val settingDao: AppSettingDao,
-    private val localCoversDir: File
+    private val localCoversDir: File,
+    private val partDao: MediaPartDao? = null,
+    private val syncEngine: AnilistSyncEngine? = null,
+    private val syncScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    private val transactionRunner: (suspend (suspend () -> Any?) -> Any?)? = null
 ) : MediaRepository {
 
     private val converters = Converters()
+
+    private suspend fun <T> runInTransaction(block: suspend () -> T): T {
+        val runner = transactionRunner
+        if (runner != null) {
+            @Suppress("UNCHECKED_CAST")
+            return runner { block() } as T
+        }
+        val database = db
+        if (database != null) {
+            return database.withTransaction { block() }
+        }
+        return block()
+    }
 
     override fun observeAll(): Flow<List<MediaItem>> = dao.observeAll()
         .map { list -> list.map { it.toDomain() } }
@@ -177,7 +196,7 @@ class MediaRepositoryImpl(
             unitName = "Item",
             secondaryUnitName = "",
             actionVerb = "Consume",
-            hasParts = 0,
+            hasSecondaryProgress = 0,
             hasCharEstimate = 0,
             hasAudioSpeed = 0,
             lengthUnit = "WORDS",
@@ -238,7 +257,7 @@ class MediaRepositoryImpl(
     }
 
     override suspend fun deleteCategory(categoryId: String) = withContext(Dispatchers.IO) {
-        db.withTransaction {
+        runInTransaction {
             val totalItems = categoryDao.countAllMediaItemsIncludingChildren(categoryId)
             if (totalItems > 0) {
                 throw IllegalStateException("Cannot delete category containing media items. Reassign items first.")
@@ -254,29 +273,9 @@ class MediaRepositoryImpl(
         }
     }
 
-    override fun observeParts(mediaId: String): Flow<List<MediaPart>> = partDao.observeByMediaId(mediaId)
-        .map { list -> list.map { it.toDomain() } }
-        .flowOn(Dispatchers.IO)
-        .distinctUntilChanged()
+    override fun observeParts(mediaId: String): Flow<List<MediaPart>> = emptyFlow()
 
-    override suspend fun setParts(mediaId: String, parts: List<MediaPart>) = withContext(Dispatchers.IO) {
-        val now = System.currentTimeMillis()
-        db.withTransaction {
-            partDao.deleteByMediaId(mediaId)
-            val entities = parts.mapIndexed { idx, p ->
-                MediaPartEntity(
-                    id = p.id.ifBlank { UUID.randomUUID().toString() },
-                    mediaId = mediaId,
-                    name = p.name,
-                    sortOrder = idx,
-                    totalUnits = p.totalUnits,
-                    createdAt = now,
-                    updatedAt = now
-                )
-            }
-            partDao.upsertAll(entities)
-        }
-    }
+    override suspend fun setParts(mediaId: String, parts: List<MediaPart>) {}
 
     override fun observeActivity(mediaId: String): Flow<List<ActivityLog>> = activityDao.observeByMediaId(mediaId)
         .map { list -> list.map { it.toDomain() } }
@@ -346,7 +345,7 @@ class MediaRepositoryImpl(
             dateAdded = now
         ).normalize()
 
-        db.withTransaction {
+        runInTransaction {
             dao.upsert(normalized.toEntity())
 
             activityDao.upsert(
@@ -378,17 +377,23 @@ class MediaRepositoryImpl(
         val now = System.currentTimeMillis()
         val current = dao.getById(item.id)
         val normalized = item.copy(lastUpdated = now).normalize()
+        var shouldPush = false
 
-        db.withTransaction {
-            dao.upsert(normalized.toEntity())
+        runInTransaction {
+            val entity = normalized.toEntity()
+            dao.upsert(entity)
 
-            if (current != null && current.userStatus != normalized.userStatus.name) {
+            val statusChanged = current != null && current.userStatus != entity.userStatus
+            val progressChanged = current != null && (current.progress != entity.progress || current.secondaryProgress != entity.secondaryProgress)
+            val scoreChanged = current != null && (current.scoreRaw != entity.scoreRaw)
+
+            if (statusChanged) {
                 activityDao.upsert(
                     ActivityEntity(
                         id = UUID.randomUUID().toString(),
                         mediaId = item.id,
                         type = "STATUS_CHANGE",
-                        oldValue = current.userStatus,
+                        oldValue = current!!.userStatus,
                         newValue = normalized.userStatus.name,
                         counted = 0,
                         timestamp = now
@@ -405,12 +410,27 @@ class MediaRepositoryImpl(
                     createdAt = now
                 )
             )
+
+            if (statusChanged || progressChanged || scoreChanged || current == null) {
+                val dirtyRows = linkDao.updateSyncStatusByMediaId(item.id, "DIRTY_LOCAL", now)
+                if (dirtyRows > 0) {
+                    shouldPush = true
+                }
+            }
+        }
+
+        if (shouldPush) {
+            syncEngine?.let { engine ->
+                syncScope.launch {
+                    runCatching { engine.pushDirtyItem(item.id) }
+                }
+            }
         }
     }
 
     override suspend fun delete(id: String) = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
-        db.withTransaction {
+        runInTransaction {
             dao.softDelete(id, now)
 
             activityDao.upsert(
@@ -444,39 +464,65 @@ class MediaRepositoryImpl(
         speed: Double
     ): MediaItem? = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
-        db.withTransaction {
-            val item = dao.getById(id) ?: return@withTransaction null
+        var shouldPush = false
+        val updatedDomain = runInTransaction {
+            val item = dao.getById(id) ?: return@runInTransaction null
             val maxProgress = item.progressTotal
             val target = (item.progress + delta).coerceAtLeast(0.0)
             val clampedProgress = if (maxProgress != null) target.coerceAtMost(maxProgress) else target
             val effectiveDelta = clampedProgress - item.progress
 
+            val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = now }
+            val currentYear = cal.get(Calendar.YEAR)
+            val currentMonth = cal.get(Calendar.MONTH) + 1
+            val currentDay = cal.get(Calendar.DAY_OF_MONTH)
+
             var newStatus = item.userStatus
-            var newStartDate = item.startDate
-            var newEndDate = item.endDate
+            var startYear = item.startYear
+            var startMonth = item.startMonth
+            var startDay = item.startDay
+            var endYear = item.endYear
+            var endMonth = item.endMonth
+            var endDay = item.endDay
 
             if (item.userStatus == "PLANNING" && clampedProgress > 0.0) {
                 newStatus = "IN_PROGRESS"
-                if (newStartDate == null) newStartDate = now
+                if (startYear == null) {
+                    startYear = currentYear
+                    startMonth = currentMonth
+                    startDay = currentDay
+                }
             }
             if (maxProgress != null && clampedProgress >= maxProgress && item.userStatus != "COMPLETED") {
                 newStatus = "COMPLETED"
-                newEndDate = now
+                endYear = currentYear
+                endMonth = currentMonth
+                endDay = currentDay
             } else if (item.userStatus == "COMPLETED" && maxProgress != null && clampedProgress < maxProgress) {
                 newStatus = "IN_PROGRESS"
-                newEndDate = null
+                endYear = null
+                endMonth = null
+                endDay = null
             }
 
             val updatedEntity = item.copy(
                 progress = clampedProgress,
                 userStatus = newStatus,
-                startDate = newStartDate,
-                endDate = newEndDate,
+                startYear = startYear,
+                startMonth = startMonth,
+                startDay = startDay,
+                endYear = endYear,
+                endMonth = endMonth,
+                endDay = endDay,
                 playbackSpeed = if (mode == "LISTEN") speed else item.playbackSpeed,
-                actionOverride = mode ?: item.actionOverride,
                 updatedAt = now
             )
             dao.upsert(updatedEntity)
+
+            val dirtyRows = linkDao.updateSyncStatusByMediaId(id, "DIRTY_LOCAL", now)
+            if (dirtyRows > 0) {
+                shouldPush = true
+            }
 
             if (effectiveDelta != 0.0) {
                 val coalesceSec = settingDao.get("activity.coalesceSeconds")?.toLongOrNull() ?: 30L
@@ -546,10 +592,20 @@ class MediaRepositoryImpl(
 
             updatedEntity.toDomain()
         }
+
+        if (shouldPush) {
+            syncEngine?.let { engine ->
+                syncScope.launch {
+                    runCatching { engine.pushDirtyItem(id) }
+                }
+            }
+        }
+
+        updatedDomain
     }
 
     override suspend fun replaceAll(items: List<MediaItem>) = withContext(Dispatchers.IO) {
-        db.withTransaction {
+        runInTransaction {
             dao.deleteAll()
             dao.upsertAll(items.map { it.normalize().toEntity() })
         }
@@ -565,10 +621,11 @@ class MediaRepositoryImpl(
     }
 
     private fun ActiveMediaItemView.toDomain(): MediaItem {
-        val altTitles = converters.toList(alternativeTitles)
+        val altTitles = listOfNotNull(titleRomaji, titleEnglish, titleNative)
         val genresList = converters.toList(genres)
         val tagsList = converters.toList(tags)
         val stat = UserStatus.fromString(userStatus) ?: UserStatus.PLAN_TO
+        val calcRating = scoreRaw?.let { it / 20.0 }
         return MediaItem(
             id = id,
             categoryId = categoryId,
@@ -583,19 +640,19 @@ class MediaRepositoryImpl(
             progressTotal = progressTotal,
             secondaryProgress = secondaryProgress,
             secondaryProgressTotal = secondaryProgressTotal,
-            actionOverride = actionOverride,
+            actionOverride = null,
             avgChapterLength = avgChapterLength,
             lengthUnitOverride = lengthUnitOverride,
             playbackSpeed = playbackSpeed,
             userStatus = stat,
-            rating = rating,
+            rating = calcRating,
             notes = notes,
             genres = genresList,
             tags = tagsList,
             author = author,
             description = description,
-            startDate = startDate,
-            endDate = endDate,
+            startDate = null,
+            endDate = null,
             lastUpdated = updatedAt,
             dateAdded = createdAt,
             deletedAt = deletedAt
@@ -603,10 +660,11 @@ class MediaRepositoryImpl(
     }
 
     private fun MediaItemEntity.toDomain(): MediaItem {
-        val altTitles = converters.toList(alternativeTitles)
+        val altTitles = listOfNotNull(titleRomaji, titleEnglish, titleNative)
         val genresList = converters.toList(genres)
         val tagsList = converters.toList(tags)
         val stat = UserStatus.fromString(userStatus) ?: UserStatus.PLAN_TO
+        val calcRating = scoreRaw?.let { it / 20.0 }
         return MediaItem(
             id = id,
             categoryId = categoryId,
@@ -621,19 +679,19 @@ class MediaRepositoryImpl(
             progressTotal = progressTotal,
             secondaryProgress = secondaryProgress,
             secondaryProgressTotal = secondaryProgressTotal,
-            actionOverride = actionOverride,
+            actionOverride = null,
             avgChapterLength = avgChapterLength,
             lengthUnitOverride = lengthUnitOverride,
             playbackSpeed = playbackSpeed,
             userStatus = stat,
-            rating = rating,
+            rating = calcRating,
             notes = notes,
             genres = genresList,
             tags = tagsList,
             author = author,
             description = description,
-            startDate = startDate,
-            endDate = endDate,
+            startDate = null,
+            endDate = null,
             lastUpdated = updatedAt,
             dateAdded = createdAt,
             deletedAt = deletedAt
@@ -641,33 +699,43 @@ class MediaRepositoryImpl(
     }
 
     private fun MediaItem.toEntity(): MediaItemEntity {
-        val altTitlesJson = converters.fromList(alternativeTitles)
         val genresJson = converters.fromList(genres)
         val tagsJson = converters.fromList(tags)
+        val rawScore = rating?.let { kotlin.math.round(it * 20.0).toInt().coerceIn(0, 100) }
         return MediaItemEntity(
             id = id,
             categoryId = categoryId,
             title = title,
-            alternativeTitles = altTitlesJson,
-            description = description,
-            author = author,
+            titleEnglish = alternativeTitles.getOrNull(1),
+            titleRomaji = alternativeTitles.getOrNull(0),
+            titleNative = alternativeTitles.getOrNull(2),
             coverImagePath = coverImagePath,
             coverImageUrl = coverImageUrl,
+            bannerImage = null,
+            description = description,
+            author = author,
             userStatus = userStatus.name,
             progress = progress,
             progressTotal = progressTotal,
             secondaryProgress = secondaryProgress,
             secondaryProgressTotal = secondaryProgressTotal,
-            actionOverride = actionOverride,
-            avgChapterLength = avgChapterLength,
-            lengthUnitOverride = lengthUnitOverride,
-            playbackSpeed = playbackSpeed,
-            rating = rating,
+            scoreRaw = rawScore,
+            repeat = 0,
             notes = notes,
             genres = genresJson,
             tags = tagsJson,
-            startDate = startDate,
-            endDate = endDate,
+            isPrivate = false,
+            isAdult = false,
+            startYear = null,
+            startMonth = null,
+            startDay = null,
+            endYear = null,
+            endMonth = null,
+            endDay = null,
+            durationMinutes = null,
+            avgChapterLength = avgChapterLength,
+            lengthUnitOverride = lengthUnitOverride,
+            playbackSpeed = playbackSpeed,
             createdAt = dateAdded,
             updatedAt = lastUpdated,
             deletedAt = deletedAt
@@ -682,7 +750,7 @@ class MediaRepositoryImpl(
         unitName = unitName,
         secondaryUnitName = secondaryUnitName,
         actionVerb = actionVerb,
-        hasParts = hasParts?.let { it == 1 },
+        hasSecondaryProgress = hasSecondaryProgress?.let { it == 1 },
         hasCharEstimate = hasCharEstimate?.let { it == 1 },
         hasAudioSpeed = hasAudioSpeed?.let { it == 1 },
         lengthUnit = lengthUnit?.let { LengthUnit.valueOf(it) },
@@ -700,7 +768,7 @@ class MediaRepositoryImpl(
         unitName = unitName,
         secondaryUnitName = secondaryUnitName,
         actionVerb = actionVerb,
-        hasParts = hasParts?.let { if (it) 1 else 0 },
+        hasSecondaryProgress = (hasSecondaryProgress ?: hasParts)?.let { if (it) 1 else 0 },
         hasCharEstimate = hasCharEstimate?.let { if (it) 1 else 0 },
         hasAudioSpeed = hasAudioSpeed?.let { if (it) 1 else 0 },
         lengthUnit = lengthUnit?.name,
@@ -708,16 +776,6 @@ class MediaRepositoryImpl(
         createdAt = createdAt,
         updatedAt = updatedAt,
         deletedAt = deletedAt
-    )
-
-    private fun MediaPartEntity.toDomain(): MediaPart = MediaPart(
-        id = id,
-        mediaId = mediaId,
-        name = name,
-        sortOrder = sortOrder,
-        totalUnits = totalUnits,
-        createdAt = createdAt,
-        updatedAt = updatedAt
     )
 
     private fun ActivityEntity.toDomain(): ActivityLog = ActivityLog(

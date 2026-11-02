@@ -266,6 +266,20 @@ class DexViewModel(
         }
     }
 
+    fun setProgress(id: String, progress: Double) {
+        viewModelScope.launch {
+            val item = repository.getById(id) ?: return@launch
+            repository.update(item.copy(progress = progress, currentProgress = progress.toInt(), lastUpdated = System.currentTimeMillis()))
+        }
+    }
+
+    fun setSecondaryProgress(id: String, secondaryProgress: Double) {
+        viewModelScope.launch {
+            val item = repository.getById(id) ?: return@launch
+            repository.update(item.copy(secondaryProgress = secondaryProgress, lastUpdated = System.currentTimeMillis()))
+        }
+    }
+
     fun setShowItemCount(enabled: Boolean) {
         viewModelScope.launch {
             themePreferences.setShowItemCount(enabled)

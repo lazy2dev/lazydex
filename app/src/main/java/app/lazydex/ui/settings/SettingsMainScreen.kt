@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -31,6 +32,7 @@ import app.lazydex.ui.settings.components.TextPreferenceWidget
 @Composable
 fun SettingsMainScreen(
     onNavigateToAppearance: () -> Unit,
+    onNavigateToTracking: () -> Unit,
     onNavigateToExtensions: () -> Unit,
     onNavigateToDataAndStorage: () -> Unit,
     onNavigateToAbout: () -> Unit,
@@ -67,6 +69,18 @@ fun SettingsMainScreen(
                 subtitle = "Theme mode, color preset & pure black",
                 icon = Icons.Default.Palette,
                 onClick = onNavigateToAppearance
+            )
+
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+
+            TextPreferenceWidget(
+                title = "Tracking",
+                subtitle = "AniList 2-way sync, token & automation",
+                icon = Icons.Default.Sync,
+                onClick = onNavigateToTracking
             )
 
             HorizontalDivider(

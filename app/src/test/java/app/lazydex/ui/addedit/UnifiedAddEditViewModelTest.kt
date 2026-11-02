@@ -133,4 +133,48 @@ class UnifiedAddEditViewModelTest {
         assertEquals("100", state.currentProgress)
         assertEquals("551", state.totalItems)
     }
+
+    @Test
+    fun save_withMetadataAndFormat_preservesRomajiNativeAndSecondaryProgress() = runTest {
+        val repo = FakeRepository()
+        val vm = UnifiedAddEditViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList())),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+
+        vm.updateTitle("The Beginning After the End")
+        vm.updateTitleRomaji("The Beginning After the End")
+        vm.updateTitleNative("끝이 아닌 시작")
+        vm.updateCategory(MediaCategory.MANGA)
+        vm.updateFormatId("typ_manhwa")
+        vm.updateCurrentProgress("175")
+        vm.updateTotalItems("200")
+        vm.updateSecondaryProgress("3")
+        vm.updateSecondaryProgressTotal("8")
+        vm.updateBannerImage("https://example.com/tbate_banner.jpg")
+        vm.addGenre("Action")
+        vm.addGenre("Fantasy")
+        vm.addTag("Magic")
+
+        assertTrue(vm.formState.value.hasSecondaryProgress)
+        vm.save()
+
+        assertTrue(vm.formState.value.isDone)
+        assertEquals(1, repo.items.size)
+        val saved = repo.items[0]
+        assertEquals("The Beginning After the End", saved.title)
+        assertEquals("typ_manhwa", saved.categoryId)
+        assertEquals("The Beginning After the End", saved.alternativeTitles.getOrNull(0))
+        assertEquals("끝이 아닌 시작", saved.alternativeTitles.getOrNull(2))
+        assertEquals(175.0, saved.progress, 0.001)
+        assertEquals(200.0, saved.progressTotal!!, 0.001)
+        assertEquals(3.0, saved.secondaryProgress, 0.001)
+        assertEquals(8.0, saved.secondaryProgressTotal!!, 0.001)
+        assertEquals("https://example.com/tbate_banner.jpg", saved.getExtra("banner_image"))
+        assertTrue(saved.genres.contains("Action"))
+        assertTrue(saved.tags.contains("Magic"))
+    }
 }

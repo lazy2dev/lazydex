@@ -1,6 +1,9 @@
 package app.lazydex.ui.settings
 
+import android.content.SharedPreferences
 import app.lazydex.data.local.DisplayPreferences
+import app.lazydex.data.tracker.anilist.AnilistTokenStore
+import org.junit.Assert.assertNull
 import app.lazydex.data.local.LibraryDisplayMode
 import app.lazydex.data.local.ThemePreferences
 import app.lazydex.data.local.ThemePreset
@@ -345,5 +348,150 @@ class SettingsViewModelTest {
         assertEquals(0L, viewModel.uiState.value.storageStats.cacheBytes)
 
         collectJob.cancel()
+    }
+
+    @Test
+    fun testTrackingInitialStateAndLogout() = runTest {
+        val repo = FakeRepository()
+        val prefs = FakeThemePreferences()
+        val fakePrefs = FakeTrackingSharedPreferences()
+        val tokenStore = AnilistTokenStore(fakePrefs)
+        tokenStore.accessToken = "test_access_token_123"
+        tokenStore.saveUser(id = 999, name = "OtakuTester", adult = true)
+
+        val viewModel = SettingsViewModel(
+            repository = repo,
+            themePreferences = prefs,
+            localCoversDir = tempCoversDir,
+            cacheDir = tempCacheDir,
+            tokenStore = tokenStore,
+            ioDispatcher = testDispatcher
+        )
+
+        val collectJob = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+
+        assertTrue(viewModel.uiState.value.tracking.isLoggedIn)
+        assertEquals("OtakuTester", viewModel.uiState.value.tracking.username)
+        assertFalse(viewModel.uiState.value.tracking.strictAdultContent)
+
+        viewModel.logoutAniList()
+
+        assertFalse(viewModel.uiState.value.tracking.isLoggedIn)
+        assertNull(viewModel.uiState.value.tracking.username)
+        assertFalse(tokenStore.isLoggedIn)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun testTrackingBackgroundSyncAndAdultFilter() = runTest {
+        val repo = FakeRepository()
+        val prefs = FakeThemePreferences()
+        val fakePrefs = FakeTrackingSharedPreferences()
+        val tokenStore = AnilistTokenStore(fakePrefs)
+
+        val viewModel = SettingsViewModel(
+            repository = repo,
+            themePreferences = prefs,
+            localCoversDir = tempCoversDir,
+            cacheDir = tempCacheDir,
+            tokenStore = tokenStore,
+            ioDispatcher = testDispatcher
+        )
+
+        val collectJob = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+
+        // Default background sync should be true
+        assertTrue(viewModel.uiState.value.tracking.backgroundSyncEnabled)
+
+        // Toggle background sync
+        viewModel.setBackgroundSyncEnabled(false)
+        assertFalse(viewModel.uiState.value.tracking.backgroundSyncEnabled)
+        assertFalse(tokenStore.backgroundSyncEnabled)
+
+        // Toggle strict adult content filter (strict filter ON means adult content OFF)
+        viewModel.setStrictAdultContent(true)
+        assertTrue(viewModel.uiState.value.tracking.strictAdultContent)
+        assertFalse(tokenStore.displayAdultContent)
+
+        collectJob.cancel()
+    }
+
+    private class FakeTrackingSharedPreferences : SharedPreferences {
+        private val data = mutableMapOf<String, Any?>()
+
+        override fun getAll(): MutableMap<String, *> = data
+        override fun getString(key: String, defValue: String?): String? = data[key] as? String ?: defValue
+        override fun getStringSet(key: String, defValues: MutableSet<String>?): MutableSet<String>? =
+            @Suppress("UNCHECKED_CAST") (data[key] as? MutableSet<String> ?: defValues)
+        override fun getInt(key: String, defValue: Int): Int = data[key] as? Int ?: defValue
+        override fun getLong(key: String, defValue: Long): Long = data[key] as? Long ?: defValue
+        override fun getFloat(key: String, defValue: Float): Float = data[key] as? Float ?: defValue
+        override fun getBoolean(key: String, defValue: Boolean): Boolean = data[key] as? Boolean ?: defValue
+        override fun contains(key: String): Boolean = data.containsKey(key)
+        override fun edit(): SharedPreferences.Editor = FakeEditor(data)
+        override fun registerOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) {}
+        override fun unregisterOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) {}
+
+        private class FakeEditor(private val backingData: MutableMap<String, Any?>) : SharedPreferences.Editor {
+            private val uncommitted = mutableMapOf<String, Any?>()
+            private val removed = mutableSetOf<String>()
+            private var clearRequested = false
+
+            override fun putString(key: String, value: String?): SharedPreferences.Editor {
+                uncommitted[key] = value
+                removed.remove(key)
+                return this
+            }
+            override fun putStringSet(key: String, values: MutableSet<String>?): SharedPreferences.Editor {
+                uncommitted[key] = values
+                removed.remove(key)
+                return this
+            }
+            override fun putInt(key: String, value: Int): SharedPreferences.Editor {
+                uncommitted[key] = value
+                removed.remove(key)
+                return this
+            }
+            override fun putLong(key: String, value: Long): SharedPreferences.Editor {
+                uncommitted[key] = value
+                removed.remove(key)
+                return this
+            }
+            override fun putFloat(key: String, value: Float): SharedPreferences.Editor {
+                uncommitted[key] = value
+                removed.remove(key)
+                return this
+            }
+            override fun putBoolean(key: String, value: Boolean): SharedPreferences.Editor {
+                uncommitted[key] = value
+                removed.remove(key)
+                return this
+            }
+            override fun remove(key: String): SharedPreferences.Editor {
+                removed.add(key)
+                uncommitted.remove(key)
+                return this
+            }
+            override fun clear(): SharedPreferences.Editor {
+                clearRequested = true
+                return this
+            }
+            override fun commit(): Boolean {
+                apply()
+                return true
+            }
+            override fun apply() {
+                if (clearRequested) {
+                    backingData.clear()
+                }
+                backingData.putAll(uncommitted)
+                removed.forEach { backingData.remove(it) }
+            }
+        }
     }
 }

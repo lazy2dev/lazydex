@@ -202,7 +202,7 @@ fun CategoryCreatorSheet(
                                 unitName = unitName.trim().ifEmpty { null },
                                 secondaryUnitName = secondaryUnitName.trim().ifEmpty { if (parentCategory != null) null else "" },
                                 actionVerb = actionVerb.trim().ifEmpty { null },
-                                hasParts = if (parentCategory != null && !hasParts) null else hasParts,
+                                hasSecondaryProgress = if (parentCategory != null && !hasParts) null else hasParts,
                                 hasCharEstimate = if (parentCategory != null && !hasCharEstimate) null else hasCharEstimate,
                                 hasAudioSpeed = if (parentCategory != null && !hasAudioSpeed) null else hasAudioSpeed,
                                 lengthUnit = lengthUnit

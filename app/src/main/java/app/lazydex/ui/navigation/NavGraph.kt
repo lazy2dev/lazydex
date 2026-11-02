@@ -10,6 +10,7 @@ import app.lazydex.ui.addedit.UnifiedAddEditScreen
 import app.lazydex.ui.settings.AboutScreen
 import app.lazydex.ui.settings.AppearanceScreen
 import app.lazydex.ui.settings.DataAndStorageScreen
+import app.lazydex.ui.settings.SettingsTrackingScreen
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -23,6 +24,9 @@ data class AddEditRoute(
 
 @Serializable
 object AppearanceRoute
+
+@Serializable
+object TrackingRoute
 
 @Serializable
 object DataAndStorageRoute
@@ -47,14 +51,11 @@ fun LazyDexNavGraph(
     ) {
         composable<MainShellRoute> {
             MainShellScreen(
-                onNavigateToAddItem = { initialUrl ->
-                    navController.navigate(AddEditRoute(itemId = null, initialUrl = initialUrl))
-                },
-                onNavigateToEditItem = { itemId ->
-                    navController.navigate(AddEditRoute(itemId = itemId, initialUrl = null))
-                },
                 onNavigateToAppearance = {
                     navController.navigate(AppearanceRoute)
+                },
+                onNavigateToTracking = {
+                    navController.navigate(TrackingRoute)
                 },
                 onNavigateToExtensions = {
                     navController.navigate(ExtensionsRoute())
@@ -64,6 +65,12 @@ fun LazyDexNavGraph(
                 },
                 onNavigateToAbout = {
                     navController.navigate(AboutRoute)
+                },
+                onNavigateToAddItem = { initialUrl ->
+                    navController.navigate(AddEditRoute(itemId = null, initialUrl = initialUrl))
+                },
+                onNavigateToEditItem = { itemId ->
+                    navController.navigate(AddEditRoute(itemId = itemId, initialUrl = null))
                 }
             )
         }
@@ -88,6 +95,7 @@ fun LazyDexNavGraph(
                 }
             )
         }
+
         composable<AppearanceRoute> {
             AppearanceScreen(
                 onBack = {
@@ -95,6 +103,15 @@ fun LazyDexNavGraph(
                 }
             )
         }
+
+        composable<TrackingRoute> {
+            SettingsTrackingScreen(
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
         composable<DataAndStorageRoute> {
             DataAndStorageScreen(
                 onBack = {
@@ -102,6 +119,7 @@ fun LazyDexNavGraph(
                 }
             )
         }
+
         composable<AboutRoute> {
             AboutScreen(
                 onBack = {

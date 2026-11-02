@@ -1,27 +1,8 @@
 package app.lazydex.data.local.entity
 
-import androidx.room.Entity
-import androidx.room.ForeignKey
-import androidx.room.Index
-import androidx.room.PrimaryKey
-
-@Entity(
-    tableName = "media_parts",
-    foreignKeys = [
-        ForeignKey(
-            entity = MediaItemEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["mediaId"],
-            onDelete = ForeignKey.CASCADE
-        )
-    ],
-    indices = [
-        Index(value = ["mediaId", "sortOrder"], unique = true),
-        Index(value = ["mediaId"])
-    ]
-)
+@Deprecated("Retired in Database V6. Aggregated into secondaryProgressTotal.")
 data class MediaPartEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val mediaId: String,
     val name: String,
     val sortOrder: Int,
@@ -29,4 +10,3 @@ data class MediaPartEntity(
     val createdAt: Long,
     val updatedAt: Long
 )
-
