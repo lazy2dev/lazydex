@@ -54,6 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.UserStatus
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -61,17 +62,41 @@ import kotlin.math.roundToInt
 @Composable
 fun TrackStatusSelector(
     currentStatus: UserStatus,
+    category: MediaCategory = MediaCategory.NOVEL,
     onStatusSelected: (UserStatus) -> Unit,
     onDismissRequest: () -> Unit
 ) {
     var selected by remember { mutableStateOf(currentStatus) }
 
+    val availableStatuses = remember(category) {
+        val primary = when (category) {
+            MediaCategory.NOVEL, MediaCategory.MANGA -> UserStatus.READING
+            MediaCategory.ANIME, MediaCategory.TV, MediaCategory.MOVIE -> UserStatus.WATCHING
+            MediaCategory.GAME -> UserStatus.PLAYING
+        }
+        val common = listOf(UserStatus.COMPLETED, UserStatus.ON_HOLD, UserStatus.DROPPED, UserStatus.PLAN_TO)
+        if (currentStatus !in listOf(primary) + common) {
+            listOf(currentStatus, primary) + common
+        } else {
+            listOf(primary) + common
+        }
+    }
+
     BaseSelector(
         title = "Status",
         content = {
             LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                items(UserStatus.entries) { status ->
+                items(availableStatuses) { status ->
                     val isSelected = status == selected
+                    val statusLabel = when (status) {
+                        UserStatus.PLAN_TO -> when (category) {
+                            MediaCategory.NOVEL, MediaCategory.MANGA -> "Plan to Read"
+                            MediaCategory.ANIME, MediaCategory.TV, MediaCategory.MOVIE -> "Plan to Watch"
+                            MediaCategory.GAME -> "Plan to Play"
+                        }
+                        else -> status.displayName
+                    }
+
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
@@ -86,7 +111,7 @@ fun TrackStatusSelector(
                         )
                         Spacer(modifier = Modifier.width(16.dp))
                         Text(
-                            text = status.displayName,
+                            text = statusLabel,
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                             color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
@@ -243,7 +268,34 @@ fun TrackScoreSelector(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // 5-Star Preset Chips
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    (1..5).forEach { star ->
+                        val isSelected = score == star.toDouble()
+                        Surface(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { score = star.toDouble() },
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                            shape = RoundedCornerShape(8.dp),
+                        ) {
+                            Text(
+                                text = "$star ★",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 Slider(
                     value = score.toFloat(),
@@ -307,7 +359,10 @@ fun TrackDateSelector(
             }
         },
         dismissButton = {
-            Row {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 if (initialDateMillis != null) {
                     TextButton(
                         onClick = {

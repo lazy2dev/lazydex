@@ -1,6 +1,9 @@
 package app.lazydex.ui.details.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -9,32 +12,58 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.outlined.Done
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
+fun formatRelativeTime(millis: Long): String {
+    if (millis <= 0) return "Not updated"
+    val now = System.currentTimeMillis()
+    val diff = (now - millis).coerceAtLeast(0L)
+    val minutes = diff / (1000 * 60)
+    val hours = minutes / 60
+    val days = hours / 24
+    val weeks = days / 7
+    val months = days / 30
+
+    val relative = when {
+        minutes < 1 -> "just now"
+        minutes < 60 -> "${minutes}m ago"
+        hours < 24 -> "${hours}h ago"
+        days == 1L -> "yesterday"
+        days < 7 -> "${days}d ago"
+        weeks < 5 -> "${weeks}w ago"
+        months < 12 -> "${months}mo ago"
+        else -> "${days / 365}y ago"
+    }
+    return "Updated $relative"
+}
+
 @Composable
 fun MediaActionRow(
     inLibrary: Boolean,
-    onAddToLibraryClicked: () -> Unit,
-    onCategoryClicked: () -> Unit,
-    onTrackingClicked: () -> Unit,
-    onWebViewClicked: () -> Unit,
+    onLibraryClick: () -> Unit,
+    onLibraryLongClick: () -> Unit,
+    lastUpdatedMillis: Long,
+    onUpdatedClick: () -> Unit,
+    isSynced: Boolean,
+    onSyncClick: () -> Unit,
+    onEditClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val defaultInactiveColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
@@ -44,40 +73,50 @@ fun MediaActionRow(
             title = if (inLibrary) "In library" else "Add to library",
             icon = if (inLibrary) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
             color = if (inLibrary) MaterialTheme.colorScheme.primary else defaultInactiveColor,
-            onClick = onAddToLibraryClicked,
+            onClick = onLibraryClick,
+            onLongClick = onLibraryLongClick,
         )
         MediaActionButton(
-            title = "Category",
-            icon = Icons.Default.Folder,
+            title = formatRelativeTime(lastUpdatedMillis),
+            icon = Icons.Default.HourglassEmpty,
             color = MaterialTheme.colorScheme.primary,
-            onClick = onCategoryClicked,
+            onClick = onUpdatedClick,
         )
         MediaActionButton(
-            title = "Tracking",
-            icon = Icons.Outlined.Sync,
-            color = if (inLibrary) MaterialTheme.colorScheme.primary else defaultInactiveColor,
-            onClick = onTrackingClicked,
+            title = if (isSynced) "Synced" else "Sync",
+            icon = if (isSynced) Icons.Outlined.Done else Icons.Outlined.Sync,
+            color = if (isSynced) MaterialTheme.colorScheme.primary else defaultInactiveColor,
+            onClick = onSyncClick,
         )
         MediaActionButton(
-            title = "WebView",
-            icon = Icons.Outlined.Public,
+            title = "Edit",
+            icon = Icons.Default.Edit,
             color = MaterialTheme.colorScheme.primary,
-            onClick = onWebViewClicked,
+            onClick = onEditClick,
         )
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RowScope.MediaActionButton(
     title: String,
     icon: ImageVector,
     color: Color,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    TextButton(
-        onClick = onClick,
-        modifier = modifier.weight(1f),
+    Box(
+        modifier = modifier
+            .weight(1f)
+            .clip(MaterialTheme.shapes.small)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Column(
             verticalArrangement = Arrangement.Center,
@@ -101,4 +140,3 @@ private fun RowScope.MediaActionButton(
         }
     }
 }
-

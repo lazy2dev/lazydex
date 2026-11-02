@@ -92,6 +92,9 @@ fun LazyDexNavGraph(
                 initialUrl = route.initialUrl,
                 onBack = {
                     navController.popBackStack()
+                },
+                onNavigateToTracking = {
+                    navController.navigate(TrackingRoute)
                 }
             )
         }

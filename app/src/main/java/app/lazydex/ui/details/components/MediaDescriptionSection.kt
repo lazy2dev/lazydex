@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -35,12 +36,12 @@ fun MediaDescriptionSection(
     tags: List<String>,
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
-    onTagClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onTagClick: (() -> Unit)? = null,
 ) {
     Column(modifier = modifier.animateContentSize()) {
         val descText = description.ifBlank {
-            "No description available. Tap category or webview to edit."
+            "No description provided."
         }
 
         Text(
@@ -48,7 +49,7 @@ fun MediaDescriptionSection(
             maxLines = if (isExpanded) Int.MAX_VALUE else 3,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = if (description.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
                 .padding(top = 8.dp)
                 .padding(horizontal = 16.dp)
@@ -66,7 +67,8 @@ fun MediaDescriptionSection(
             Icon(
                 imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                 contentDescription = if (isExpanded) "Collapse" else "Expand",
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.size(20.dp)
             )
         }
 
@@ -105,14 +107,15 @@ fun MediaDescriptionSection(
 @Composable
 fun GenreTagChip(
     text: String,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     Surface(
-        modifier = modifier.height(30.dp),
+        modifier = modifier.height(28.dp),
         shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-        onClick = onClick,
+        onClick = onClick ?: {},
+        enabled = onClick != null,
     ) {
         Box(
             modifier = Modifier.padding(horizontal = 12.dp),
@@ -126,4 +129,3 @@ fun GenreTagChip(
         }
     }
 }
-

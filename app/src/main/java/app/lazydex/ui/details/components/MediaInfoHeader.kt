@@ -61,13 +61,14 @@ fun MediaInfoHeader(
             Color.Transparent,
             MaterialTheme.colorScheme.background,
         )
-        val imageModel = bannerUrl?.takeIf { it.isNotBlank() } ?: coverImageUrl?.takeIf { it.isNotBlank() }
+        val backdropPath = if (coverImagePath.isNotBlank() && File(coverImagePath).exists()) coverImagePath else ""
+        val backdropUrl = bannerUrl?.takeIf { it.isNotBlank() } ?: coverImageUrl?.takeIf { it.isNotBlank() }
 
-        if (imageModel != null) {
+        if (backdropPath.isNotBlank() || backdropUrl != null) {
             DetailCoverImage(
-                coverImagePath = coverImagePath,
+                coverImagePath = backdropPath,
                 title = title,
-                coverImageUrl = imageModel,
+                coverImageUrl = backdropUrl,
                 shape = RectangleShape,
                 modifier = Modifier
                     .matchParentSize()
@@ -150,7 +151,9 @@ fun MediaInfoHeader(
                         val host = sourceUrl?.takeIf { it.isNotBlank() }?.let { parseSourceHost(it) }
                         if (host != null) {
                             append(host)
-                        } else if (totalItems != null && totalItems > 0) {
+                        }
+                        if (totalItems != null && totalItems > 0) {
+                            if (isNotEmpty()) append(" • ")
                             val unit = when (category) {
                                 MediaCategory.NOVEL, MediaCategory.MANGA -> "Chapters"
                                 MediaCategory.ANIME, MediaCategory.TV -> "Episodes"

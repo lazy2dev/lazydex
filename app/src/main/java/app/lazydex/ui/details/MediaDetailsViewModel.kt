@@ -3,6 +3,10 @@ package app.lazydex.ui.details
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.lazydex.data.local.dao.MediaLinkDao
+import app.lazydex.data.local.entity.MediaLinkEntity
+import app.lazydex.data.tracker.anilist.AnilistTokenStore
+import app.lazydex.data.tracker.sync.AnilistSyncEngine
 import app.lazydex.domain.model.Category
 import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.MediaItem
@@ -13,9 +17,12 @@ import app.lazydex.domain.repository.MediaRepository
 import app.lazydex.scraper.MetadataScraper
 import app.lazydex.ui.components.formatProgress
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -64,6 +71,13 @@ data class MediaDetailsUiState(
     val showDeleteConfirm: Boolean = false,
     val showDiscardConfirm: Boolean = false,
     val isNew: Boolean = true,
+    val isLoading: Boolean = false,
+    val isSyncing: Boolean = false,
+    val anilistMediaId: Long? = null,
+    val anilistSyncStatus: String? = null,
+    val anilistLastSynced: Long? = null,
+    val isAnilistLoggedIn: Boolean = false,
+    val lastUpdated: Long = System.currentTimeMillis(),
 ) {
     val parsedSecondaryProgress: Double? get() = secondaryProgress.trim().toDoubleOrNull()
     val parsedSecondaryTotal: Double? get() = secondaryProgressTotal.trim().takeIf { it.isNotEmpty() }?.toDoubleOrNull()
@@ -107,6 +121,9 @@ class MediaDetailsViewModel(
     private val scraper: MetadataScraper,
     private val okHttpClient: OkHttpClient,
     private val cacheDir: File,
+    private val mediaLinkDao: MediaLinkDao? = null,
+    private val syncEngine: AnilistSyncEngine? = null,
+    private val tokenStore: AnilistTokenStore? = null,
 ) : ViewModel() {
 
     private val itemId: String? = savedStateHandle["itemId"]
@@ -116,16 +133,32 @@ class MediaDetailsViewModel(
     val uiState: StateFlow<MediaDetailsUiState> = _uiState.asStateFlow()
 
     private var originalItem: MediaItem? = null
+    private val notesFlow = MutableStateFlow<String?>(null)
 
     init {
         initialize(itemId, initialUrl)
+        viewModelScope.launch {
+            @OptIn(FlowPreview::class)
+            notesFlow
+                .debounce(500L)
+                .distinctUntilChanged()
+                .collect { pendingNotes ->
+                    if (pendingNotes != null) {
+                        autoSave()
+                    }
+                }
+        }
     }
 
     fun initialize(id: String?, initialUrl: String?) {
         val effectiveUrl = initialUrl?.takeIf { it.isNotBlank() }
         val effectiveId = id?.takeIf { it.isNotBlank() }
 
-        _uiState.value = _uiState.value.copy(isNew = effectiveId == null)
+        _uiState.value = _uiState.value.copy(
+            isNew = effectiveId == null,
+            isLoading = effectiveId != null,
+            isAnilistLoggedIn = tokenStore?.isLoggedIn == true,
+        )
 
         effectiveUrl?.let { url ->
             updateSourceUrl(url)
@@ -149,6 +182,19 @@ class MediaDetailsViewModel(
         }
 
         effectiveId?.let { targetId ->
+            mediaLinkDao?.let { linkDao ->
+                viewModelScope.launch {
+                    linkDao.observeByMediaId(targetId).collect { links ->
+                        val link = links.firstOrNull { it.providerId == "anilist" && it.state == "LINKED" }
+                        _uiState.value = _uiState.value.copy(
+                            anilistMediaId = link?.remoteId?.toLongOrNull(),
+                            anilistSyncStatus = link?.syncStatus,
+                            anilistLastSynced = link?.lastSyncedAt,
+                        )
+                    }
+                }
+            }
+
             viewModelScope.launch {
                 repository.observeById(targetId).collect { item ->
                     if (item != null && !_uiState.value.isSaving && !_uiState.value.isScraping) {
@@ -196,11 +242,15 @@ class MediaDetailsViewModel(
                             description = item.description,
                             startDate = item.startDate,
                             endDate = item.endDate,
+                            lastUpdated = item.lastUpdated,
                             isNew = false,
+                            isLoading = false,
                         )
                         repository.observeTypes(topCatId).collect { types ->
                             _uiState.value = _uiState.value.copy(availableFormats = types)
                         }
+                    } else if (item == null) {
+                        _uiState.value = _uiState.value.copy(isLoading = false)
                     }
                 }
             }
@@ -306,6 +356,16 @@ class MediaDetailsViewModel(
 
     fun updateNotes(notes: String) {
         _uiState.value = _uiState.value.copy(notes = notes)
+        notesFlow.value = notes
+    }
+
+    fun flushNotes() {
+        val pending = notesFlow.value
+        if (pending != null) {
+            notesFlow.value = null
+            originalItem = originalItem?.copy(notes = _uiState.value.notes)
+            autoSave()
+        }
     }
 
     fun addGenre(genre: String) {
@@ -384,21 +444,26 @@ class MediaDetailsViewModel(
                         }
                     }
                 }.onFailure { exception ->
+                    val msg = exception.message ?: "Failed to scrape metadata"
                     _uiState.value = _uiState.value.copy(
                         isScraping = false,
-                        scrapeError = exception.message ?: "Failed to scrape metadata",
+                        scrapeError = msg,
+                        errorMsg = msg,
                     )
                 }
             } catch (e: Exception) {
+                val msg = e.message ?: "Failed to scrape metadata"
                 _uiState.value = _uiState.value.copy(
                     isScraping = false,
-                    scrapeError = e.message ?: "Failed to scrape metadata",
+                    scrapeError = msg,
+                    errorMsg = msg,
                 )
             }
         }
     }
 
     fun save(exitOnSuccess: Boolean = true) {
+        flushNotes()
         val state = _uiState.value
         if (state.isTitleBlank) {
             _uiState.value = _uiState.value.copy(errorMsg = "Title is required")
@@ -512,6 +577,71 @@ class MediaDetailsViewModel(
         save(exitOnSuccess = false)
     }
 
+    fun syncWithAniList() {
+        val mediaId = _uiState.value.id
+        if (mediaId.isBlank() || _uiState.value.isSyncing) return
+        val engine = syncEngine ?: return
+
+        _uiState.value = _uiState.value.copy(isSyncing = true)
+        viewModelScope.launch {
+            try {
+                val success = engine.pushDirtyItem(mediaId)
+                if (!success) {
+                    _uiState.value = _uiState.value.copy(errorMsg = "AniList sync failed.")
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(errorMsg = e.message ?: "AniList sync error.")
+            } finally {
+                _uiState.value = _uiState.value.copy(isSyncing = false)
+            }
+        }
+    }
+
+    fun linkAniListId(remoteId: Long) {
+        val targetId = _uiState.value.id
+        if (targetId.isBlank()) return
+        val linkDao = mediaLinkDao ?: return
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val type = if (_uiState.value.category == MediaCategory.ANIME || _uiState.value.category == MediaCategory.TV || _uiState.value.category == MediaCategory.MOVIE) "anime" else "manga"
+            val newLink = MediaLinkEntity(
+                id = UUID.randomUUID().toString(),
+                mediaId = targetId,
+                kind = "TRACKER",
+                providerId = "anilist",
+                remoteId = remoteId.toString(),
+                remoteMediaListId = null,
+                url = "https://anilist.co/$type/$remoteId",
+                state = "LINKED",
+                syncStatus = "DIRTY_LOCAL",
+                lastSyncedAt = null,
+                syncedSnapshot = "{}",
+                createdAt = now,
+                updatedAt = now,
+            )
+            linkDao.upsert(newLink)
+            syncWithAniList()
+        }
+    }
+
+    fun unlinkAniList() {
+        val targetId = _uiState.value.id
+        if (targetId.isBlank()) return
+        val linkDao = mediaLinkDao ?: return
+        viewModelScope.launch {
+            val links = linkDao.getByMediaId(targetId)
+            val link = links.firstOrNull { it.providerId == "anilist" && it.state == "LINKED" }
+            if (link != null) {
+                linkDao.delete(link.id)
+                _uiState.value = _uiState.value.copy(
+                    anilistMediaId = null,
+                    anilistSyncStatus = null,
+                    anilistLastSynced = null,
+                )
+            }
+        }
+    }
+
     fun deleteItem() {
         val id = _uiState.value.id
         if (id.isEmpty()) return
@@ -537,8 +667,7 @@ class MediaDetailsViewModel(
         val isDirty = if (state.isNew) {
             state.title.isNotBlank() || state.sourceUrl.isNotBlank() || state.notes.isNotBlank()
         } else {
-            val orig = originalItem
-            orig == null ||
+            val orig = originalItem ?: return true
             state.title != orig.title ||
             state.category != orig.category ||
             state.alternativeTitles != orig.alternativeTitles ||
@@ -570,7 +699,10 @@ class MediaDetailsViewModel(
         return true
     }
 
-    fun onBackPress(): Boolean = checkBackPressAllowed()
+    fun onBackPress(): Boolean {
+        flushNotes()
+        return checkBackPressAllowed()
+    }
 
     fun dismissDiscardConfirm() {
         _uiState.value = _uiState.value.copy(showDiscardConfirm = false)

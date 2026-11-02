@@ -1,6 +1,14 @@
 package app.lazydex.ui.details
 
 import androidx.lifecycle.SavedStateHandle
+import app.lazydex.data.local.dao.MediaLinkDao
+import app.lazydex.data.local.entity.MediaLinkEntity
+import app.lazydex.data.repository.ProgressMutationRulesTest
+import app.lazydex.data.tracker.anilist.AnilistGraphQLClient
+import app.lazydex.data.tracker.anilist.AnilistTokenStore
+import app.lazydex.data.tracker.anilist.TokenBucketLimiter
+import app.lazydex.data.tracker.sync.AnilistSyncEngine
+import app.lazydex.data.tracker.sync.AnilistSyncEngineTest
 import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.MediaStats
@@ -60,6 +68,52 @@ class MediaDetailsViewModelTest {
         }
     }
 
+    private class FakeMediaLinkDao : MediaLinkDao {
+        val links = mutableListOf<MediaLinkEntity>()
+        override fun observeByMediaId(mediaId: String): Flow<List<MediaLinkEntity>> =
+            flowOf(links.filter { it.mediaId == mediaId })
+        override suspend fun getByMediaId(mediaId: String): List<MediaLinkEntity> =
+            links.filter { it.mediaId == mediaId }
+        override suspend fun getByRemoteId(providerId: String, remoteId: String): MediaLinkEntity? =
+            links.find { it.providerId == providerId && it.remoteId == remoteId }
+        override suspend fun getDirtyLinks(providerId: String): List<MediaLinkEntity> =
+            links.filter { it.providerId == providerId && it.syncStatus == "DIRTY_LOCAL" }
+        override suspend fun getByProviderAndState(providerId: String, state: String): List<MediaLinkEntity> =
+            links.filter { it.providerId == providerId && it.state == state }
+        override suspend fun getByProviderId(providerId: String): List<MediaLinkEntity> =
+            links.filter { it.providerId == providerId }
+        override suspend fun updateSyncStatusByMediaId(mediaId: String, syncStatus: String, updatedAt: Long): Int = 0
+        override suspend fun upsert(link: MediaLinkEntity) {
+            val idx = links.indexOfFirst { it.id == link.id }
+            if (idx >= 0) links[idx] = link else links.add(link)
+        }
+        override suspend fun upsertAll(links: List<MediaLinkEntity>) {
+            links.forEach { upsert(it) }
+        }
+        override suspend fun delete(id: String) {
+            links.removeIf { it.id == id }
+        }
+    }
+
+    private class TestSyncEngine : AnilistSyncEngine(
+        client = AnilistGraphQLClient(
+            okHttpClient = OkHttpClient(),
+            tokenStore = AnilistTokenStore(AnilistSyncEngineTest.FakeSharedPreferences()),
+            limiter = TokenBucketLimiter(60, 60, 15)
+        ),
+        mediaItemDao = ProgressMutationRulesTest.FakeMediaItemDao(),
+        mediaLinkDao = FakeMediaLinkDao(),
+        tokenStore = AnilistTokenStore(AnilistSyncEngineTest.FakeSharedPreferences())
+    ) {
+        var pushedMediaId: String? = null
+        var shouldSucceed: Boolean = true
+
+        override suspend fun pushDirtyItem(mediaId: String): Boolean {
+            pushedMediaId = mediaId
+            return shouldSucceed
+        }
+    }
+
     private val testDispatcher = kotlinx.coroutines.test.UnconfinedTestDispatcher()
 
     @Before
@@ -78,7 +132,7 @@ class MediaDetailsViewModelTest {
         val vm = MediaDetailsViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
-            scraper = MetadataScraper(SourceRegistry(emptyList())),
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
             okHttpClient = OkHttpClient(),
             cacheDir = File(".")
         )
@@ -122,7 +176,7 @@ class MediaDetailsViewModelTest {
         val vm = MediaDetailsViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
-            scraper = MetadataScraper(SourceRegistry(emptyList())),
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
             okHttpClient = OkHttpClient(),
             cacheDir = File(".")
         )
@@ -130,9 +184,28 @@ class MediaDetailsViewModelTest {
         vm.initialize("existing-1", null)
         val state = vm.uiState.value
         assertFalse(state.isNew)
+        assertFalse(state.isLoading)
+        assertEquals(100L, state.lastUpdated)
         assertEquals("Omniscient Reader", state.title)
         assertEquals("100", state.currentProgress)
         assertEquals("551", state.totalItems)
+    }
+
+    @Test
+    fun initialize_withMissingItemId_clearsLoading() = runTest {
+        val repo = FakeRepository()
+        val vm = MediaDetailsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+
+        vm.initialize("non-existent-id", null)
+        val state = vm.uiState.value
+        assertFalse(state.isNew)
+        assertFalse(state.isLoading)
     }
 
     @Test
@@ -141,7 +214,7 @@ class MediaDetailsViewModelTest {
         val vm = MediaDetailsViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
-            scraper = MetadataScraper(SourceRegistry(emptyList())),
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
             okHttpClient = OkHttpClient(),
             cacheDir = File(".")
         )
@@ -197,7 +270,7 @@ class MediaDetailsViewModelTest {
         val vm = MediaDetailsViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
-            scraper = MetadataScraper(SourceRegistry(emptyList())),
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
             okHttpClient = OkHttpClient(),
             cacheDir = File(".")
         )
@@ -232,7 +305,7 @@ class MediaDetailsViewModelTest {
         val vm = MediaDetailsViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
-            scraper = MetadataScraper(SourceRegistry(emptyList())),
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
             okHttpClient = OkHttpClient(),
             cacheDir = File(".")
         )
@@ -242,6 +315,260 @@ class MediaDetailsViewModelTest {
 
         assertTrue(vm.uiState.value.isDone)
         assertTrue(repo.items.isEmpty())
+    }
+
+    @Test
+    fun checkBackPressAllowed_uninitializedExistingItem_allowsBackPressWithoutDiscardPrompt() = runTest {
+        val repo = FakeRepository()
+        val vm = MediaDetailsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+
+        // Initialize with missing id so originalItem is null and isNew is false
+        vm.initialize("missing-id", null)
+        val allowed = vm.checkBackPressAllowed()
+
+        assertTrue(allowed)
+        assertFalse(vm.uiState.value.showDiscardConfirm)
+    }
+
+    @Test
+    fun checkBackPressAllowed_modifiedExistingItem_showsDiscardPrompt() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "existing-back",
+            category = MediaCategory.NOVEL,
+            title = "Original Title",
+            currentProgress = 0,
+            userStatus = UserStatus.PLAN_TO,
+            lastUpdated = 100L,
+            dateAdded = 100L
+        )
+        repo.items.add(existing)
+
+        val vm = MediaDetailsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+
+        vm.initialize("existing-back", null)
+        assertTrue(vm.checkBackPressAllowed()) // Unmodified -> allowed
+
+        vm.updateTitle("Modified Title")
+        assertFalse(vm.checkBackPressAllowed()) // Modified -> disallowed
+        assertTrue(vm.uiState.value.showDiscardConfirm)
+    }
+
+    @Test
+    fun updateNotes_debouncedAutoSave_persistsAfterDelay() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "existing-notes",
+            category = MediaCategory.NOVEL,
+            title = "Notes Test",
+            currentProgress = 10,
+            userStatus = UserStatus.READING,
+            notes = "Initial",
+            lastUpdated = 100L,
+            dateAdded = 100L
+        )
+        repo.items.add(existing)
+
+        val vm = MediaDetailsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+
+        vm.initialize("existing-notes", null)
+        vm.updateNotes("Updated debounced note")
+
+        // Before debounce, repo still has initial
+        assertEquals("Initial", repo.items.find { it.id == "existing-notes" }?.notes)
+
+        // Advance debounce duration
+        testScheduler.advanceTimeBy(600L)
+
+        assertEquals("Updated debounced note", repo.items.find { it.id == "existing-notes" }?.notes)
+    }
+
+    @Test
+    fun flushNotes_immediatelyPersistsPendingNotes() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "existing-flush",
+            category = MediaCategory.NOVEL,
+            title = "Flush Test",
+            currentProgress = 10,
+            userStatus = UserStatus.READING,
+            notes = "Initial",
+            lastUpdated = 100L,
+            dateAdded = 100L
+        )
+        repo.items.add(existing)
+
+        val vm = MediaDetailsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+
+        vm.initialize("existing-flush", null)
+        vm.updateNotes("Immediately flushed note")
+
+        // Flush immediately without waiting 500ms
+        vm.flushNotes()
+
+        assertEquals("Immediately flushed note", repo.items.find { it.id == "existing-flush" }?.notes)
+    }
+
+    @Test
+    fun scrapeUrl_onFailure_surfacesErrorMessage() = runTest {
+        val repo = FakeRepository()
+        val vm = MediaDetailsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+
+        vm.scrapeUrl("https://example.com/notfound")
+        testScheduler.advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.isScraping)
+        assertEquals("Failed to scrape metadata from URL: https://example.com/notfound", vm.uiState.value.errorMsg)
+        assertEquals("Failed to scrape metadata from URL: https://example.com/notfound", vm.uiState.value.scrapeError)
+    }
+
+    @Test
+    fun initialize_observesMediaLinkAndTokenStore() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "item-sync-1",
+            category = MediaCategory.NOVEL,
+            title = "Sync Test",
+            currentProgress = 10,
+            userStatus = UserStatus.READING,
+            lastUpdated = 100L,
+            dateAdded = 100L
+        )
+        repo.items.add(existing)
+
+        val linkDao = FakeMediaLinkDao()
+        linkDao.links.add(
+            MediaLinkEntity(
+                id = "link-1",
+                mediaId = "item-sync-1",
+                kind = "NOVEL",
+                providerId = "anilist",
+                remoteId = "12345",
+                url = null,
+                syncStatus = "SYNCED",
+                lastSyncedAt = 999999L,
+                createdAt = 100L,
+                updatedAt = 100L
+            )
+        )
+
+        val prefs = AnilistSyncEngineTest.FakeSharedPreferences()
+        val tokenStore = AnilistTokenStore(prefs)
+        tokenStore.accessToken = "mock_token"
+
+        val vm = MediaDetailsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File("."),
+            mediaLinkDao = linkDao,
+            tokenStore = tokenStore
+        )
+
+        vm.initialize("item-sync-1", null)
+        val state = vm.uiState.value
+
+        assertTrue(state.isAnilistLoggedIn)
+        assertEquals(12345L, state.anilistMediaId)
+        assertEquals("SYNCED", state.anilistSyncStatus)
+        assertEquals(999999L, state.anilistLastSynced)
+    }
+
+    @Test
+    fun syncWithAniList_callsPushDirtyItem() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "item-sync-2",
+            category = MediaCategory.NOVEL,
+            title = "Push Test",
+            currentProgress = 10,
+            userStatus = UserStatus.READING,
+            lastUpdated = 100L,
+            dateAdded = 100L
+        )
+        repo.items.add(existing)
+
+        val syncEngine = TestSyncEngine()
+        val vm = MediaDetailsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File("."),
+            syncEngine = syncEngine
+        )
+
+        vm.initialize("item-sync-2", null)
+        vm.syncWithAniList()
+
+        assertEquals("item-sync-2", syncEngine.pushedMediaId)
+        assertFalse(vm.uiState.value.isSyncing)
+        assertNull(vm.uiState.value.errorMsg)
+    }
+
+    @Test
+    fun syncWithAniList_failure_surfacesErrorMessage() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "item-sync-3",
+            category = MediaCategory.NOVEL,
+            title = "Push Fail Test",
+            currentProgress = 10,
+            userStatus = UserStatus.READING,
+            lastUpdated = 100L,
+            dateAdded = 100L
+        )
+        repo.items.add(existing)
+
+        val syncEngine = TestSyncEngine()
+        syncEngine.shouldSucceed = false
+
+        val vm = MediaDetailsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File("."),
+            syncEngine = syncEngine
+        )
+
+        vm.initialize("item-sync-3", null)
+        vm.syncWithAniList()
+
+        assertEquals("item-sync-3", syncEngine.pushedMediaId)
+        assertFalse(vm.uiState.value.isSyncing)
+        assertEquals("AniList sync failed.", vm.uiState.value.errorMsg)
     }
 }
 

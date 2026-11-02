@@ -169,7 +169,10 @@ val viewModelModule = module {
             repository = get(),
             scraper = get(),
             okHttpClient = get(),
-            cacheDir = get(named("cacheDir"))
+            cacheDir = get(named("cacheDir")),
+            mediaLinkDao = get(),
+            syncEngine = get(),
+            tokenStore = get(),
         )
     }
     viewModel {

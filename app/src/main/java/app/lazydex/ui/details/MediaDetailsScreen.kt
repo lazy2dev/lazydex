@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
@@ -31,6 +32,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -70,7 +73,9 @@ import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.UserStatus
 import app.lazydex.ui.details.components.MediaActionRow
 import app.lazydex.ui.details.components.MediaDescriptionSection
+import app.lazydex.ui.details.components.MediaDetailsSkeleton
 import app.lazydex.ui.details.components.MediaInfoHeader
+import app.lazydex.ui.details.components.MediaTrackerSyncDialog
 import app.lazydex.ui.details.components.MediaTrackingSection
 import app.lazydex.ui.details.components.TrackDateSelector
 import app.lazydex.ui.details.components.TrackProgressSelector
@@ -87,6 +92,7 @@ private sealed interface ActiveDialog {
     data object FinishDate : ActiveDialog
     data object Cover : ActiveDialog
     data object Metadata : ActiveDialog
+    data object Sync : ActiveDialog
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -95,6 +101,7 @@ fun MediaDetailsScreen(
     itemId: String? = null,
     initialUrl: String? = null,
     onBack: () -> Unit,
+    onNavigateToTracking: (() -> Unit)? = null,
     viewModel: MediaDetailsViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -179,111 +186,69 @@ fun MediaDetailsScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(bottom = 88.dp)
-        ) {
-            Spacer(modifier = Modifier.height(innerPadding.calculateTopPadding()))
+        if (state.isLoading) {
+            MediaDetailsSkeleton(modifier = Modifier.padding(innerPadding))
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(bottom = 88.dp)
+            ) {
+                Spacer(modifier = Modifier.height(innerPadding.calculateTopPadding()))
 
-            // Scraper helper banner (when new item or scraping)
-            AnimatedVisibility(visible = state.isNew || state.isScraping || state.sourceUrl.isNotBlank()) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    shape = MaterialTheme.shapes.small
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CloudDownload,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        OutlinedTextField(
-                            value = state.sourceUrl,
-                            onValueChange = { viewModel.updateSourceUrl(it) },
-                            placeholder = { Text("Enter URL to auto-fetch info") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                        FilledTonalButton(
-                            onClick = { viewModel.scrapeUrl() },
-                            enabled = !state.isScraping && state.sourceUrl.isNotBlank()
-                        ) {
-                            if (state.isScraping) {
-                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            } else {
-                                Icon(Icons.Default.Refresh, contentDescription = "Fetch", modifier = Modifier.size(16.dp))
-                            }
+                // 1. Media Info Header (Backdrop + Cover + Title + Metadata)
+                MediaInfoHeader(
+                    title = state.title,
+                    author = state.author,
+                    category = state.category,
+                    formatName = state.availableFormats.find { it.id == state.formatId }?.name ?: state.formatId,
+                    sourceUrl = state.sourceUrl,
+                    totalItems = state.parsedTotal,
+                    coverImagePath = state.coverImagePath,
+                    coverImageUrl = state.coverImageUrl,
+                    bannerUrl = state.bannerImage,
+                    onCoverClick = { activeDialog = ActiveDialog.Cover }
+                )
+
+                // 2. Action Row (In Library, Updated X, Sync, Edit)
+                MediaActionRow(
+                    inLibrary = !state.isNew,
+                    onLibraryClick = {
+                        if (state.isNew) {
+                            viewModel.save(exitOnSuccess = false)
+                        } else {
+                            viewModel.showDeleteConfirm(true)
                         }
-                    }
-                }
-            }
-
-            // 1. Media Info Header (Backdrop + Cover + Title + Metadata)
-            MediaInfoHeader(
-                title = state.title,
-                author = state.author,
-                category = state.category,
-                formatName = state.availableFormats.find { it.id == state.formatId }?.name ?: state.formatId,
-                sourceUrl = state.sourceUrl,
-                totalItems = state.parsedTotal,
-                coverImagePath = state.coverImagePath,
-                coverImageUrl = state.coverImageUrl,
-                bannerUrl = state.bannerImage,
-                onCoverClick = { activeDialog = ActiveDialog.Cover }
-            )
-
-            // 2. Action Row (In Library, Category, Tracking, WebView)
-            MediaActionRow(
-                inLibrary = !state.isNew,
-                onAddToLibraryClicked = {
-                    if (state.isNew) {
-                        viewModel.save(exitOnSuccess = false)
-                    } else {
-                        activeDialog = ActiveDialog.Status
-                    }
-                },
-                onCategoryClicked = { activeDialog = ActiveDialog.Metadata },
-                onTrackingClicked = {
-                    if (!state.isNew) {
-                        activeDialog = ActiveDialog.Progress
-                    }
-                },
-                onWebViewClicked = {
-                    if (state.sourceUrl.isNotBlank()) {
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(state.sourceUrl))
-                            context.startActivity(intent)
-                        } catch (_: Exception) {}
-                    } else {
+                    },
+                    onLibraryLongClick = {
+                        activeDialog = ActiveDialog.Metadata
+                    },
+                    lastUpdatedMillis = state.lastUpdated,
+                    onUpdatedClick = {
+                        val dateStr = java.text.SimpleDateFormat("MMM dd, yyyy HH:mm", java.util.Locale.getDefault())
+                            .format(java.util.Date(state.lastUpdated))
+                        scope.launch { snackbarHostState.showSnackbar("Last updated: $dateStr") }
+                    },
+                    isSynced = state.anilistSyncStatus == "SYNCED",
+                    onSyncClick = {
+                        activeDialog = ActiveDialog.Sync
+                    },
+                    onEditClick = {
                         activeDialog = ActiveDialog.Metadata
                     }
-                }
-            )
+                )
 
-            // 3. Expandable Description & Genre Chips
-            MediaDescriptionSection(
-                description = state.description,
-                genres = state.genres,
-                tags = state.tags,
-                isExpanded = isSynopsisExpanded,
-                onToggleExpand = { isSynopsisExpanded = !isSynopsisExpanded },
-                onTagClick = { activeDialog = ActiveDialog.Metadata }
-            )
+                // 3. Expandable Description & Genre Chips
+                MediaDescriptionSection(
+                    description = state.description,
+                    genres = state.genres,
+                    tags = state.tags,
+                    isExpanded = isSynopsisExpanded,
+                    onToggleExpand = { isSynopsisExpanded = !isSynopsisExpanded },
+                )
 
-            // 4. Tracking Matrix vs "Add to Library" CTA
-            if (!state.isNew) {
+                // 4. Tracking Matrix
                 MediaTrackingSection(
                     category = state.category,
                     userStatus = state.userStatus,
@@ -309,43 +274,8 @@ fun MediaDetailsScreen(
                     },
                     onNotesChange = {
                         viewModel.updateNotes(it)
-                        viewModel.autoSave()
                     }
                 )
-            } else {
-                Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                    shape = MaterialTheme.shapes.medium,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "Not in Library",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Add this media to your library to track reading progress, score, and dates.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Button(
-                            onClick = { viewModel.save(exitOnSuccess = false) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null)
-                            Spacer(modifier = Modifier.size(8.dp))
-                            Text("Add to Library")
-                        }
-                    }
-                }
             }
         }
     }
@@ -358,6 +288,7 @@ fun MediaDetailsScreen(
         ActiveDialog.Status -> {
             TrackStatusSelector(
                 currentStatus = state.userStatus,
+                category = state.category,
                 onStatusSelected = { status ->
                     viewModel.updateUserStatus(status)
                     viewModel.autoSave()
@@ -471,6 +402,30 @@ fun MediaDetailsScreen(
                 )
             }
         }
+        ActiveDialog.Sync -> {
+            MediaTrackerSyncDialog(
+                isLoggedIn = state.isAnilistLoggedIn,
+                anilistMediaId = state.anilistMediaId,
+                anilistSyncStatus = state.anilistSyncStatus,
+                anilistLastSynced = state.anilistLastSynced,
+                isSyncing = state.isSyncing,
+                category = state.category,
+                title = state.title,
+                currentProgress = state.currentProgress,
+                totalItems = state.totalItems,
+                userStatus = state.userStatus,
+                rating = state.rating,
+                startDate = state.startDate,
+                endDate = state.endDate,
+                onSyncNow = { viewModel.syncWithAniList() },
+                onLinkMediaId = { id -> viewModel.linkAniListId(id) },
+                onUnlink = { viewModel.unlinkAniList() },
+                onOpenSettings = {
+                    onNavigateToTracking?.invoke()
+                },
+                onDismissRequest = { activeDialog = null }
+            )
+        }
         null -> {}
     }
 
@@ -544,6 +499,120 @@ private fun EditMetadataSheetContent(
             )
             Button(onClick = onClose) {
                 Text("Done")
+            }
+        }
+
+        // Relocated Scraper / Source URL Fetcher
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.small
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CloudDownload,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                OutlinedTextField(
+                    value = state.sourceUrl,
+                    onValueChange = { viewModel.updateSourceUrl(it) },
+                    label = { Text("Source URL") },
+                    placeholder = { Text("Paste URL to auto-fetch info") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+                FilledTonalButton(
+                    onClick = { viewModel.scrapeUrl() },
+                    enabled = !state.isScraping && state.sourceUrl.isNotBlank()
+                ) {
+                    if (state.isScraping) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Default.Refresh, contentDescription = "Fetch", modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+        }
+
+        // Category & Format Picker
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            var categoryExpanded by remember { mutableStateOf(false) }
+            Box(modifier = Modifier.weight(1f)) {
+                OutlinedTextField(
+                    value = state.category.displayName,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Category") },
+                    trailingIcon = {
+                        IconButton(onClick = { categoryExpanded = true }) {
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { categoryExpanded = true }
+                )
+                DropdownMenu(
+                    expanded = categoryExpanded,
+                    onDismissRequest = { categoryExpanded = false },
+                ) {
+                    MediaCategory.entries.forEach { cat ->
+                        DropdownMenuItem(
+                            text = { Text(cat.displayName) },
+                            onClick = {
+                                viewModel.updateCategory(cat)
+                                categoryExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            if (state.availableFormats.isNotEmpty()) {
+                var formatExpanded by remember { mutableStateOf(false) }
+                val currentFormatName = state.availableFormats.find { it.id == state.formatId }?.name
+                    ?: state.availableFormats.firstOrNull()?.name ?: "Standard"
+                Box(modifier = Modifier.weight(1f)) {
+                    OutlinedTextField(
+                        value = currentFormatName,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Format") },
+                        trailingIcon = {
+                            IconButton(onClick = { formatExpanded = true }) {
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { formatExpanded = true }
+                    )
+                    DropdownMenu(
+                        expanded = formatExpanded,
+                        onDismissRequest = { formatExpanded = false },
+                    ) {
+                        state.availableFormats.forEach { format ->
+                            DropdownMenuItem(
+                                text = { Text(format.name) },
+                                onClick = {
+                                    viewModel.updateFormatId(format.id)
+                                    formatExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
             }
         }
 
