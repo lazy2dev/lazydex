@@ -10,13 +10,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -24,20 +20,21 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,12 +42,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -60,14 +56,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.lazydex.data.local.LibraryDisplayMode
 import app.lazydex.domain.model.Category
-import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.StatusFilter
 import app.lazydex.ui.components.CategoryCreatorSheet
 import app.lazydex.ui.components.DexSettingsSheet
@@ -85,6 +81,7 @@ fun DexScreen(
     onSearchClick: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
@@ -92,19 +89,17 @@ fun DexScreen(
 
     var showCategoryCreatorSheet by rememberSaveable { mutableStateOf(false) }
     var categoryToCreateTypeUnder by remember { mutableStateOf<Category?>(null) }
+    var showOverflowMenu by rememberSaveable { mutableStateOf(false) }
 
-    var isSearching by rememberSaveable { mutableStateOf(false) }
-    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val searchFocusRequester = remember { FocusRequester() }
 
-    val displayedItems = remember(uiState.items, searchQuery) {
-        val query = searchQuery.trim()
-        if (query.isEmpty()) {
-            uiState.items
-        } else {
-            uiState.items.filter { item ->
-                item.title.contains(query, ignoreCase = true) ||
-                        (item.author.contains(query, ignoreCase = true))
-            }
+    val activeParent = remember(uiState.topLevelCategories, uiState.selectedCategoryId) {
+        uiState.topLevelCategories.firstOrNull { it.id == uiState.selectedCategoryId }
+    }
+
+    LaunchedEffect(searchQuery != null) {
+        if (searchQuery != null) {
+            searchFocusRequester.requestFocus()
         }
     }
 
@@ -122,22 +117,28 @@ fun DexScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    if (isSearching) {
-                        TextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search dex...") },
+                    if (searchQuery != null) {
+                        BasicTextField(
+                            value = searchQuery.orEmpty(),
+                            onValueChange = { viewModel.setSearchQuery(it) },
                             singleLine = true,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions = KeyboardActions(onSearch = {}),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                disabledContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent
+                            textStyle = MaterialTheme.typography.titleMedium.copy(
+                                color = MaterialTheme.colorScheme.onSurface
                             ),
-                            modifier = Modifier.fillMaxWidth()
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(searchFocusRequester),
+                            decorationBox = { innerTextField ->
+                                if (searchQuery.isNullOrEmpty()) {
+                                    Text(
+                                        text = "Search dex...",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                innerTextField()
+                            }
                         )
                     } else {
                         Text(
@@ -148,25 +149,28 @@ fun DexScreen(
                     }
                 },
                 navigationIcon = {
-                    if (isSearching) {
-                        IconButton(onClick = {
-                            isSearching = false
-                            searchQuery = ""
-                        }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search")
+                    if (searchQuery != null) {
+                        IconButton(onClick = { viewModel.setSearchQuery(null) }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Close search"
+                            )
                         }
                     }
                 },
                 actions = {
-                    if (isSearching) {
-                        if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { searchQuery = "" }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Clear search")
+                    if (searchQuery != null) {
+                        if (!searchQuery.isNullOrEmpty()) {
+                            IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                                Icon(
+                                    imageVector = Icons.Default.Clear,
+                                    contentDescription = "Clear search"
+                                )
                             }
                         }
                     } else {
                         IconButton(onClick = {
-                            if (onSearchClick != null) onSearchClick() else isSearching = true
+                            if (onSearchClick != null) onSearchClick() else viewModel.setSearchQuery("")
                         }) {
                             Icon(
                                 imageVector = Icons.Default.Search,
@@ -174,13 +178,43 @@ fun DexScreen(
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
-                    }
-                    IconButton(onClick = { showFilterSheet = true }) {
-                        Icon(
-                            imageVector = Icons.Default.FilterList,
-                            contentDescription = "Filter and Sort",
-                            tint = if (isFilterActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                        )
+                        IconButton(onClick = { showFilterSheet = true }) {
+                            Icon(
+                                imageVector = Icons.Default.FilterList,
+                                contentDescription = "Filter and Sort",
+                                tint = if (isFilterActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Box {
+                            IconButton(onClick = { showOverflowMenu = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "More options",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showOverflowMenu,
+                                onDismissRequest = { showOverflowMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("New Type") },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        categoryToCreateTypeUnder = null
+                                        showCategoryCreatorSheet = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("New Format") },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        categoryToCreateTypeUnder = activeParent
+                                        showCategoryCreatorSheet = true
+                                    }
+                                )
+                            }
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -189,13 +223,11 @@ fun DexScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onNavigateToAddItem,
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Add") },
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-            )
+            FloatingActionButton(
+                onClick = onNavigateToAddItem
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Add Item")
+            }
         },
         containerColor = MaterialTheme.colorScheme.background,
         modifier = modifier
@@ -237,21 +269,6 @@ fun DexScreen(
                             )
                         )
                     }
-
-                    AssistChip(
-                        onClick = {
-                            categoryToCreateTypeUnder = null
-                            showCategoryCreatorSheet = true
-                        },
-                        label = { Text("+ Category") },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Add,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    )
                 }
 
                 // Tier 2: Subtypes Rail with smooth animation
@@ -260,7 +277,6 @@ fun DexScreen(
                     enter = expandVertically(tween(200)),
                     exit = shrinkVertically(tween(200))
                 ) {
-                    val activeParent = uiState.topLevelCategories.firstOrNull { it.id == uiState.selectedCategoryId }
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
                         shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
@@ -287,21 +303,6 @@ fun DexScreen(
                                     label = { Text(sub.name) }
                                 )
                             }
-
-                            AssistChip(
-                                onClick = {
-                                    categoryToCreateTypeUnder = activeParent
-                                    showCategoryCreatorSheet = true
-                                },
-                                label = { Text("+ Type") },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.Add,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            )
                         }
                     }
                 }
@@ -318,19 +319,21 @@ fun DexScreen(
                     uiState.isLoading -> {
                         CircularProgressIndicator()
                     }
-                    displayedItems.isEmpty() -> {
+                    uiState.items.isEmpty() -> {
+                        val currentQuery = searchQuery?.trim()
+                        val isSearchActive = !currentQuery.isNullOrEmpty()
                         val message = when {
-                            searchQuery.isNotBlank() -> "No items matching '$searchQuery'"
+                            isSearchActive -> "No items matching '$currentQuery'"
                             isFilterActive -> "No items match your filters"
                             else -> "Nothing here yet. Tap [+] to add your first tracking item."
                         }
                         val actionLabel = when {
-                            searchQuery.isNotBlank() -> "Clear Search"
+                            isSearchActive -> "Clear Search"
                             isFilterActive -> "Clear Filters"
                             else -> null
                         }
                         val actionCallback = when {
-                            searchQuery.isNotBlank() -> { { searchQuery = "" } }
+                            isSearchActive -> { { viewModel.setSearchQuery("") } }
                             isFilterActive -> { { viewModel.clearFilters() } }
                             else -> null
                         }
@@ -348,7 +351,7 @@ fun DexScreen(
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 items(
-                                    items = displayedItems,
+                                    items = uiState.items,
                                     key = { it.id }
                                 ) { item ->
                                     MediaCard(
@@ -358,9 +361,6 @@ fun DexScreen(
                                         showProgressBadge = uiState.showProgressBadge,
                                         showStatusBadge = uiState.showStatusBadge,
                                         showScoreBadge = uiState.showScoreBadge,
-                                        onIncrementProgress = { viewModel.incrementProgress(item.id) },
-                                        onSetProgress = { newProgress -> viewModel.setProgress(item.id, newProgress) },
-                                        onSetSecondaryProgress = { newSec -> viewModel.setSecondaryProgress(item.id, newSec) },
                                     )
                                 }
                             }
@@ -379,7 +379,7 @@ fun DexScreen(
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 items(
-                                    items = displayedItems,
+                                    items = uiState.items,
                                     key = { it.id }
                                 ) { item ->
                                     MediaCard(
@@ -389,9 +389,6 @@ fun DexScreen(
                                         showProgressBadge = uiState.showProgressBadge,
                                         showStatusBadge = uiState.showStatusBadge,
                                         showScoreBadge = uiState.showScoreBadge,
-                                        onIncrementProgress = { viewModel.incrementProgress(item.id) },
-                                        onSetProgress = { newProgress -> viewModel.setProgress(item.id, newProgress) },
-                                        onSetSecondaryProgress = { newSec -> viewModel.setSecondaryProgress(item.id, newSec) },
                                     )
                                 }
                             }

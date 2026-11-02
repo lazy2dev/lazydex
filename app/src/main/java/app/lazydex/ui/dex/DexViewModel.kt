@@ -11,13 +11,20 @@ import app.lazydex.domain.model.SortDirection
 import app.lazydex.domain.model.SortField
 import app.lazydex.domain.model.StatusFilter
 import app.lazydex.domain.repository.MediaRepository
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -93,10 +100,23 @@ private data class MetadataBundle(
 @OptIn(ExperimentalCoroutinesApi::class)
 class DexViewModel(
     private val repository: MediaRepository,
-    private val themePreferences: ThemePreferences
+    private val themePreferences: ThemePreferences,
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : ViewModel() {
 
     private val mutableFilterState = MutableStateFlow(MutableFilterState())
+    val searchQuery = MutableStateFlow<String?>(null)
+
+    fun setSearchQuery(query: String?) {
+        searchQuery.value = query
+    }
+
+    @OptIn(FlowPreview::class)
+    private val debouncedSearchQuery: Flow<String?> = searchQuery
+        .debounce { if (it == null) 0L else 250L }
+        .distinctUntilChanged()
+        .flowOn(defaultDispatcher)
+
     private val selectedCategoryId = MutableStateFlow<String?>(null)
     private val selectedSubtypeId = MutableStateFlow<String?>(null)
 
@@ -173,7 +193,8 @@ class DexViewModel(
         topLevelCategories,
         subtypesForSelectedCategory,
         selectedCategoryId,
-        selectedSubtypeId
+        selectedSubtypeId,
+        debouncedSearchQuery
     ) { args: Array<Any?> ->
         @Suppress("UNCHECKED_CAST")
         val items = args[0] as List<MediaItem>
@@ -187,7 +208,9 @@ class DexViewModel(
         val subCats = args[6] as List<Category>
         val selCatId = args[7] as String?
         val selSubId = args[8] as String?
+        val search = args[9] as String?
 
+        val q = search?.trim()
         val filtered = items.filter { item ->
             (fs.selectedGenres.isEmpty() || item.genres.any { it.lowercase() in fs.selectedGenres }) &&
             (fs.selectedTags.isEmpty() || item.tags.any { it.lowercase() in fs.selectedTags }) &&
@@ -195,7 +218,14 @@ class DexViewModel(
             (afs.minRating == null || (item.rating ?: 0.0) >= afs.minRating) &&
             (afs.maxRating == null || (item.rating ?: 0.0) <= afs.maxRating) &&
             (afs.dateRangeStart == null || (item.startDate != null && item.startDate >= afs.dateRangeStart)) &&
-            (afs.dateRangeEnd == null || (item.startDate != null && item.startDate <= afs.dateRangeEnd))
+            (afs.dateRangeEnd == null || (item.startDate != null && item.startDate <= afs.dateRangeEnd)) &&
+            (q.isNullOrEmpty() || (
+                item.title.contains(q, ignoreCase = true) ||
+                item.author.contains(q, ignoreCase = true) ||
+                item.alternativeTitles.any { it.contains(q, ignoreCase = true) } ||
+                item.getExtra("titleEnglish")?.contains(q, ignoreCase = true) == true ||
+                item.getExtra("titleRomaji")?.contains(q, ignoreCase = true) == true
+            ))
         }
 
         DexUiState(
@@ -221,7 +251,7 @@ class DexViewModel(
             perStatusCounts = fs.perStatusCounts,
             isLoading = false
         )
-    }.combine(repository.observeCount()) { state, count -> state.copy(totalCount = count) }
+    }.flowOn(defaultDispatcher).combine(repository.observeCount()) { state, count -> state.copy(totalCount = count) }
     .combine(themePreferences.displayPreferences) { state, dp ->
         state.copy(
             displayMode = dp.displayMode,

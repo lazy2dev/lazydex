@@ -7,9 +7,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -73,7 +73,7 @@ fun MainShellScreen(
                     label = { Text("Stats") }
                 )
 
-                // 3. Add (+) Button — Center Hub
+                // 3. Browse Tab
                 NavigationBarItem(
                     selected = currentTab == ShellTab.BROWSE,
                     onClick = {
@@ -83,15 +83,8 @@ fun MainShellScreen(
                             currentTab = ShellTab.BROWSE
                         }
                     },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Add",
-                            tint = if (currentTab == ShellTab.BROWSE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    },
-                    label = { Text("Add") }
+                    icon = { Icon(imageVector = Icons.Default.Explore, contentDescription = "Browse") },
+                    label = { Text("Browse") }
                 )
 
                 // 4. History Tab

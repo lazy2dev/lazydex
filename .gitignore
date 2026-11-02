@@ -18,4 +18,5 @@ build/
 .tmp/
 *.bak
 *.tmp
+.impeccable/
 /app/schemas/*/

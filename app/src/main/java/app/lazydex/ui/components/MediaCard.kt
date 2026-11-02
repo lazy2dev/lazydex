@@ -16,18 +16,15 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -198,93 +195,38 @@ fun resolveUnitPrefix(category: MediaCategory, isSecondary: Boolean = false): St
     }
 }
 
-private fun Color.darken(factor: Float = 0.65f): Color = Color(
-    red = red * factor,
-    green = green * factor,
-    blue = blue * factor,
-    alpha = alpha,
-)
-
 @Composable
 private fun CardStartBadges(
     item: MediaItem,
-    formatName: String,
-    showStatusBadge: Boolean,
     showProgressBadge: Boolean,
-    statusColor: Color,
     modifier: Modifier = Modifier,
 ) {
     val displayProgress = if (item.progress > 0.0) item.progress else item.currentProgress.toDouble()
-    val displayTotal = item.progressTotal ?: item.totalItems?.toDouble()
-    val hasProgress = showProgressBadge && (displayProgress > 0 || (displayTotal != null && displayTotal > 0))
-    val hasFormat = formatName.isNotBlank()
-    val hasStartBadges = showStatusBadge || hasProgress || hasFormat
-    if (!hasStartBadges) return
-
-    val baseColor = if (showStatusBadge) statusColor else MaterialTheme.colorScheme.tertiary
-    val baseColorDark = remember(baseColor) { baseColor.darken(0.65f) }
+    if (!showProgressBadge || displayProgress <= 0.0) return
 
     BadgeGroup(modifier = modifier) {
-        if (hasFormat) {
-            Badge(
-                text = formatName,
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
-                textColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (hasProgress) {
-            Badge(
-                text = formatProgress(displayProgress),
-                color = baseColor,
-                textColor = Color.White,
-            )
-            if (displayTotal != null && displayTotal > 0) {
-                Badge(
-                    text = formatProgress(displayTotal),
-                    color = baseColorDark,
-                    textColor = Color.White.copy(alpha = 0.9f),
-                )
-            }
-        } else if (showStatusBadge) {
-            Badge(
-                imageVector = item.userStatus.icon(),
-                color = statusColor,
-                iconColor = Color.White,
-            )
-        }
+        Badge(
+            text = formatProgress(displayProgress),
+            color = MaterialTheme.colorScheme.tertiary,
+            textColor = MaterialTheme.colorScheme.onTertiary,
+        )
     }
 }
 
 @Composable
 private fun CardEndBadges(
-    item: MediaItem,
-    showScoreBadge: Boolean,
-    isDirtyLocal: Boolean = false,
+    statusColor: Color,
+    showStatusBadge: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val rating = item.rating
-    if ((!showScoreBadge || rating == null) && !isDirtyLocal) return
+    if (!showStatusBadge) return
 
-    val ratingText = remember(rating) {
-        rating?.let { "%.1f".format(it) }
-    }
-
-    BadgeGroup(modifier = modifier) {
-        if (isDirtyLocal) {
-            Badge(
-                imageVector = Icons.Default.Sync,
-                color = MaterialTheme.colorScheme.tertiary,
-                iconColor = Color.White,
-            )
-        }
-        if (showScoreBadge && rating != null && ratingText != null) {
-            Badge(
-                text = ratingText,
-                color = getRatingColor(rating),
-                textColor = Color.White,
-            )
-        }
-    }
+    Box(
+        modifier = modifier
+            .padding(6.dp)
+            .size(8.dp)
+            .background(color = statusColor, shape = CircleShape)
+    )
 }
 
 @Composable
@@ -297,9 +239,6 @@ fun MediaCard(
     showProgressBadge: Boolean = true,
     showStatusBadge: Boolean = true,
     showScoreBadge: Boolean = true,
-    onIncrementProgress: (() -> Unit)? = null,
-    onSetProgress: ((Double) -> Unit)? = null,
-    onSetSecondaryProgress: ((Double) -> Unit)? = null,
 ) {
     MediaCard(
         item = uiState.toMediaItem(),
@@ -313,9 +252,6 @@ fun MediaCard(
         formatName = uiState.formatName,
         hasSecondaryProgress = uiState.hasSecondaryProgress,
         isDirtyLocal = uiState.isDirtyLocal,
-        onIncrementProgress = onIncrementProgress,
-        onSetProgress = onSetProgress,
-        onSetSecondaryProgress = onSetSecondaryProgress,
     )
 }
 
@@ -332,9 +268,6 @@ fun MediaCard(
     formatName: String? = null,
     hasSecondaryProgress: Boolean? = null,
     isDirtyLocal: Boolean = false,
-    onIncrementProgress: (() -> Unit)? = null,
-    onSetProgress: ((Double) -> Unit)? = null,
-    onSetSecondaryProgress: ((Double) -> Unit)? = null,
 ) {
     val effectiveMode = displayMode ?: if (isGridView) LibraryDisplayMode.COMPACT_GRID else LibraryDisplayMode.LIST
     val relativeTime = remember(item.lastUpdated) { getRelativeTime(item.lastUpdated) }
@@ -366,37 +299,6 @@ fun MediaCard(
 
     val primaryUnitPrefix = remember(item.category) { resolveUnitPrefix(item.category, isSecondary = false) }
     val secondaryUnitPrefix = remember(item.category) { resolveUnitPrefix(item.category, isSecondary = true) }
-
-    var showPrimaryDialog by remember { mutableStateOf(false) }
-    var showSecondaryDialog by remember { mutableStateOf(false) }
-
-    if (showPrimaryDialog) {
-        TrackProgressDialog(
-            initialValue = displayProgress,
-            maxValue = displayProgressTotal,
-            title = "Set $primaryUnitPrefix",
-            unitLabel = primaryUnitPrefix,
-            onConfirm = { newProgress ->
-                onSetProgress?.invoke(newProgress)
-                showPrimaryDialog = false
-            },
-            onDismissRequest = { showPrimaryDialog = false },
-        )
-    }
-
-    if (showSecondaryDialog && resolvedHasSecondary) {
-        TrackProgressDialog(
-            initialValue = displaySecondaryProgress,
-            maxValue = displaySecondaryProgressTotal,
-            title = "Set $secondaryUnitPrefix",
-            unitLabel = secondaryUnitPrefix,
-            onConfirm = { newSecProgress ->
-                onSetSecondaryProgress?.invoke(newSecProgress)
-                showSecondaryDialog = false
-            },
-            onDismissRequest = { showSecondaryDialog = false },
-        )
-    }
 
     when (effectiveMode) {
         LibraryDisplayMode.LIST -> {
@@ -494,65 +396,25 @@ fun MediaCard(
                         }
                     }
 
-                    // Row 3: Primary Counter (Chapters/Episodes) + [+1] Button
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val primaryText = "$primaryUnitPrefix ${formatProgress(displayProgress)} / ${displayProgressTotal?.takeIf { it > 0 }?.let { formatProgress(it) } ?: "?"}"
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = Color.Transparent,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .clickable { showPrimaryDialog = true }
-                                .padding(vertical = 2.dp),
-                        ) {
-                            Text(
-                                text = primaryText,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-
-                        if (onIncrementProgress != null) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .clickable { onIncrementProgress() },
-                            ) {
-                                Text(
-                                    text = "+1",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                )
-                            }
-                        }
-                    }
+                    // Row 3: Primary Counter (Chapters/Episodes)
+                    val primaryText = "$primaryUnitPrefix ${formatProgress(displayProgress)} / ${displayProgressTotal?.takeIf { it > 0 }?.let { formatProgress(it) } ?: "?"}"
+                    Text(
+                        text = primaryText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
 
                     // Row 4: Secondary Counter (Volumes/Seasons) - ONLY if hasSecondaryProgress == true
                     if (resolvedHasSecondary) {
                         val secondaryText = "$secondaryUnitPrefix ${formatProgress(displaySecondaryProgress)} / ${displaySecondaryProgressTotal?.takeIf { it > 0 }?.let { formatProgress(it) } ?: "?"}"
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = Color.Transparent,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .clickable { showSecondaryDialog = true }
-                                .padding(vertical = 1.dp),
-                        ) {
-                            Text(
-                                text = secondaryText,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                        Text(
+                            text = secondaryText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 1.dp)
+                        )
                     }
                 }
             }
@@ -584,69 +446,42 @@ fun MediaCard(
                                 .clip(RoundedCornerShape(bottomStart = 4.dp, bottomEnd = 4.dp))
                                 .background(
                                     Brush.verticalGradient(
-                                        0f to Color.Transparent,
-                                        1f to Color(0xAA000000),
+                                        listOf(
+                                            Color.Transparent,
+                                            MaterialTheme.colorScheme.scrim.copy(alpha = 0.75f),
+                                        )
                                     )
                                 )
                                 .fillMaxHeight(0.33f)
                                 .fillMaxWidth()
                                 .align(Alignment.BottomCenter)
                         )
-                        Row(
-                            modifier = Modifier.align(Alignment.BottomStart),
-                            verticalAlignment = Alignment.Bottom,
-                        ) {
-                            Text(
-                                text = item.title,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(8.dp),
-                                fontSize = 12.sp,
-                                lineHeight = 16.sp,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    color = Color.White,
-                                    shadow = Shadow(
-                                        color = Color.Black,
-                                        blurRadius = 4f,
-                                    ),
+                        Text(
+                            text = item.title,
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(8.dp),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                color = Color.White,
+                                shadow = Shadow(
+                                    color = Color.Black,
+                                    blurRadius = 4f,
                                 ),
-                            )
-                            if (onIncrementProgress != null) {
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
-                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier
-                                        .padding(end = 6.dp, bottom = 6.dp)
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .clickable { onIncrementProgress() },
-                                ) {
-                                    Text(
-                                        text = "+1",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    )
-                                }
-                            }
-                        }
+                            ),
+                        )
                     }
 
                     CardStartBadges(
                         item = item,
-                        formatName = resolvedFormat,
-                        showStatusBadge = showStatusBadge,
                         showProgressBadge = showProgressBadge,
-                        statusColor = statusColor,
                         modifier = Modifier.align(Alignment.TopStart),
                     )
 
                     CardEndBadges(
-                        item = item,
-                        showScoreBadge = showScoreBadge,
-                        isDirtyLocal = isDirtyLocal,
+                        statusColor = statusColor,
+                        showStatusBadge = showStatusBadge,
                         modifier = Modifier.align(Alignment.TopEnd),
                     )
                 }
@@ -677,46 +512,20 @@ fun MediaCard(
 
                     CardStartBadges(
                         item = item,
-                        formatName = resolvedFormat,
-                        showStatusBadge = showStatusBadge,
                         showProgressBadge = showProgressBadge,
-                        statusColor = statusColor,
                         modifier = Modifier.align(Alignment.TopStart),
                     )
 
                     CardEndBadges(
-                        item = item,
-                        showScoreBadge = showScoreBadge,
-                        isDirtyLocal = isDirtyLocal,
+                        statusColor = statusColor,
+                        showStatusBadge = showStatusBadge,
                         modifier = Modifier.align(Alignment.TopEnd),
                     )
-
-                    if (onIncrementProgress != null) {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(6.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .clickable { onIncrementProgress() },
-                        ) {
-                            Text(
-                                text = "+1",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
-                        }
-                    }
                 }
 
                 Text(
                     text = item.title,
                     modifier = Modifier.padding(4.dp),
-                    fontSize = 12.sp,
-                    lineHeight = 18.sp,
                     minLines = if (isPanorama) 1 else 2,
                     maxLines = if (isPanorama) 1 else 2,
                     overflow = TextOverflow.Ellipsis,
