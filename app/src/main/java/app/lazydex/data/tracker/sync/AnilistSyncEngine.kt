@@ -361,10 +361,20 @@ open class AnilistSyncEngine(
                     val updatedTitleNative = entry.media?.title?.nativeTitle ?: localItem.titleNative
                     val updatedIsAdult = entry.media?.isAdult ?: localItem.isAdult
                     val updatedGenres = if (entry.media?.genres.isNullOrEmpty()) localItem.genres else Json.encodeToString(entry.media!!.genres)
+                    val incomingTags = entry.media?.tags?.map { it.name }
+                    val updatedTags = if (incomingTags.isNullOrEmpty()) {
+                        localItem.tags
+                    } else if (localItem.tags.isBlank() || localItem.tags == "[]") {
+                        Json.encodeToString(incomingTags)
+                    } else {
+                        localItem.tags
+                    }
+                    val sanitizedDesc = sanitizeDescription(entry.media?.description)
+                    val updatedDescription = if (localItem.description.isBlank()) sanitizedDesc else localItem.description
 
-                    val updatedStartYear = localItem.startYear ?: entry.startedAt?.year
-                    val updatedStartMonth = localItem.startMonth ?: entry.startedAt?.month
-                    val updatedStartDay = localItem.startDay ?: entry.startedAt?.day
+                    val updatedStartYear = localItem.startYear ?: entry.startedAt?.year ?: entry.media?.startDate?.year
+                    val updatedStartMonth = localItem.startMonth ?: entry.startedAt?.month ?: entry.media?.startDate?.month
+                    val updatedStartDay = localItem.startDay ?: entry.startedAt?.day ?: entry.media?.startDate?.day
                     val updatedEndYear = localItem.endYear ?: entry.completedAt?.year
                     val updatedEndMonth = localItem.endMonth ?: entry.completedAt?.month
                     val updatedEndDay = localItem.endDay ?: entry.completedAt?.day
@@ -381,11 +391,13 @@ open class AnilistSyncEngine(
                         secondaryProgressTotal = updatedSecondaryProgressTotal,
                         coverImageUrl = updatedCoverImageUrl,
                         bannerImage = updatedBannerImage,
+                        description = updatedDescription,
                         titleEnglish = updatedTitleEnglish,
                         titleRomaji = updatedTitleRomaji,
                         titleNative = updatedTitleNative,
                         isAdult = updatedIsAdult,
                         genres = updatedGenres,
+                        tags = updatedTags,
                         startYear = updatedStartYear,
                         startMonth = updatedStartMonth,
                         startDay = updatedStartDay,
@@ -494,7 +506,7 @@ open class AnilistSyncEngine(
                     coverImagePath = "",
                     coverImageUrl = coverImageUrl,
                     bannerImage = bannerImage,
-                    description = "", // Bulk ingestion omits heavy HTML description
+                    description = sanitizeDescription(entry.media?.description),
                     author = "",
                     userStatus = userStatus,
                     progress = progress,
@@ -505,12 +517,12 @@ open class AnilistSyncEngine(
                     repeat = repeat,
                     notes = notes,
                     genres = genres,
-                    tags = "[]", // Bulk ingestion omits heavy tag metadata
+                    tags = Json.encodeToString(entry.media?.tags?.map { it.name } ?: emptyList()),
                     isPrivate = isPrivate,
                     isAdult = isAdult,
-                    startYear = entry.startedAt?.year,
-                    startMonth = entry.startedAt?.month,
-                    startDay = entry.startedAt?.day,
+                    startYear = entry.startedAt?.year ?: entry.media?.startDate?.year,
+                    startMonth = entry.startedAt?.month ?: entry.media?.startDate?.month,
+                    startDay = entry.startedAt?.day ?: entry.media?.startDate?.day,
                     endYear = entry.completedAt?.year,
                     endMonth = entry.completedAt?.month,
                     endDay = entry.completedAt?.day,
@@ -555,6 +567,20 @@ open class AnilistSyncEngine(
                 }
             }
         }
+    }
+
+    private fun sanitizeDescription(html: String?): String {
+        if (html.isNullOrBlank()) return ""
+        return html
+            .replace(Regex("(?i)<br\\s*/?>"), "\n")
+            .replace(Regex("</?p>"), "\n")
+            .replace(Regex("<[^>]*>"), "")
+            .replace("&quot;", "\"")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&#039;", "'")
+            .trim()
     }
 }
 

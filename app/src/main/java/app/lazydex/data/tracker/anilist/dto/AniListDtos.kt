@@ -106,11 +106,18 @@ data class AniListMedia(
     val chapters: Int? = null,
     val volumes: Int? = null,
     val genres: List<String> = emptyList(),
+    val tags: List<AniListTag> = emptyList(),
     val coverImage: AniListCoverImage? = null,
     val bannerImage: String? = null,
     val title: AniListTitle? = null,
     val description: String? = null,
     val startDate: AniListFuzzyDate? = null
+)
+
+@Serializable
+data class AniListTag(
+    val name: String,
+    val isMediaSpoiler: Boolean = false
 )
 
 @Serializable

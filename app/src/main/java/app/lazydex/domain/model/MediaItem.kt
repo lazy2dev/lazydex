@@ -42,6 +42,7 @@ data class MediaItem(
     val extraData: String = "{}",
     val deletedAt: Long? = null,
     val isDeleted: Boolean = deletedAt != null,
+    val isAdult: Boolean = false,
     val category: MediaCategory = MediaCategory.fromString(
         categoryId.removePrefix("cat_").removePrefix("typ_").substringBefore("_")
     ) ?: MediaCategory.NOVEL
@@ -68,7 +69,8 @@ data class MediaItem(
         lastUpdated: Long,
         dateAdded: Long,
         extraData: String = "{}",
-        isDeleted: Boolean = false
+        isDeleted: Boolean = false,
+        isAdult: Boolean = false
     ) : this(
         id = id,
         categoryId = when (category) {
@@ -102,6 +104,7 @@ data class MediaItem(
         extraData = extraData,
         deletedAt = if (isDeleted) lastUpdated else null,
         isDeleted = isDeleted,
+        isAdult = isAdult,
         category = category
     )
 

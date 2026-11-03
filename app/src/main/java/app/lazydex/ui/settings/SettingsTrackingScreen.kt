@@ -329,21 +329,14 @@ fun SettingsTrackingScreen(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
             )
 
-            // ==================== 3. AUTOMATION ====================
-            PreferenceGroupHeader(title = "AUTOMATION")
+            // ==================== 3. CONTENT & PRIVACY ====================
+            PreferenceGroupHeader(title = "CONTENT & PRIVACY")
 
             SwitchPreferenceWidget(
-                title = "Background Sync",
-                subtitle = "Daily automatic synchronization on Wi-Fi",
-                checked = tracking.backgroundSyncEnabled,
-                onCheckedChange = { viewModel.setBackgroundSyncEnabled(it) }
-            )
-
-            SwitchPreferenceWidget(
-                title = "Strict Adult Content Filter",
-                subtitle = "Exclude 18+ adult titles from library sync",
-                checked = tracking.strictAdultContent,
-                onCheckedChange = { viewModel.setStrictAdultContent(it) }
+                title = "Blur 18+ Adult Covers",
+                subtitle = "Obscure 18+ adult covers across library and details",
+                checked = tracking.blurAdultCovers,
+                onCheckedChange = { viewModel.setBlurAdultCovers(it) }
             )
 
             Spacer(modifier = Modifier.height(16.dp))

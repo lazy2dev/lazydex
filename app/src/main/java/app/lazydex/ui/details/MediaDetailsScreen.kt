@@ -210,8 +210,9 @@ fun MediaDetailsScreen(
                     coverImagePath = state.coverImagePath,
                     coverImageUrl = state.coverImageUrl,
                     bannerUrl = state.bannerImage,
-                    onCoverClick = { activeDialog = ActiveDialog.Cover },
+                    onCoverClick = { if (!state.isObscured) activeDialog = ActiveDialog.Cover },
                     isUpdatingCover = state.isUpdatingArtwork,
+                    isObscured = state.isObscured,
                 )
 
                 // 2. Action Row (In Library, Updated X, Sync, Edit)

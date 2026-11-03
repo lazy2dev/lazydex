@@ -665,11 +665,12 @@ class MediaRepositoryImpl(
             tags = tagsList,
             author = author,
             description = description,
-            startDate = null,
-            endDate = null,
+            startDate = fuzzyDateToMillis(startYear, startMonth, startDay),
+            endDate = fuzzyDateToMillis(endYear, endMonth, endDay),
             lastUpdated = updatedAt,
             dateAdded = createdAt,
-            deletedAt = deletedAt
+            deletedAt = deletedAt,
+            isAdult = isAdult
         )
     }
 
@@ -704,11 +705,12 @@ class MediaRepositoryImpl(
             tags = tagsList,
             author = author,
             description = description,
-            startDate = null,
-            endDate = null,
+            startDate = fuzzyDateToMillis(startYear, startMonth, startDay),
+            endDate = fuzzyDateToMillis(endYear, endMonth, endDay),
             lastUpdated = updatedAt,
             dateAdded = createdAt,
-            deletedAt = deletedAt
+            deletedAt = deletedAt,
+            isAdult = isAdult
         )
     }
 
@@ -716,6 +718,8 @@ class MediaRepositoryImpl(
         val genresJson = converters.fromList(genres)
         val tagsJson = converters.fromList(tags)
         val rawScore = rating?.let { kotlin.math.round(it * 20.0).toInt().coerceIn(0, 100) }
+        val (sYear, sMonth, sDay) = millisToFuzzyDate(startDate)
+        val (eYear, eMonth, eDay) = millisToFuzzyDate(endDate)
         return MediaItemEntity(
             id = id,
             categoryId = categoryId,
@@ -739,13 +743,13 @@ class MediaRepositoryImpl(
             genres = genresJson,
             tags = tagsJson,
             isPrivate = false,
-            isAdult = false,
-            startYear = null,
-            startMonth = null,
-            startDay = null,
-            endYear = null,
-            endMonth = null,
-            endDay = null,
+            isAdult = isAdult,
+            startYear = sYear,
+            startMonth = sMonth,
+            startDay = sDay,
+            endYear = eYear,
+            endMonth = eMonth,
+            endDay = eDay,
             durationMinutes = null,
             avgChapterLength = avgChapterLength,
             lengthUnitOverride = lengthUnitOverride,
@@ -807,4 +811,21 @@ class MediaRepositoryImpl(
         counted = counted == 1,
         timestamp = timestamp
     )
+
+    private fun fuzzyDateToMillis(year: Int?, month: Int?, day: Int?): Long? {
+        if (year == null || year <= 0) return null
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        cal.clear()
+        cal.set(Calendar.YEAR, year)
+        cal.set(Calendar.MONTH, (month?.coerceIn(1, 12) ?: 1) - 1)
+        cal.set(Calendar.DAY_OF_MONTH, day?.coerceIn(1, 31) ?: 1)
+        return cal.timeInMillis
+    }
+
+    private fun millisToFuzzyDate(millis: Long?): Triple<Int?, Int?, Int?> {
+        if (millis == null || millis <= 0L) return Triple(null, null, null)
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        cal.timeInMillis = millis
+        return Triple(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH))
+    }
 }

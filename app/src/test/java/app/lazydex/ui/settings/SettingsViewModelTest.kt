@@ -86,6 +86,9 @@ class SettingsViewModelTest {
         private val _coverTheming = MutableStateFlow(false)
         override val coverTheming: Flow<Boolean> = _coverTheming.asStateFlow()
 
+        private val _blurAdultCovers = MutableStateFlow(false)
+        override val blurAdultCovers: Flow<Boolean> = _blurAdultCovers.asStateFlow()
+
         private val _displayPreferences = MutableStateFlow(DisplayPreferences())
         override val displayPreferences: Flow<DisplayPreferences> = _displayPreferences.asStateFlow()
 
@@ -131,6 +134,10 @@ class SettingsViewModelTest {
 
         override suspend fun setShowItemCount(enabled: Boolean) {
             _displayPreferences.value = _displayPreferences.value.copy(showItemCount = enabled)
+        }
+
+        override suspend fun setBlurAdultCovers(enabled: Boolean) {
+            _blurAdultCovers.value = enabled
         }
     }
 
@@ -417,6 +424,11 @@ class SettingsViewModelTest {
         viewModel.setStrictAdultContent(true)
         assertTrue(viewModel.uiState.value.tracking.strictAdultContent)
         assertFalse(tokenStore.displayAdultContent)
+
+        // Toggle blur adult covers
+        assertFalse(viewModel.uiState.value.tracking.blurAdultCovers)
+        viewModel.setBlurAdultCovers(true)
+        assertTrue(viewModel.uiState.value.tracking.blurAdultCovers)
 
         collectJob.cancel()
     }

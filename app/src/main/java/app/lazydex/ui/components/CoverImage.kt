@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -32,6 +33,7 @@ fun CoverImage(
     modifier: Modifier = Modifier,
     coverImageUrl: String? = null,
     shape: Shape = RoundedCornerShape(4.dp),
+    isObscured: Boolean = false,
 ) {
     val fileExists = remember(coverImagePath) {
         coverImagePath.isNotEmpty() && File(coverImagePath).exists()
@@ -52,7 +54,21 @@ fun CoverImage(
         val iconSize = if (isSmall) 24.dp else 32.dp
         val strokeWidth = if (isSmall) 2.dp else 3.dp
 
-        if (imageModel != null) {
+        if (isObscured) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF2B1414)),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    imageVector = ImageVector.vectorResource(R.drawable.cover_error_vector),
+                    contentDescription = "Adult Content Hidden",
+                    colorFilter = ColorFilter.tint(Color(0xFFEF5350)),
+                    modifier = Modifier.size(iconSize)
+                )
+            }
+        } else if (imageModel != null) {
             SubcomposeAsyncImage(
                 model = imageModel,
                 contentDescription = "Cover for $title",

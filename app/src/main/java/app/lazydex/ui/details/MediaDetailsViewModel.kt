@@ -3,6 +3,7 @@ package app.lazydex.ui.details
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.lazydex.data.local.ThemePreferences
 import app.lazydex.data.local.dao.MediaLinkDao
 import app.lazydex.data.local.entity.MediaLinkEntity
 import app.lazydex.data.tracker.anilist.AnilistApi
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -94,7 +96,10 @@ data class MediaDetailsUiState(
     val trackerSearchResults: List<AniListMedia> = emptyList(),
     val isSearchingTracker: Boolean = false,
     val lastUpdated: Long = System.currentTimeMillis(),
+    val isAdult: Boolean = false,
+    val blurAdultCovers: Boolean = false,
 ) {
+    val isObscured: Boolean get() = isAdult && blurAdultCovers
     val parsedSecondaryProgress: Double? get() = secondaryProgress.trim().toDoubleOrNull()
     val parsedSecondaryTotal: Double? get() = secondaryProgressTotal.trim().takeIf { it.isNotEmpty() }?.toDoubleOrNull()
 
@@ -141,6 +146,7 @@ class MediaDetailsViewModel(
     private val syncEngine: AnilistSyncEngine? = null,
     private val tokenStore: AnilistTokenStore? = null,
     private val client: AnilistApi? = null,
+    private val themePreferences: ThemePreferences? = null,
 ) : ViewModel() {
 
     private val itemId: String? = savedStateHandle["itemId"]
@@ -157,6 +163,13 @@ class MediaDetailsViewModel(
 
     init {
         initialize(itemId, initialUrl)
+        if (themePreferences != null) {
+            viewModelScope.launch {
+                themePreferences.blurAdultCovers.collect { blur ->
+                    _uiState.update { it.copy(blurAdultCovers = blur) }
+                }
+            }
+        }
         viewModelScope.launch {
             @OptIn(FlowPreview::class)
             notesFlow
@@ -287,6 +300,7 @@ class MediaDetailsViewModel(
                         startDate = item.startDate,
                         endDate = item.endDate,
                         lastUpdated = item.lastUpdated,
+                        isAdult = item.isAdult,
                         isNew = false,
                         isLoading = false,
                     )
@@ -606,6 +620,7 @@ class MediaDetailsViewModel(
                 endDate = state.endDate,
                 lastUpdated = System.currentTimeMillis(),
                 dateAdded = originalItem?.dateAdded ?: System.currentTimeMillis(),
+                isAdult = state.isAdult,
             )
 
             if (!state.bannerImage.isNullOrBlank()) {

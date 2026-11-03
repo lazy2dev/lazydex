@@ -904,6 +904,84 @@ class AnilistSyncEngineTest {
         assertEquals("SYNCED", updatedLink.syncStatus)
     }
 
+    @Test
+    fun `inbound sync extracts description html sanitized, all tags, and dates`() = runTest(testDispatcher) {
+        val mangaJson = """
+        {
+          "data": {
+            "MediaListCollection": {
+              "hasNextChunk": false,
+              "lists": [
+                {
+                  "name": "Reading",
+                  "isCustomList": false,
+                  "status": "CURRENT",
+                  "entries": [
+                    {
+                      "id": 905,
+                      "mediaId": 2005,
+                      "status": "CURRENT",
+                      "scoreRaw": 80,
+                      "progress": 37,
+                      "progressVolumes": 0,
+                      "repeat": 0,
+                      "private": false,
+                      "notes": "",
+                      "startedAt": { "year": 2024, "month": 1, "day": 15 },
+                      "completedAt": { "year": null, "month": null, "day": null },
+                      "updatedAt": 1700000000,
+                      "media": {
+                        "id": 2005,
+                        "format": "MANGA",
+                        "status": "RELEASING",
+                        "isAdult": false,
+                        "chapters": 50,
+                        "volumes": 0,
+                        "genres": ["Action", "Drama", "Fantasy"],
+                        "tags": [
+                          { "name": "Military", "isMediaSpoiler": false },
+                          { "name": "Reincarnation", "isMediaSpoiler": true }
+                        ],
+                        "description": "A veteran returns.<br><br><b>Enlistment</b> day awaits.",
+                        "startDate": { "year": 2023, "month": 10, "day": 1 },
+                        "coverImage": { "extraLarge": "https://img.anilist.co/cover2.jpg" },
+                        "bannerImage": null,
+                        "title": {
+                          "userPreferred": "Gwihwanhaenneunde Ipdae Jeonnarida",
+                          "english": null,
+                          "romaji": "Gwihwanhaenneunde Ipdae Jeonnarida",
+                          "native": "귀환했는데 입대전날이다"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+        """.trimIndent()
+
+        responseHandler = { _, body ->
+            if (body.contains("\"type\":\"MANGA\"")) {
+                createResponse(200, mangaJson)
+            } else {
+                createResponse(200, """{"data":{"MediaListCollection":{"hasNextChunk":false,"lists":[]}}}""")
+            }
+        }
+
+        val result = engine.syncAll()
+        assertTrue(result is SyncResult.Success)
+
+        val insertedItem = fakeMediaItemDao.items.values.first { it.title == "Gwihwanhaenneunde Ipdae Jeonnarida" }
+        assertEquals("A veteran returns.\n\nEnlistment day awaits.", insertedItem.description)
+        assertTrue(insertedItem.tags.contains("Military"))
+        assertTrue(insertedItem.tags.contains("Reincarnation"))
+        assertEquals(2024, insertedItem.startYear)
+        assertEquals(1, insertedItem.startMonth)
+        assertEquals(15, insertedItem.startDay)
+    }
+
     // --- Fakes ---
 
     class FakeMediaItemDao : MediaItemDao {

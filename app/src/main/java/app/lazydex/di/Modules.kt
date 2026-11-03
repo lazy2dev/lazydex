@@ -186,6 +186,7 @@ val viewModelModule = module {
             syncEngine = get(),
             tokenStore = get(),
             client = get(),
+            themePreferences = get(),
         )
     }
     viewModel {

@@ -361,6 +361,7 @@ fun DexScreen(
                                         showProgressBadge = uiState.showProgressBadge,
                                         showStatusBadge = uiState.showStatusBadge,
                                         showScoreBadge = uiState.showScoreBadge,
+                                        blurAdultCovers = uiState.blurAdultCovers,
                                     )
                                 }
                             }
@@ -389,6 +390,7 @@ fun DexScreen(
                                         showProgressBadge = uiState.showProgressBadge,
                                         showStatusBadge = uiState.showStatusBadge,
                                         showScoreBadge = uiState.showScoreBadge,
+                                        blurAdultCovers = uiState.blurAdultCovers,
                                     )
                                 }
                             }

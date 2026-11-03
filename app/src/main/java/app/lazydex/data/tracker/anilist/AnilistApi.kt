@@ -79,6 +79,12 @@ query (${'$'}userId: Int, ${'$'}type: MediaType, ${'$'}chunk: Int) {
           chapters
           volumes
           genres
+          tags {
+            name
+            isMediaSpoiler
+          }
+          description
+          startDate { year month day }
           coverImage { large extraLarge }
           bannerImage
           title { userPreferred english romaji native }

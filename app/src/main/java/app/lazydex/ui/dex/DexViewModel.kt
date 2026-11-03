@@ -59,6 +59,7 @@ data class DexUiState(
     val showStatusBadge: Boolean = true,
     val showScoreBadge: Boolean = true,
     val showItemCount: Boolean = false,
+    val blurAdultCovers: Boolean = false,
     val isLoading: Boolean = true
 )
 
@@ -260,7 +261,8 @@ class DexViewModel(
             showProgressBadge = dp.showProgressBadge,
             showStatusBadge = dp.showStatusBadge,
             showScoreBadge = dp.showScoreBadge,
-            showItemCount = dp.showItemCount
+            showItemCount = dp.showItemCount,
+            blurAdultCovers = dp.blurAdultCovers
         )
     }
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DexUiState())

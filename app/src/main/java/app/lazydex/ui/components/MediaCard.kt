@@ -239,6 +239,7 @@ fun MediaCard(
     showProgressBadge: Boolean = true,
     showStatusBadge: Boolean = true,
     showScoreBadge: Boolean = true,
+    blurAdultCovers: Boolean = false,
 ) {
     MediaCard(
         item = uiState.toMediaItem(),
@@ -252,6 +253,7 @@ fun MediaCard(
         formatName = uiState.formatName,
         hasSecondaryProgress = uiState.hasSecondaryProgress,
         isDirtyLocal = uiState.isDirtyLocal,
+        blurAdultCovers = blurAdultCovers,
     )
 }
 
@@ -268,9 +270,11 @@ fun MediaCard(
     formatName: String? = null,
     hasSecondaryProgress: Boolean? = null,
     isDirtyLocal: Boolean = false,
+    blurAdultCovers: Boolean = false,
 ) {
     val effectiveMode = displayMode ?: if (isGridView) LibraryDisplayMode.COMPACT_GRID else LibraryDisplayMode.LIST
     val relativeTime = remember(item.lastUpdated) { getRelativeTime(item.lastUpdated) }
+    val isAdultObscured = item.isAdult && blurAdultCovers
 
     val statusColor = when (item.userStatus) {
         UserStatus.READING, UserStatus.WATCHING, UserStatus.PLAYING -> StatusInProgress
@@ -315,6 +319,7 @@ fun MediaCard(
                     title = item.title,
                     coverImageUrl = item.coverImageUrl,
                     shape = RoundedCornerShape(4.dp),
+                    isObscured = isAdultObscured,
                     modifier = Modifier.size(width = 54.dp, height = 78.dp)
                 )
 
@@ -437,6 +442,7 @@ fun MediaCard(
                         title = item.title,
                         coverImageUrl = item.coverImageUrl,
                         shape = RoundedCornerShape(4.dp),
+                        isObscured = isAdultObscured,
                         modifier = Modifier.fillMaxSize()
                     )
 
@@ -507,6 +513,7 @@ fun MediaCard(
                         title = item.title,
                         coverImageUrl = item.coverImageUrl,
                         shape = RoundedCornerShape(4.dp),
+                        isObscured = isAdultObscured,
                         modifier = Modifier.fillMaxSize()
                     )
 

@@ -1,6 +1,7 @@
 package app.lazydex.ui.details.components
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
@@ -71,30 +73,68 @@ fun MediaDescriptionSection(
             )
         }
 
-        val allTags = genres + tags
-        if (allTags.isNotEmpty()) {
+        val hasGenres = genres.isNotEmpty()
+        val hasTags = tags.isNotEmpty()
+
+        if (hasGenres || hasTags) {
             Box(
                 modifier = Modifier
                     .padding(bottom = 8.dp)
                     .fillMaxWidth(),
             ) {
                 if (isExpanded) {
-                    FlowRow(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        allTags.forEach { tag ->
-                            GenreTagChip(text = tag)
+                        if (hasGenres) {
+                            Text(
+                                text = "GENRES",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                            FlowRow(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                genres.forEach { genre ->
+                                    GenreChip(text = genre)
+                                }
+                            }
+                        }
+
+                        if (hasTags) {
+                            Text(
+                                text = "TAGS",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = if (hasGenres) 4.dp else 0.dp)
+                            )
+                            FlowRow(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                tags.forEach { tag ->
+                                    TagChip(text = tag)
+                                }
+                            }
                         }
                     }
                 } else {
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        items(allTags) { tag ->
-                            GenreTagChip(text = tag)
+                        items(genres) { genre ->
+                            GenreChip(text = genre)
+                        }
+                        items(tags) { tag ->
+                            TagChip(text = tag)
                         }
                     }
                 }
@@ -104,14 +144,14 @@ fun MediaDescriptionSection(
 }
 
 @Composable
-fun GenreTagChip(
+fun GenreChip(
     text: String,
     modifier: Modifier = Modifier,
 ) {
     Surface(
         modifier = modifier.height(28.dp),
         shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
     ) {
         Box(
             modifier = Modifier.padding(horizontal = 12.dp),
@@ -121,6 +161,30 @@ fun GenreTagChip(
                 text = text,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+        }
+    }
+}
+
+@Composable
+fun TagChip(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.height(26.dp),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.5f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 10.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = if (text.startsWith("#")) text else "#$text",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

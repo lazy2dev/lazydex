@@ -1,6 +1,7 @@
 package app.lazydex.ui.details.components
 
 import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,12 +31,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.lazydex.R
 import app.lazydex.domain.model.MediaCategory
 import app.lazydex.ui.components.icon
 import coil3.compose.AsyncImage
@@ -57,6 +62,7 @@ fun MediaInfoHeader(
     onCoverClick: () -> Unit,
     modifier: Modifier = Modifier,
     isUpdatingCover: Boolean = false,
+    isObscured: Boolean = false,
 ) {
     Box(modifier = modifier) {
         val backdropGradientColors = listOf(
@@ -66,7 +72,7 @@ fun MediaInfoHeader(
         val backdropPath = if (coverImagePath.isNotBlank() && File(coverImagePath).exists()) coverImagePath else ""
         val backdropUrl = bannerUrl?.takeIf { it.isNotBlank() } ?: coverImageUrl?.takeIf { it.isNotBlank() }
 
-        if (backdropPath.isNotBlank() || backdropUrl != null) {
+        if (!isObscured && (backdropPath.isNotBlank() || backdropUrl != null)) {
             DetailCoverImage(
                 coverImagePath = backdropPath,
                 title = title,
@@ -108,7 +114,8 @@ fun MediaInfoHeader(
                         coverImagePath = coverImagePath,
                         title = title,
                         coverImageUrl = coverImageUrl,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        isObscured = isObscured,
                     )
                     if (isUpdatingCover) {
                         Box(
@@ -245,7 +252,25 @@ fun DetailCoverImage(
     coverImageUrl: String?,
     modifier: Modifier = Modifier,
     shape: androidx.compose.ui.graphics.Shape = MaterialTheme.shapes.extraSmall,
+    isObscured: Boolean = false,
 ) {
+    if (isObscured) {
+        Box(
+            modifier = modifier
+                .clip(shape)
+                .background(Color(0xFF2B1414)),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                imageVector = ImageVector.vectorResource(R.drawable.cover_error_vector),
+                contentDescription = "Adult Content Hidden",
+                colorFilter = ColorFilter.tint(Color(0xFFEF5350)),
+                modifier = Modifier.size(36.dp)
+            )
+        }
+        return
+    }
+
     val model = when {
         coverImagePath.isNotBlank() && File(coverImagePath).exists() -> File(coverImagePath)
         !coverImageUrl.isNullOrBlank() -> coverImageUrl

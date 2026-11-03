@@ -69,4 +69,20 @@ class MediaItemTest {
         assertEquals(52991L, numericItem.malId)
         assertEquals("154587", numericItem.getExtra("anilist_id"))
     }
+
+    @Test
+    fun mediaItem_supportsAdultFlag() {
+        val item = MediaItem(
+            id = "adult-1",
+            category = MediaCategory.MANGA,
+            title = "Adult Title",
+            currentProgress = 0,
+            totalItems = 10,
+            userStatus = UserStatus.PLAN_TO,
+            lastUpdated = 100L,
+            dateAdded = 100L,
+            isAdult = true
+        )
+        org.junit.Assert.assertTrue(item.isAdult)
+    }
 }

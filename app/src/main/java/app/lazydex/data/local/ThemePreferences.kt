@@ -12,6 +12,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import app.lazydex.domain.model.SortDirection
 import app.lazydex.domain.model.SortField
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings_prefs")
@@ -39,7 +40,8 @@ data class DisplayPreferences(
     val showProgressBadge: Boolean = true,
     val showStatusBadge: Boolean = true,
     val showScoreBadge: Boolean = true,
-    val showItemCount: Boolean = false
+    val showItemCount: Boolean = false,
+    val blurAdultCovers: Boolean = false
 )
 
 open class ThemePreferences(private val context: Context? = null) {
@@ -49,6 +51,7 @@ open class ThemePreferences(private val context: Context? = null) {
         val AMOLED_MODE_KEY = booleanPreferencesKey("amoled_mode")
         val COVER_THEMING_KEY = booleanPreferencesKey("cover_theming")
         val SHOW_ITEM_COUNT_KEY = booleanPreferencesKey("show_item_count")
+        val BLUR_ADULT_COVERS_KEY = booleanPreferencesKey("blur_adult_covers")
 
         val DISPLAY_MODE_KEY = stringPreferencesKey("display_mode")
         val GRID_COLUMNS_KEY = intPreferencesKey("grid_columns")
@@ -132,8 +135,19 @@ open class ThemePreferences(private val context: Context? = null) {
                 showProgressBadge = preferences[SHOW_PROGRESS_BADGE_KEY] ?: true,
                 showStatusBadge = preferences[SHOW_STATUS_BADGE_KEY] ?: true,
                 showScoreBadge = preferences[SHOW_SCORE_BADGE_KEY] ?: true,
-                showItemCount = preferences[SHOW_ITEM_COUNT_KEY] ?: false
+                showItemCount = preferences[SHOW_ITEM_COUNT_KEY] ?: false,
+                blurAdultCovers = preferences[BLUR_ADULT_COVERS_KEY] ?: false
             )
+        }
+    }
+
+    open val blurAdultCovers: Flow<Boolean> by lazy {
+        if (context == null) {
+            flowOf(false)
+        } else {
+            dataStore.data.map { preferences ->
+                preferences[BLUR_ADULT_COVERS_KEY] ?: false
+            }
         }
     }
 
@@ -223,6 +237,12 @@ open class ThemePreferences(private val context: Context? = null) {
             } else {
                 current + sourceId
             }
+        }
+    }
+
+    open suspend fun setBlurAdultCovers(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[BLUR_ADULT_COVERS_KEY] = enabled
         }
     }
 }

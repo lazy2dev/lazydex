@@ -41,7 +41,8 @@ data class TrackingSettingsUiState(
     val syncTotal: Int = 0,
     val syncError: String? = null,
     val backgroundSyncEnabled: Boolean = true,
-    val strictAdultContent: Boolean = false
+    val strictAdultContent: Boolean = false,
+    val blurAdultCovers: Boolean = false
 )
 
 data class SettingsUiState(
@@ -101,6 +102,15 @@ class SettingsViewModel(
         viewModelScope.launch {
             themePreferences.coverTheming.collect { coverTheme ->
                 _uiState.value = _uiState.value.copy(coverTheming = coverTheme)
+            }
+        }
+        viewModelScope.launch {
+            themePreferences.blurAdultCovers.collect { blur ->
+                _uiState.update { current ->
+                    current.copy(
+                        tracking = current.tracking.copy(blurAdultCovers = blur)
+                    )
+                }
             }
         }
         syncEngine?.let { engine ->
@@ -504,6 +514,12 @@ class SettingsViewModel(
     fun setStrictAdultContent(enabled: Boolean) {
         tokenStore?.displayAdultContent = !enabled
         _uiState.update { it.copy(tracking = it.tracking.copy(strictAdultContent = enabled)) }
+    }
+
+    fun setBlurAdultCovers(enabled: Boolean) {
+        viewModelScope.launch {
+            themePreferences.setBlurAdultCovers(enabled)
+        }
     }
 
     fun clearSyncError() {
