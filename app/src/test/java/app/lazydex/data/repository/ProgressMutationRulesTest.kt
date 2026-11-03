@@ -453,6 +453,7 @@ class ProgressMutationRulesTest {
         override suspend fun getById(id: String): MediaItemEntity? = items[id]
         override suspend fun getActiveById(id: String): ActiveMediaItemView? = null
         override suspend fun getAll(): List<ActiveMediaItemView> = emptyList()
+        override suspend fun getActiveByCategoryId(categoryId: String): List<MediaItemEntity> = items.values.filter { it.categoryId == categoryId && it.deletedAt == null }
         override suspend fun upsert(item: MediaItemEntity) { items[item.id] = item }
         override suspend fun upsertAll(items: List<MediaItemEntity>) { items.forEach { this.items[it.id] = it } }
         override suspend fun atomicIncrementProgress(id: String, delta: Double, now: Long): Int = 1

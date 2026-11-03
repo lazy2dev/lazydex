@@ -234,6 +234,117 @@ class AnilistSyncEngineTest {
     }
 
     @Test
+    fun `inbound sync suggests merge when local item matches title without duplicating`() = runTest(testDispatcher) {
+        val existingItem = MediaItemEntity(
+            id = "local_frieren",
+            categoryId = "cat_manga",
+            title = "Frieren: Beyond Journey's End",
+            titleEnglish = "Frieren: Beyond Journey's End",
+            titleRomaji = "Sousou no Frieren",
+            titleNative = "葬送のフリーレン",
+            coverImagePath = "",
+            coverImageUrl = null,
+            bannerImage = null,
+            description = "Local added manga",
+            author = "",
+            userStatus = "IN_PROGRESS",
+            progress = 10.0,
+            progressTotal = null,
+            secondaryProgress = 0.0,
+            secondaryProgressTotal = null,
+            scoreRaw = null,
+            repeat = 0,
+            notes = "",
+            genres = "[]",
+            tags = "[]",
+            isPrivate = false,
+            isAdult = false,
+            startYear = null,
+            startMonth = null,
+            startDay = null,
+            endYear = null,
+            endMonth = null,
+            endDay = null,
+            durationMinutes = null,
+            avgChapterLength = null,
+            lengthUnitOverride = null,
+            playbackSpeed = 1.0,
+            createdAt = 1700000000,
+            updatedAt = 1700000000,
+            deletedAt = null
+        )
+        fakeMediaItemDao.items[existingItem.id] = existingItem
+
+        val mangaJson = """
+        {
+          "data": {
+            "MediaListCollection": {
+              "hasNextChunk": false,
+              "lists": [
+                {
+                  "name": "Reading",
+                  "isCustomList": false,
+                  "status": "CURRENT",
+                  "entries": [
+                    {
+                      "id": 905,
+                      "mediaId": 2002,
+                      "status": "CURRENT",
+                      "scoreRaw": 90,
+                      "progress": 15,
+                      "progressVolumes": 2,
+                      "repeat": 0,
+                      "private": false,
+                      "notes": "Great read",
+                      "updatedAt": 1700000050,
+                      "media": {
+                        "id": 2002,
+                        "format": "MANGA",
+                        "status": "RELEASING",
+                        "isAdult": false,
+                        "chapters": 130,
+                        "volumes": 12,
+                        "genres": ["Fantasy"],
+                        "coverImage": { "large": "https://img.anilist.co/frieren.jpg" },
+                        "title": { "userPreferred": "Sousou no Frieren", "english": "Frieren: Beyond Journey's End", "romaji": "Sousou no Frieren" }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+        """.trimIndent()
+
+        val emptyAnimeJson = """
+        { "data": { "MediaListCollection": { "hasNextChunk": false, "lists": [] } } }
+        """.trimIndent()
+
+        responseHandler = { req, body ->
+            when {
+              body.contains("\"type\":\"MANGA\"") -> createResponse(200, mangaJson)
+              else -> createResponse(200, emptyAnimeJson)
+            }
+        }
+
+        val result = engine.syncAll()
+        assertTrue(result is SyncResult.Success)
+
+        // Verifications:
+        // 1. MUST NOT duplicate media item: size remains exactly 1
+        assertEquals(1, fakeMediaItemDao.items.size)
+        assertTrue(fakeMediaItemDao.items.containsKey("local_frieren"))
+
+        // 2. Link created for local_frieren with state = "SUGGESTED"
+        assertEquals(1, fakeMediaLinkDao.links.size)
+        val link = fakeMediaLinkDao.links.values.first()
+        assertEquals("local_frieren", link.mediaId)
+        assertEquals("2002", link.remoteId)
+        assertEquals("SUGGESTED", link.state)
+    }
+
+    @Test
     fun `novel format maps to cat_novel and anime maps to cat_anime`() = runTest(testDispatcher) {
         val mixedJson = """
         {
@@ -808,6 +919,7 @@ class AnilistSyncEngineTest {
         override suspend fun getById(id: String): MediaItemEntity? = items[id]
         override suspend fun getActiveById(id: String): ActiveMediaItemView? = null
         override suspend fun getAll(): List<ActiveMediaItemView> = emptyList()
+        override suspend fun getActiveByCategoryId(categoryId: String): List<MediaItemEntity> = items.values.filter { it.categoryId == categoryId && it.deletedAt == null }
         override suspend fun upsert(item: MediaItemEntity) { items[item.id] = item }
         override suspend fun upsertAll(items: List<MediaItemEntity>) { items.forEach { this.items[it.id] = it } }
         override suspend fun atomicIncrementProgress(id: String, delta: Double, now: Long): Int = 1

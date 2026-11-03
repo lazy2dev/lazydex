@@ -26,9 +26,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.OpenInBrowser
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteOutline
+import app.lazydex.data.tracker.anilist.dto.AniListMedia
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -87,6 +92,9 @@ fun MediaTrackerSyncDialog(
     onUnlink: () -> Unit,
     onOpenSettings: () -> Unit,
     onDismissRequest: () -> Unit,
+    searchResults: List<AniListMedia> = emptyList(),
+    isSearching: Boolean = false,
+    onSearch: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     inLibrary: Boolean = true,
 ) {
@@ -256,8 +264,10 @@ fun MediaTrackerSyncDialog(
                 }
 
                 anilistMediaId == null -> {
-                    // Unlinked State: Manual ID input
-                    var idText by remember { mutableStateOf("") }
+                    var searchQuery by remember(title) { mutableStateOf(title) }
+                    var showManualId by remember { mutableStateOf(false) }
+                    var manualIdText by remember { mutableStateOf("") }
+
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHighest,
                         shape = RoundedCornerShape(12.dp),
@@ -268,37 +278,139 @@ fun MediaTrackerSyncDialog(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             Text(
-                                text = "Link to AniList Entry",
+                                text = "Link to AniList",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                             )
-                            Text(
-                                text = "Enter the AniList Media ID from the URL (e.g. anilist.co/manga/123456 -> 123456).",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            OutlinedTextField(
-                                value = idText,
-                                onValueChange = { idText = it.filter { char -> char.isDigit() } },
-                                label = { Text("AniList Media ID") },
-                                placeholder = { Text("e.g. 123456") },
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+
+                            // Search bar
+                            Row(
                                 modifier = Modifier.fillMaxWidth(),
-                            )
-                            Button(
-                                onClick = {
-                                    val id = idText.toLongOrNull()
-                                    if (id != null) {
-                                        onLinkMediaId(id)
-                                    }
-                                },
-                                enabled = idText.isNotBlank(),
-                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                Icon(Icons.Default.CloudSync, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Link & Synchronize")
+                                OutlinedTextField(
+                                    value = searchQuery,
+                                    onValueChange = { searchQuery = it },
+                                    label = { Text("Search title") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Button(
+                                    onClick = { onSearch(searchQuery) },
+                                    enabled = searchQuery.isNotBlank() && !isSearching,
+                                ) {
+                                    if (isSearching) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                        )
+                                    } else {
+                                        Icon(Icons.Default.Search, contentDescription = "Search")
+                                    }
+                                }
+                            }
+
+                            // Search Results
+                            if (searchResults.isNotEmpty()) {
+                                Text(
+                                    text = "Select matching entry:",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    searchResults.take(5).forEach { result ->
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.surface,
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { onLinkMediaId(result.id.toLong()) },
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(8.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            ) {
+                                                AsyncImage(
+                                                    model = ImageRequest.Builder(LocalContext.current)
+                                                        .data(result.coverImage?.best)
+                                                        .crossfade(true)
+                                                        .build(),
+                                                    contentDescription = null,
+                                                    modifier = Modifier
+                                                        .size(40.dp, 56.dp)
+                                                        .clip(RoundedCornerShape(4.dp))
+                                                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                                                )
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = result.title?.best ?: "Untitled",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                    )
+                                                    val meta = listOfNotNull(
+                                                        result.format,
+                                                        result.startDate?.year?.toString(),
+                                                        (result.chapters ?: result.episodes)?.let { "$it eps/ch" }
+                                                    ).joinToString(" • ")
+                                                    if (meta.isNotBlank()) {
+                                                        Text(
+                                                            text = meta,
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        )
+                                                    }
+                                                }
+                                                Button(
+                                                    onClick = { onLinkMediaId(result.id.toLong()) },
+                                                    modifier = Modifier.height(36.dp),
+                                                ) {
+                                                    Text("Link")
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                            // Manual ID option toggle
+                            if (!showManualId) {
+                                OutlinedButton(
+                                    onClick = { showManualId = true },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text("Enter AniList ID manually")
+                                }
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedTextField(
+                                        value = manualIdText,
+                                        onValueChange = { manualIdText = it.filter { char -> char.isDigit() } },
+                                        label = { Text("AniList Media ID") },
+                                        placeholder = { Text("e.g. 140101") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                    Button(
+                                        onClick = {
+                                            val id = manualIdText.toLongOrNull()
+                                            if (id != null) onLinkMediaId(id)
+                                        },
+                                        enabled = manualIdText.isNotBlank(),
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) {
+                                        Icon(Icons.Default.CloudSync, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Link by ID")
+                                    }
+                                }
                             }
                         }
                     }

@@ -4,6 +4,7 @@ import app.lazydex.data.tracker.anilist.dto.AniListApiException
 import app.lazydex.data.tracker.anilist.dto.AniListFuzzyDateInput
 import app.lazydex.data.tracker.anilist.dto.AniListGraphQLError
 import app.lazydex.data.tracker.anilist.dto.AniListGraphQLResponse
+import app.lazydex.data.tracker.anilist.dto.AniListMedia
 import app.lazydex.data.tracker.anilist.dto.AniListMediaListEntry
 import app.lazydex.data.tracker.anilist.dto.AniListSavedEntry
 import app.lazydex.data.tracker.anilist.dto.AniListViewer
@@ -11,6 +12,7 @@ import app.lazydex.data.tracker.anilist.dto.CurrentUserData
 import app.lazydex.data.tracker.anilist.dto.MediaListCollection
 import app.lazydex.data.tracker.anilist.dto.MediaListCollectionData
 import app.lazydex.data.tracker.anilist.dto.SaveMediaListEntryData
+import app.lazydex.data.tracker.anilist.dto.SearchMediaPageData
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -131,6 +133,24 @@ query CurrentUser {
     }
     options {
       displayAdultContent
+    }
+  }
+}
+"""
+
+        const val SEARCH_MEDIA_QUERY = """
+query (${'$'}search: String, ${'$'}type: MediaType, ${'$'}perPage: Int) {
+  Page(perPage: ${'$'}perPage) {
+    media(search: ${'$'}search, type: ${'$'}type) {
+      id
+      title { userPreferred english romaji native }
+      coverImage { large extraLarge medium }
+      format
+      status
+      episodes
+      chapters
+      volumes
+      startDate { year month day }
     }
   }
 }
@@ -283,6 +303,32 @@ query CurrentUser {
             errors = listOf(AniListGraphQLError("CurrentUser returned no viewer data")),
             httpCode = 200
         )
+    }
+
+    /**
+     * Searches AniList for media matching [query] and [type] ("MANGA" or "ANIME").
+     */
+    suspend fun searchMedia(
+        query: String,
+        type: String,
+        perPage: Int = 10,
+        priority: TokenBucketLimiter.Priority = TokenBucketLimiter.Priority.INTERACTIVE
+    ): List<AniListMedia> {
+        if (query.isBlank()) return emptyList()
+        val variables = buildJsonObject {
+            put("search", query.trim())
+            put("type", type.uppercase())
+            put("perPage", perPage)
+        }
+
+        val responseData = execute(
+            query = SEARCH_MEDIA_QUERY,
+            variables = variables,
+            deserializer = SearchMediaPageData.serializer(),
+            priority = priority
+        )
+
+        return responseData.page?.media ?: emptyList()
     }
 
     private suspend fun <T> execute(

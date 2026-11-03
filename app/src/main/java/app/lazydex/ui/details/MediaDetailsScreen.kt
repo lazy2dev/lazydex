@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -23,11 +24,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -235,6 +239,57 @@ fun MediaDetailsScreen(
                     }
                 )
 
+                // Suggested AniList Tracker Match Banner
+                state.suggestedTracker?.let { suggestion ->
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudSync,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Suggested AniList Match",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                            Text(
+                                text = "Found matching AniList entry \"${suggestion.title}\"${if (suggestion.progress > 0) " at progress ${suggestion.progress.toInt()}" else ""}. Link tracker?",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                TextButton(onClick = { viewModel.dismissTrackerSuggestion() }) {
+                                    Text("Dismiss")
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Button(onClick = { viewModel.acceptTrackerSuggestion() }) {
+                                    Text("Link Tracker")
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // 3. Expandable Description & Genre Chips
                 MediaDescriptionSection(
                     description = state.description,
@@ -418,7 +473,13 @@ fun MediaDetailsScreen(
                 onOpenSettings = {
                     onNavigateToTracking?.invoke()
                 },
-                onDismissRequest = { activeDialog = null }
+                searchResults = state.trackerSearchResults,
+                isSearching = state.isSearchingTracker,
+                onSearch = { query -> viewModel.searchAniListTracker(query) },
+                onDismissRequest = {
+                    viewModel.clearTrackerSearchResults()
+                    activeDialog = null
+                }
             )
         }
         null -> {}

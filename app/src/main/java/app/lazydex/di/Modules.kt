@@ -173,6 +173,7 @@ val viewModelModule = module {
             mediaLinkDao = get(),
             syncEngine = get(),
             tokenStore = get(),
+            client = get(),
         )
     }
     viewModel {

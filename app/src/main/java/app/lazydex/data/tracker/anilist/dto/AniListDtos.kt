@@ -109,7 +109,19 @@ data class AniListMedia(
     val coverImage: AniListCoverImage? = null,
     val bannerImage: String? = null,
     val title: AniListTitle? = null,
-    val description: String? = null
+    val description: String? = null,
+    val startDate: AniListFuzzyDate? = null
+)
+
+@Serializable
+data class SearchMediaPageData(
+    @SerialName("Page")
+    val page: SearchMediaPage? = null
+)
+
+@Serializable
+data class SearchMediaPage(
+    val media: List<AniListMedia> = emptyList()
 )
 
 @Serializable

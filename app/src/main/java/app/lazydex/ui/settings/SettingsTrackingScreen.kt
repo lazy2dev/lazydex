@@ -68,7 +68,7 @@ import app.lazydex.ui.settings.components.SwitchPreferenceWidget
 import app.lazydex.ui.settings.components.TrackingPreferenceWidget
 import org.koin.androidx.compose.koinViewModel
 
-private const val ANILIST_CLIENT_ID = "16801"
+private const val ANILIST_CLIENT_ID = "46821"
 private const val ANILIST_AUTH_URL =
     "https://anilist.co/api/v2/oauth/authorize?client_id=$ANILIST_CLIENT_ID&response_type=token"
 

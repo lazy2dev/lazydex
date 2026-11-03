@@ -58,6 +58,9 @@ interface MediaItemDao {
     @Query("SELECT * FROM active_media_items")
     suspend fun getAll(): List<ActiveMediaItemView>
 
+    @Query("SELECT * FROM media_items WHERE (categoryId = :categoryId OR categoryId IN (SELECT id FROM categories WHERE parentId = :categoryId)) AND deletedAt IS NULL")
+    suspend fun getActiveByCategoryId(categoryId: String): List<MediaItemEntity>
+
     @Upsert
     suspend fun upsert(item: MediaItemEntity)
 

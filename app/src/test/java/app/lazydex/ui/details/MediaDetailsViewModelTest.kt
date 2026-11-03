@@ -26,6 +26,7 @@ import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -658,6 +659,121 @@ class MediaDetailsViewModelTest {
 
         assertEquals("https://example.com/cover.jpg", vm.uiState.value.coverImageUrl)
         assertEquals("https://example.com/banner.jpg", vm.uiState.value.bannerImage)
+    }
+
+    @Test
+    fun acceptTrackerSuggestion_updatesStateToLinkedAndAdvancesProgress() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "item-sugg-1",
+            title = "Frieren",
+            category = MediaCategory.MANGA,
+            currentProgress = 10,
+            totalItems = 100,
+            lastUpdated = 1000L,
+            dateAdded = 1000L,
+            userStatus = UserStatus.READING,
+            rating = null
+        )
+        repo.items.add(existing)
+
+        val linkDao = FakeMediaLinkDao()
+        val suggestedLink = MediaLinkEntity(
+            id = "link-sugg-1",
+            mediaId = "item-sugg-1",
+            kind = "TRACKER",
+            providerId = "anilist",
+            remoteId = "140101",
+            remoteMediaListId = "999",
+            url = "https://anilist.co/manga/140101",
+            state = "SUGGESTED",
+            syncStatus = "SYNCED",
+            lastSyncedAt = null,
+            syncedSnapshot = """{"progress": 25.0, "status": "IN_PROGRESS"}""",
+            createdAt = 1000L,
+            updatedAt = 1000L
+        )
+        linkDao.links.add(suggestedLink)
+
+        val vm = MediaDetailsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File("."),
+            mediaLinkDao = linkDao
+        )
+
+        vm.initialize("item-sugg-1", null)
+        testScheduler.advanceUntilIdle()
+
+        assertNotNull(vm.uiState.value.suggestedTracker)
+        assertEquals("link-sugg-1", vm.uiState.value.suggestedTracker?.linkId)
+        assertEquals(25.0, vm.uiState.value.suggestedTracker?.progress)
+
+        vm.acceptTrackerSuggestion()
+        testScheduler.advanceUntilIdle()
+
+        // Verify link is now LINKED and marked DIRTY_LOCAL
+        val updatedLink = linkDao.links.find { it.id == "link-sugg-1" }
+        assertNotNull(updatedLink)
+        assertEquals("LINKED", updatedLink?.state)
+        assertEquals("DIRTY_LOCAL", updatedLink?.syncStatus)
+
+        // Progress was fast-forwarded to remote 25
+        assertEquals("25", vm.uiState.value.currentProgress)
+        assertNull(vm.uiState.value.suggestedTracker)
+    }
+
+    @Test
+    fun dismissTrackerSuggestion_deletesSuggestedLink() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "item-sugg-2",
+            title = "Sousou no Frieren",
+            category = MediaCategory.MANGA,
+            currentProgress = 5,
+            totalItems = 100,
+            lastUpdated = 1000L,
+            dateAdded = 1000L,
+            userStatus = UserStatus.READING,
+            rating = null
+        )
+        repo.items.add(existing)
+
+        val linkDao = FakeMediaLinkDao()
+        val suggestedLink = MediaLinkEntity(
+            id = "link-sugg-2",
+            mediaId = "item-sugg-2",
+            kind = "TRACKER",
+            providerId = "anilist",
+            remoteId = "140101",
+            state = "SUGGESTED",
+            url = null,
+            createdAt = 1000L,
+            updatedAt = 1000L
+        )
+        linkDao.links.add(suggestedLink)
+
+        val vm = MediaDetailsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File("."),
+            mediaLinkDao = linkDao
+        )
+
+        vm.initialize("item-sugg-2", null)
+        testScheduler.advanceUntilIdle()
+
+        assertNotNull(vm.uiState.value.suggestedTracker)
+
+        vm.dismissTrackerSuggestion()
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(linkDao.links.none { it.id == "link-sugg-2" })
+        assertNull(vm.uiState.value.suggestedTracker)
     }
 }
 

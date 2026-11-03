@@ -5,8 +5,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.lazydex.data.local.dao.MediaLinkDao
 import app.lazydex.data.local.entity.MediaLinkEntity
+import app.lazydex.data.tracker.anilist.AnilistGraphQLClient
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
+import app.lazydex.data.tracker.anilist.dto.AniListMedia
 import app.lazydex.data.tracker.sync.AnilistSyncEngine
+import app.lazydex.data.tracker.sync.SyncSnapshot
 import app.lazydex.domain.model.Category
 import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.MediaItem
@@ -32,6 +35,14 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.util.UUID
+
+data class SuggestedTracker(
+    val linkId: String,
+    val remoteId: Long,
+    val title: String,
+    val progress: Double = 0.0,
+    val userStatus: String = "PLANNING"
+)
 
 data class MediaDetailsUiState(
     val id: String = "",
@@ -79,6 +90,9 @@ data class MediaDetailsUiState(
     val anilistSyncStatus: String? = null,
     val anilistLastSynced: Long? = null,
     val isAnilistLoggedIn: Boolean = false,
+    val suggestedTracker: SuggestedTracker? = null,
+    val trackerSearchResults: List<AniListMedia> = emptyList(),
+    val isSearchingTracker: Boolean = false,
     val lastUpdated: Long = System.currentTimeMillis(),
 ) {
     val parsedSecondaryProgress: Double? get() = secondaryProgress.trim().toDoubleOrNull()
@@ -126,6 +140,7 @@ class MediaDetailsViewModel(
     private val mediaLinkDao: MediaLinkDao? = null,
     private val syncEngine: AnilistSyncEngine? = null,
     private val tokenStore: AnilistTokenStore? = null,
+    private val client: AnilistGraphQLClient? = null,
 ) : ViewModel() {
 
     private val itemId: String? = savedStateHandle["itemId"]
@@ -202,10 +217,22 @@ class MediaDetailsViewModel(
             linkObservationJob = viewModelScope.launch {
                 linkDao.observeByMediaId(targetId).collect { links ->
                     val link = links.firstOrNull { it.providerId == "anilist" && it.state == "LINKED" }
+                    val suggested = links.firstOrNull { it.providerId == "anilist" && it.state == "SUGGESTED" }
+                    val suggestedTracker = suggested?.let { s ->
+                        val snap = SyncSnapshot.fromJson(s.syncedSnapshot)
+                        SuggestedTracker(
+                            linkId = s.id,
+                            remoteId = s.remoteId?.toLongOrNull() ?: 0L,
+                            title = _uiState.value.title.ifBlank { "AniList Entry #${s.remoteId}" },
+                            progress = snap?.progress ?: 0.0,
+                            userStatus = snap?.status ?: "PLANNING"
+                        )
+                    }
                     _uiState.value = _uiState.value.copy(
                         anilistMediaId = link?.remoteId?.toLongOrNull(),
                         anilistSyncStatus = link?.syncStatus,
                         anilistLastSynced = link?.lastSyncedAt,
+                        suggestedTracker = suggestedTracker
                     )
                 }
             }
@@ -642,6 +669,74 @@ class MediaDetailsViewModel(
         }
     }
 
+    fun acceptTrackerSuggestion() {
+        val suggestion = _uiState.value.suggestedTracker ?: return
+        val targetId = _uiState.value.id
+        if (targetId.isBlank()) return
+        val linkDao = mediaLinkDao ?: return
+
+        viewModelScope.launch {
+            val links = linkDao.getByMediaId(targetId)
+            val suggestedLink = links.firstOrNull { it.id == suggestion.linkId } ?: return@launch
+
+            // Fast forward progress if remote progress is higher (monotonic max)
+            val localProgress = _uiState.value.currentProgress.toDoubleOrNull() ?: 0.0
+            if (suggestion.progress > localProgress) {
+                _uiState.value = _uiState.value.copy(currentProgress = suggestion.progress.toInt().toString())
+                save(exitOnSuccess = false)
+            }
+
+            linkDao.upsert(
+                suggestedLink.copy(
+                    state = "LINKED",
+                    syncStatus = "DIRTY_LOCAL",
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+            _uiState.value = _uiState.value.copy(suggestedTracker = null)
+            syncWithAniList()
+        }
+    }
+
+    fun dismissTrackerSuggestion() {
+        val suggestion = _uiState.value.suggestedTracker ?: return
+        val linkDao = mediaLinkDao ?: return
+        viewModelScope.launch {
+            linkDao.delete(suggestion.linkId)
+            _uiState.value = _uiState.value.copy(suggestedTracker = null)
+        }
+    }
+
+    fun searchAniListTracker(query: String) {
+        val cleanQuery = query.trim()
+        if (cleanQuery.isBlank()) {
+            _uiState.value = _uiState.value.copy(trackerSearchResults = emptyList())
+            return
+        }
+        val anilistClient = client ?: return
+        val mediaType = if (_uiState.value.category == MediaCategory.ANIME || _uiState.value.category == MediaCategory.TV || _uiState.value.category == MediaCategory.MOVIE) "ANIME" else "MANGA"
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isSearchingTracker = true)
+            try {
+                val results = withContext(Dispatchers.IO) {
+                    anilistClient.searchMedia(cleanQuery, mediaType, perPage = 8)
+                }
+                _uiState.value = _uiState.value.copy(trackerSearchResults = results, isSearchingTracker = false)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    trackerSearchResults = emptyList(),
+                    isSearchingTracker = false,
+                    errorMsg = "Search failed: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun clearTrackerSearchResults() {
+        _uiState.value = _uiState.value.copy(trackerSearchResults = emptyList())
+    }
+
     fun linkAniListId(remoteId: Long) {
         val targetId = _uiState.value.id
         if (targetId.isBlank() || _uiState.value.isNew) {
@@ -652,6 +747,11 @@ class MediaDetailsViewModel(
         viewModelScope.launch {
             val now = System.currentTimeMillis()
             val type = if (_uiState.value.category == MediaCategory.ANIME || _uiState.value.category == MediaCategory.TV || _uiState.value.category == MediaCategory.MOVIE) "anime" else "manga"
+
+            // Remove any pending suggestion or old links for anilist on this item
+            val existingLinks = linkDao.getByMediaId(targetId)
+            existingLinks.filter { it.providerId == "anilist" }.forEach { linkDao.delete(it.id) }
+
             val newLink = MediaLinkEntity(
                 id = UUID.randomUUID().toString(),
                 mediaId = targetId,
@@ -668,6 +768,7 @@ class MediaDetailsViewModel(
                 updatedAt = now,
             )
             linkDao.upsert(newLink)
+            _uiState.value = _uiState.value.copy(suggestedTracker = null, trackerSearchResults = emptyList())
             syncWithAniList()
         }
     }

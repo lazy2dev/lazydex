@@ -408,8 +408,62 @@ open class AnilistSyncEngine(
                     mediaLinkDao.upsert(updatedLink)
                 }
             } else {
-                // New item from remote
-                val newMediaId = UUID.randomUUID().toString()
+                val categoryId = mapToCategoryId(entry.media?.format, type)
+                val targetTitles = listOfNotNull(
+                    entry.media?.title?.userPreferred,
+                    entry.media?.title?.english,
+                    entry.media?.title?.romaji,
+                    entry.media?.title?.nativeTitle
+                )
+
+                // Check for existing local item with matching title & category family that lacks an active AniList link
+                val localCandidates = mediaItemDao.getActiveByCategoryId(categoryId)
+                val matchingLocal = localCandidates.firstOrNull { localItem ->
+                    val hasExistingLink = mediaLinkDao.getByMediaId(localItem.id)
+                        .any { it.providerId == PROVIDER_ID && it.state == "LINKED" }
+                    if (hasExistingLink) return@firstOrNull false
+
+                    val localTitles = listOfNotNull(
+                        localItem.title,
+                        localItem.titleEnglish,
+                        localItem.titleRomaji,
+                        localItem.titleNative
+                    )
+                    TitleMatcher.isMatch(localTitles, targetTitles)
+                }
+
+                if (matchingLocal != null) {
+                    // In-app Merge Suggester: Attach suggested link to existing local item without creating duplicate card
+                    val snapshot = SyncSnapshot(
+                        remoteUpdatedAt = entry.updatedAt?.let { if (it > 100_000_000_000L) it / 1000L else it } ?: (now / 1000L),
+                        localUpdatedAt = matchingLocal.updatedAt,
+                        progress = entry.progress?.toDouble() ?: 0.0,
+                        secondaryProgress = entry.progressVolumes?.toDouble() ?: 0.0,
+                        status = ThreeWayMergeResolver.anilistStatusToLazyDex(entry.status),
+                        scoreRaw = if (entry.scoreRaw == 0) null else entry.scoreRaw,
+                        repeat = entry.repeat ?: 0,
+                        isPrivate = entry.isPrivate ?: false,
+                        notes = entry.notes ?: ""
+                    )
+                    val suggestedLink = MediaLinkEntity(
+                        id = UUID.randomUUID().toString(),
+                        mediaId = matchingLocal.id,
+                        kind = "TRACKER",
+                        providerId = PROVIDER_ID,
+                        remoteId = remoteId,
+                        remoteMediaListId = entry.id.toString(),
+                        url = "https://anilist.co/${type.lowercase()}/$remoteId",
+                        state = "SUGGESTED",
+                        syncStatus = ThreeWayMergeResolver.SYNC_STATUS_SYNCED,
+                        lastSyncedAt = now,
+                        syncedSnapshot = snapshot.toJson(),
+                        createdAt = now,
+                        updatedAt = now
+                    )
+                    mediaLinkDao.upsert(suggestedLink)
+                } else {
+                    // New item from remote (no matching local item exists)
+                    val newMediaId = UUID.randomUUID().toString()
                 val categoryId = mapToCategoryId(entry.media?.format, type)
                 val userStatus = ThreeWayMergeResolver.anilistStatusToLazyDex(entry.status)
                 val progress = entry.progress?.toDouble() ?: 0.0
@@ -499,6 +553,7 @@ open class AnilistSyncEngine(
                     updatedAt = now
                 )
                 mediaLinkDao.upsert(newLink)
+                }
             }
         }
     }

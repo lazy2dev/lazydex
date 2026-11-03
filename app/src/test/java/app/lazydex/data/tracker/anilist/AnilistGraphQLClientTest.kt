@@ -384,6 +384,57 @@ class AnilistGraphQLClientTest {
     }
 
     @Test
+    fun `searchMedia sends correct variables and parses media page results`() = runTest {
+        val limiter = TokenBucketLimiter(timeProvider = { testScheduler.currentTime })
+        val client = AnilistGraphQLClient(
+            okHttpClient = fakeHttpClient,
+            tokenStore = tokenStore,
+            limiter = limiter,
+            ioDispatcher = StandardTestDispatcher(testScheduler)
+        )
+
+        responseHandler = { req, body ->
+            assertTrue(body.contains("\"search\":\"Frieren\""))
+            assertTrue(body.contains("\"type\":\"MANGA\""))
+            assertTrue(body.contains("\"perPage\":5"))
+            createResponse(
+                code = 200,
+                body = """
+                    {
+                      "data": {
+                        "Page": {
+                          "media": [
+                            {
+                              "id": 140101,
+                              "format": "MANGA",
+                              "status": "RELEASING",
+                              "chapters": 130,
+                              "volumes": 13,
+                              "title": {
+                                "userPreferred": "Sousou no Frieren",
+                                "english": "Frieren: Beyond Journey's End"
+                              },
+                              "coverImage": {
+                                "large": "https://img.anilist.co/frieren.jpg"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                """.trimIndent()
+            )
+        }
+
+        val results = client.searchMedia(query = "Frieren", type = "MANGA", perPage = 5)
+        assertEquals(1, results.size)
+        assertEquals(140101, results[0].id)
+        assertEquals("Sousou no Frieren", results[0].title?.userPreferred)
+        assertEquals("Frieren: Beyond Journey's End", results[0].title?.english)
+        assertEquals("https://img.anilist.co/frieren.jpg", results[0].coverImage?.large)
+    }
+
+    @Test
     fun `GraphQL errors on HTTP 200 throw typed AniListApiException`() = runTest {
         val limiter = TokenBucketLimiter(timeProvider = { testScheduler.currentTime })
         val client = AnilistGraphQLClient(
