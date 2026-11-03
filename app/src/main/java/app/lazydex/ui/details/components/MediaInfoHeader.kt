@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PersonOutline
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -55,6 +56,7 @@ fun MediaInfoHeader(
     bannerUrl: String?,
     onCoverClick: () -> Unit,
     modifier: Modifier = Modifier,
+    isUpdatingCover: Boolean = false,
 ) {
     Box(modifier = modifier) {
         val backdropGradientColors = listOf(
@@ -108,6 +110,20 @@ fun MediaInfoHeader(
                         coverImageUrl = coverImageUrl,
                         modifier = Modifier.fillMaxSize()
                     )
+                    if (isUpdatingCover) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.5f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
                 }
 
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -143,7 +159,9 @@ fun MediaInfoHeader(
 
                     // Type, Format & Source/Units row styled matching the Author row
                     val formatDisplayText = when {
-                        !formatName.isNullOrBlank() && !formatName.equals(category.displayName, ignoreCase = true) -> formatName
+                        !formatName.isNullOrBlank() &&
+                            !formatName.equals(category.displayName, ignoreCase = true) &&
+                            !formatName.startsWith("cat_", ignoreCase = true) -> formatName
                         else -> category.displayName
                     }
 

@@ -37,7 +37,6 @@ fun MediaDescriptionSection(
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
     modifier: Modifier = Modifier,
-    onTagClick: (() -> Unit)? = null,
 ) {
     Column(modifier = modifier.animateContentSize()) {
         val descText = description.ifBlank {
@@ -86,7 +85,7 @@ fun MediaDescriptionSection(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         allTags.forEach { tag ->
-                            GenreTagChip(text = tag, onClick = onTagClick)
+                            GenreTagChip(text = tag)
                         }
                     }
                 } else {
@@ -95,7 +94,7 @@ fun MediaDescriptionSection(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         items(allTags) { tag ->
-                            GenreTagChip(text = tag, onClick = onTagClick)
+                            GenreTagChip(text = tag)
                         }
                     }
                 }
@@ -108,14 +107,11 @@ fun MediaDescriptionSection(
 fun GenreTagChip(
     text: String,
     modifier: Modifier = Modifier,
-    onClick: (() -> Unit)? = null,
 ) {
     Surface(
         modifier = modifier.height(28.dp),
         shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-        onClick = onClick ?: {},
-        enabled = onClick != null,
     ) {
         Box(
             modifier = Modifier.padding(horizontal = 12.dp),

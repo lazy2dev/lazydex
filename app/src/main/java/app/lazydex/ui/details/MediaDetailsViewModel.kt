@@ -18,6 +18,7 @@ import app.lazydex.scraper.MetadataScraper
 import app.lazydex.ui.components.formatProgress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -73,6 +74,7 @@ data class MediaDetailsUiState(
     val isNew: Boolean = true,
     val isLoading: Boolean = false,
     val isSyncing: Boolean = false,
+    val isUpdatingArtwork: Boolean = false,
     val anilistMediaId: Long? = null,
     val anilistSyncStatus: String? = null,
     val anilistLastSynced: Long? = null,
@@ -134,6 +136,9 @@ class MediaDetailsViewModel(
 
     private var originalItem: MediaItem? = null
     private val notesFlow = MutableStateFlow<String?>(null)
+    private var itemObservationJob: Job? = null
+    private var linkObservationJob: Job? = null
+    private var formatObservationJob: Job? = null
 
     init {
         initialize(itemId, initialUrl)
@@ -165,93 +170,104 @@ class MediaDetailsViewModel(
             scrapeUrl(url)
         }
 
-        viewModelScope.launch {
-            val initialCatId = when (_uiState.value.category) {
-                MediaCategory.NOVEL -> "cat_novel"
-                MediaCategory.MANGA -> "cat_manga"
-                MediaCategory.ANIME -> "cat_anime"
-                MediaCategory.GAME -> "cat_game"
-                MediaCategory.MOVIE -> "cat_movie"
-                MediaCategory.TV -> "cat_tv"
-            }
-            val config = repository.getResolvedConfig(initialCatId)
+        val initialCatId = when (_uiState.value.category) {
+            MediaCategory.NOVEL -> "cat_novel"
+            MediaCategory.MANGA -> "cat_manga"
+            MediaCategory.ANIME -> "cat_anime"
+            MediaCategory.GAME -> "cat_game"
+            MediaCategory.MOVIE -> "cat_movie"
+            MediaCategory.TV -> "cat_tv"
+        }
+        observeCategoryFormats(initialCatId)
+
+        effectiveId?.let { targetId ->
+            observeItem(targetId)
+        }
+    }
+
+    private fun observeCategoryFormats(catId: String) {
+        formatObservationJob?.cancel()
+        formatObservationJob = viewModelScope.launch {
+            val config = repository.getResolvedConfig(catId)
             _uiState.value = _uiState.value.copy(resolvedConfig = config)
-            repository.observeTypes(initialCatId).collect { types ->
+            repository.observeTypes(catId).collect { types ->
                 _uiState.value = _uiState.value.copy(availableFormats = types)
             }
         }
+    }
 
-        effectiveId?.let { targetId ->
-            mediaLinkDao?.let { linkDao ->
-                viewModelScope.launch {
-                    linkDao.observeByMediaId(targetId).collect { links ->
-                        val link = links.firstOrNull { it.providerId == "anilist" && it.state == "LINKED" }
-                        _uiState.value = _uiState.value.copy(
-                            anilistMediaId = link?.remoteId?.toLongOrNull(),
-                            anilistSyncStatus = link?.syncStatus,
-                            anilistLastSynced = link?.lastSyncedAt,
-                        )
-                    }
+    private fun observeItem(targetId: String) {
+        mediaLinkDao?.let { linkDao ->
+            linkObservationJob?.cancel()
+            linkObservationJob = viewModelScope.launch {
+                linkDao.observeByMediaId(targetId).collect { links ->
+                    val link = links.firstOrNull { it.providerId == "anilist" && it.state == "LINKED" }
+                    _uiState.value = _uiState.value.copy(
+                        anilistMediaId = link?.remoteId?.toLongOrNull(),
+                        anilistSyncStatus = link?.syncStatus,
+                        anilistLastSynced = link?.lastSyncedAt,
+                    )
                 }
             }
+        }
 
-            viewModelScope.launch {
-                repository.observeById(targetId).collect { item ->
-                    if (item != null && !_uiState.value.isSaving && !_uiState.value.isScraping) {
-                        originalItem = item
-                        val config = repository.getResolvedConfig(item.categoryId)
-                        val timeSpent = repository.getTimeSpentMinutes(item.id)
-                        val topCatId = when (item.category) {
-                            MediaCategory.NOVEL -> "cat_novel"
-                            MediaCategory.MANGA -> "cat_manga"
-                            MediaCategory.ANIME -> "cat_anime"
-                            MediaCategory.GAME -> "cat_game"
-                            MediaCategory.MOVIE -> "cat_movie"
-                            MediaCategory.TV -> "cat_tv"
-                        }
-                        val romaji = item.alternativeTitles.getOrNull(0) ?: ""
-                        val native = item.alternativeTitles.getOrNull(2) ?: ""
-                        val banner = item.getExtra("banner_image")
-                        _uiState.value = _uiState.value.copy(
-                            id = item.id,
-                            category = item.category,
-                            formatId = item.categoryId,
-                            title = item.title,
-                            titleRomaji = romaji,
-                            titleNative = native,
-                            bannerImage = banner,
-                            alternativeTitles = item.alternativeTitles,
-                            sourceUrl = item.sourceUrl ?: "",
-                            coverImagePath = item.coverImagePath,
-                            coverImageUrl = item.coverImageUrl ?: "",
-                            currentProgress = item.currentProgress.toString(),
-                            totalItems = item.totalItems?.toString() ?: "",
-                            secondaryProgress = formatProgress(item.secondaryProgress),
-                            secondaryProgressTotal = item.secondaryProgressTotal?.let { formatProgress(it) } ?: "",
-                            actionOverride = item.actionOverride,
-                            playbackSpeed = item.playbackSpeed,
-                            avgChapterLength = item.avgChapterLength?.toString() ?: "",
-                            resolvedConfig = config,
-                            timeStats = timeSpent,
-                            userStatus = item.userStatus,
-                            rating = item.rating,
-                            notes = item.notes,
-                            genres = item.genres,
-                            tags = item.tags,
-                            author = item.author,
-                            description = item.description,
-                            startDate = item.startDate,
-                            endDate = item.endDate,
-                            lastUpdated = item.lastUpdated,
-                            isNew = false,
-                            isLoading = false,
-                        )
-                        repository.observeTypes(topCatId).collect { types ->
-                            _uiState.value = _uiState.value.copy(availableFormats = types)
-                        }
-                    } else if (item == null) {
-                        _uiState.value = _uiState.value.copy(isLoading = false)
+        itemObservationJob?.cancel()
+        itemObservationJob = viewModelScope.launch {
+            repository.observeById(targetId).collect { item ->
+                if (item != null && !_uiState.value.isSaving && !_uiState.value.isScraping) {
+                    originalItem = item
+                    val config = repository.getResolvedConfig(item.categoryId)
+                    val timeSpent = repository.getTimeSpentMinutes(item.id)
+                    val topCatId = when (item.category) {
+                        MediaCategory.NOVEL -> "cat_novel"
+                        MediaCategory.MANGA -> "cat_manga"
+                        MediaCategory.ANIME -> "cat_anime"
+                        MediaCategory.GAME -> "cat_game"
+                        MediaCategory.MOVIE -> "cat_movie"
+                        MediaCategory.TV -> "cat_tv"
                     }
+                    val romaji = item.alternativeTitles.getOrNull(0) ?: ""
+                    val native = item.alternativeTitles.getOrNull(2) ?: ""
+                    val banner = item.getExtra("banner_image")
+                    _uiState.value = _uiState.value.copy(
+                        id = item.id,
+                        category = item.category,
+                        formatId = item.categoryId,
+                        title = item.title,
+                        titleRomaji = romaji,
+                        titleNative = native,
+                        bannerImage = banner,
+                        alternativeTitles = item.alternativeTitles,
+                        sourceUrl = item.sourceUrl ?: "",
+                        coverImagePath = item.coverImagePath,
+                        coverImageUrl = item.coverImageUrl ?: "",
+                        currentProgress = item.currentProgress.toString(),
+                        totalItems = item.totalItems?.toString() ?: "",
+                        secondaryProgress = formatProgress(item.secondaryProgress),
+                        secondaryProgressTotal = item.secondaryProgressTotal?.let { formatProgress(it) } ?: "",
+                        actionOverride = item.actionOverride,
+                        playbackSpeed = item.playbackSpeed,
+                        avgChapterLength = item.avgChapterLength?.toString() ?: "",
+                        resolvedConfig = config,
+                        timeStats = timeSpent,
+                        userStatus = item.userStatus,
+                        rating = item.rating,
+                        notes = item.notes,
+                        genres = item.genres,
+                        tags = item.tags,
+                        author = item.author,
+                        description = item.description,
+                        startDate = item.startDate,
+                        endDate = item.endDate,
+                        lastUpdated = item.lastUpdated,
+                        isNew = false,
+                        isLoading = false,
+                    )
+                    if (item.category != _uiState.value.category || _uiState.value.availableFormats.isEmpty()) {
+                        observeCategoryFormats(topCatId)
+                    }
+                } else if (item == null) {
+                    _uiState.value = _uiState.value.copy(isLoading = false)
                 }
             }
         }
@@ -270,13 +286,8 @@ class MediaDetailsViewModel(
             MediaCategory.MOVIE -> "cat_movie"
             MediaCategory.TV -> "cat_tv"
         }
-        viewModelScope.launch {
-            val config = repository.getResolvedConfig(catId)
-            _uiState.value = _uiState.value.copy(category = category, formatId = null, resolvedConfig = config)
-            repository.observeTypes(catId).collect { types ->
-                _uiState.value = _uiState.value.copy(availableFormats = types)
-            }
-        }
+        _uiState.value = _uiState.value.copy(category = category, formatId = null)
+        observeCategoryFormats(catId)
     }
 
     fun updateFormatId(formatId: String?) {
@@ -316,6 +327,36 @@ class MediaDetailsViewModel(
 
     fun updateCoverImageUrl(url: String) {
         _uiState.value = _uiState.value.copy(coverImageUrl = url)
+    }
+
+    fun updateArtwork(coverUrl: String, bannerUrl: String?) {
+        val trimmedCover = coverUrl.trim()
+        val trimmedBanner = bannerUrl?.trim()?.ifEmpty { null }
+        _uiState.value = _uiState.value.copy(
+            isUpdatingArtwork = true,
+            bannerImage = trimmedBanner,
+            coverImageUrl = trimmedCover,
+        )
+        viewModelScope.launch {
+            try {
+                val newLocalPath = if (trimmedCover.isNotBlank()) {
+                    val downloaded = downloadImageToTemp(trimmedCover)
+                    downloaded?.absolutePath ?: ""
+                } else {
+                    ""
+                }
+                _uiState.value = _uiState.value.copy(
+                    coverImagePath = newLocalPath,
+                    isUpdatingArtwork = false,
+                )
+                autoSave()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isUpdatingArtwork = false,
+                    errorMsg = e.message ?: "Failed to update artwork",
+                )
+            }
+        }
     }
 
     fun updateCurrentProgress(progress: String) {
@@ -545,6 +586,7 @@ class MediaDetailsViewModel(
             }
 
             try {
+                val wasNew = state.isNew
                 val savedItem = if (state.isNew) {
                     repository.add(item)
                 } else {
@@ -556,6 +598,9 @@ class MediaDetailsViewModel(
                     _uiState.value = _uiState.value.copy(id = savedItem.id, isDone = true, isSaving = false)
                 } else {
                     _uiState.value = _uiState.value.copy(id = savedItem.id, isNew = false, isSaving = false)
+                    if (wasNew) {
+                        observeItem(savedItem.id)
+                    }
                 }
             } catch (e: DuplicateUrlException) {
                 _uiState.value = _uiState.value.copy(
@@ -599,7 +644,10 @@ class MediaDetailsViewModel(
 
     fun linkAniListId(remoteId: Long) {
         val targetId = _uiState.value.id
-        if (targetId.isBlank()) return
+        if (targetId.isBlank() || _uiState.value.isNew) {
+            _uiState.value = _uiState.value.copy(errorMsg = "Add media to library before linking tracker")
+            return
+        }
         val linkDao = mediaLinkDao ?: return
         viewModelScope.launch {
             val now = System.currentTimeMillis()

@@ -1,7 +1,5 @@
 package app.lazydex.ui.details
 
-import android.content.Intent
-import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -26,7 +24,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -202,13 +199,15 @@ fun MediaDetailsScreen(
                     title = state.title,
                     author = state.author,
                     category = state.category,
-                    formatName = state.availableFormats.find { it.id == state.formatId }?.name ?: state.formatId,
+                    formatName = state.availableFormats.find { it.id == state.formatId }?.name
+                        ?: state.formatId?.takeIf { !it.startsWith("cat_") && !it.equals(state.category.name, ignoreCase = true) },
                     sourceUrl = state.sourceUrl,
                     totalItems = state.parsedTotal,
                     coverImagePath = state.coverImagePath,
                     coverImageUrl = state.coverImageUrl,
                     bannerUrl = state.bannerImage,
-                    onCoverClick = { activeDialog = ActiveDialog.Cover }
+                    onCoverClick = { activeDialog = ActiveDialog.Cover },
+                    isUpdatingCover = state.isUpdatingArtwork,
                 )
 
                 // 2. Action Row (In Library, Updated X, Sync, Edit)
@@ -220,9 +219,6 @@ fun MediaDetailsScreen(
                         } else {
                             viewModel.showDeleteConfirm(true)
                         }
-                    },
-                    onLibraryLongClick = {
-                        activeDialog = ActiveDialog.Metadata
                     },
                     lastUpdatedMillis = state.lastUpdated,
                     onUpdatedClick = {
@@ -373,9 +369,7 @@ fun MediaDetailsScreen(
                 confirmButton = {
                     Button(
                         onClick = {
-                            viewModel.updateCoverImageUrl(tempCoverUrl)
-                            viewModel.updateBannerImage(tempBannerUrl.takeIf { it.isNotBlank() })
-                            viewModel.autoSave()
+                            viewModel.updateArtwork(tempCoverUrl, tempBannerUrl)
                             activeDialog = null
                         }
                     ) {
@@ -404,6 +398,7 @@ fun MediaDetailsScreen(
         }
         ActiveDialog.Sync -> {
             MediaTrackerSyncDialog(
+                inLibrary = !state.isNew,
                 isLoggedIn = state.isAnilistLoggedIn,
                 anilistMediaId = state.anilistMediaId,
                 anilistSyncStatus = state.anilistSyncStatus,

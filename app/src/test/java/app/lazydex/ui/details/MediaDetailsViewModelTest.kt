@@ -37,10 +37,18 @@ class MediaDetailsViewModelTest {
 
     private class FakeRepository : MediaRepository {
         val items = mutableListOf<MediaItem>()
+        val itemFlows = mutableMapOf<String, kotlinx.coroutines.flow.MutableSharedFlow<MediaItem?>>()
+
         override fun observeAll(): Flow<List<MediaItem>> = flowOf(items)
         override fun observeByCategory(category: MediaCategory): Flow<List<MediaItem>> = flowOf(items.filter { it.category == category })
         override fun observeFiltered(category: MediaCategory?, statusFilter: StatusFilter): Flow<List<MediaItem>> = flowOf(items)
-        override fun observeById(id: String): Flow<MediaItem?> = flowOf(items.find { it.id == id })
+        override fun observeById(id: String): Flow<MediaItem?> {
+            return itemFlows.getOrPut(id) {
+                kotlinx.coroutines.flow.MutableSharedFlow<MediaItem?>(replay = 1).apply {
+                    tryEmit(items.find { it.id == id })
+                }
+            }
+        }
         override fun observeCount(): Flow<Int> = flowOf(items.size)
         override fun observeStats(): Flow<MediaStats> = flowOf(MediaStats(0, 0, 0, null, 0, 0, 0, 0, 0))
         override fun observeCategoryCounts(): Flow<Map<MediaCategory, Int>> = flowOf(emptyMap())
@@ -53,14 +61,17 @@ class MediaDetailsViewModelTest {
         override suspend fun add(item: MediaItem): MediaItem {
             val toAdd = item.copy(id = "gen-id-123")
             items.add(toAdd)
+            itemFlows[toAdd.id]?.emit(toAdd)
             return toAdd
         }
         override suspend fun update(item: MediaItem) {
             val idx = items.indexOfFirst { it.id == item.id }
             if (idx >= 0) items[idx] = item else items.add(item)
+            itemFlows[item.id]?.emit(item)
         }
         override suspend fun delete(id: String) {
             items.removeIf { it.id == id }
+            itemFlows[id]?.emit(null)
         }
         override suspend fun replaceAll(items: List<MediaItem>) {
             this.items.clear()
@@ -569,6 +580,84 @@ class MediaDetailsViewModelTest {
         assertEquals("item-sync-3", syncEngine.pushedMediaId)
         assertFalse(vm.uiState.value.isSyncing)
         assertEquals("AniList sync failed.", vm.uiState.value.errorMsg)
+    }
+
+    @Test
+    fun liveDatabaseUpdate_updatesUiStateWithoutDeadlock() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "live-item-1",
+            category = MediaCategory.NOVEL,
+            title = "Live Test",
+            currentProgress = 10,
+            userStatus = UserStatus.READING,
+            lastUpdated = 100L,
+            dateAdded = 100L
+        )
+        repo.items.add(existing)
+
+        val vm = MediaDetailsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+
+        vm.initialize("live-item-1", null)
+        assertEquals("10", vm.uiState.value.currentProgress)
+
+        // Simulate database update while screen is open
+        repo.update(existing.copy(currentProgress = 15))
+        testScheduler.advanceUntilIdle()
+
+        // UiState should reflect new progress from database without being deadlocked
+        assertEquals("15", vm.uiState.value.currentProgress)
+    }
+
+    @Test
+    fun linkAniListId_whenItemIsNew_setsError() = runTest {
+        val repo = FakeRepository()
+        val vm = MediaDetailsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+
+        // Item is new (not in library)
+        vm.linkAniListId(12345L)
+        assertEquals("Add media to library before linking tracker", vm.uiState.value.errorMsg)
+    }
+
+    @Test
+    fun updateArtwork_setsArtworkUrlAndBanner() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "art-item-1",
+            category = MediaCategory.MANGA,
+            title = "Artwork Test",
+            currentProgress = 1,
+            userStatus = UserStatus.READING,
+            lastUpdated = 100L,
+            dateAdded = 100L
+        )
+        repo.items.add(existing)
+
+        val vm = MediaDetailsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+
+        vm.initialize("art-item-1", null)
+        vm.updateArtwork("https://example.com/cover.jpg", "https://example.com/banner.jpg")
+
+        assertEquals("https://example.com/cover.jpg", vm.uiState.value.coverImageUrl)
+        assertEquals("https://example.com/banner.jpg", vm.uiState.value.bannerImage)
     }
 }
 

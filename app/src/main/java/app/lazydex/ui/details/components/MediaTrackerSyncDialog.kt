@@ -88,6 +88,7 @@ fun MediaTrackerSyncDialog(
     onOpenSettings: () -> Unit,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
+    inLibrary: Boolean = true,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
@@ -195,6 +196,33 @@ fun MediaTrackerSyncDialog(
 
             // Body States
             when {
+                !inLibrary -> {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                text = "Add this media to your library first to track and synchronize with AniList.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                            )
+                            Button(
+                                onClick = onDismissRequest,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("OK")
+                            }
+                        }
+                    }
+                }
+
                 !isLoggedIn -> {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHighest,
