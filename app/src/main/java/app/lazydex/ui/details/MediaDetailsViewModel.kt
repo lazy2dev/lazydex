@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.lazydex.data.local.dao.MediaLinkDao
 import app.lazydex.data.local.entity.MediaLinkEntity
-import app.lazydex.data.tracker.anilist.AnilistGraphQLClient
+import app.lazydex.data.tracker.anilist.AnilistApi
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.anilist.dto.AniListMedia
 import app.lazydex.data.tracker.sync.AnilistSyncEngine
@@ -140,7 +140,7 @@ class MediaDetailsViewModel(
     private val mediaLinkDao: MediaLinkDao? = null,
     private val syncEngine: AnilistSyncEngine? = null,
     private val tokenStore: AnilistTokenStore? = null,
-    private val client: AnilistGraphQLClient? = null,
+    private val client: AnilistApi? = null,
 ) : ViewModel() {
 
     private val itemId: String? = savedStateHandle["itemId"]

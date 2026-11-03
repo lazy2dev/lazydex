@@ -23,7 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
-import app.lazydex.data.tracker.anilist.AnilistGraphQLClient
+import app.lazydex.data.tracker.anilist.AnilistApi
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.ui.navigation.ExtensionsRoute
 import kotlinx.coroutines.Dispatchers
@@ -34,7 +34,7 @@ class MainActivity : ComponentActivity() {
 
     private val themePreferences: ThemePreferences by inject()
     private val tokenStore: AnilistTokenStore by inject()
-    private val client: AnilistGraphQLClient by inject()
+    private val client: AnilistApi by inject()
     private val deepLinkRepoUrl = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {

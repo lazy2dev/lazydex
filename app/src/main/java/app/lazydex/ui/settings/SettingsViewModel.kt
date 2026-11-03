@@ -10,7 +10,7 @@ import app.lazydex.backup.BackupProcessor
 import app.lazydex.backup.ImportedBackup
 import app.lazydex.data.local.ThemePreferences
 import app.lazydex.data.local.ThemePreset
-import app.lazydex.data.tracker.anilist.AnilistGraphQLClient
+import app.lazydex.data.tracker.anilist.AnilistApi
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.sync.AnilistSyncEngine
 import app.lazydex.domain.repository.MediaRepository
@@ -76,7 +76,7 @@ class SettingsViewModel(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val tokenStore: AnilistTokenStore? = null,
     private val syncEngine: AnilistSyncEngine? = null,
-    private val client: AnilistGraphQLClient? = null,
+    private val client: AnilistApi? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())

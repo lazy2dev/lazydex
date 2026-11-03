@@ -1,5 +1,6 @@
 package app.lazydex.data.repository
 
+import android.content.Context
 import androidx.room.withTransaction
 import app.lazydex.data.local.LazyDexDatabase
 import app.lazydex.data.local.converter.Converters
@@ -15,7 +16,9 @@ import app.lazydex.data.local.entity.ActivityEntity
 import app.lazydex.data.local.entity.CategoryEntity
 import app.lazydex.data.local.entity.MediaItemEntity
 import app.lazydex.data.local.entity.SyncOutboxEntity
+import app.lazydex.data.tracker.service.DelayedTrackingUpdateJob
 import app.lazydex.data.tracker.sync.AnilistSyncEngine
+import app.lazydex.data.tracker.sync.TrackChapter
 import app.lazydex.domain.model.ActivityLog
 import app.lazydex.domain.model.Category
 import app.lazydex.domain.model.LengthUnit
@@ -43,6 +46,7 @@ import java.util.TimeZone
 import java.util.UUID
 
 class MediaRepositoryImpl(
+    private val context: Context? = null,
     private val db: LazyDexDatabase? = null,
     private val dao: MediaItemDao,
     private val categoryDao: CategoryDao,
@@ -53,6 +57,7 @@ class MediaRepositoryImpl(
     private val localCoversDir: File,
     private val partDao: MediaPartDao? = null,
     private val syncEngine: AnilistSyncEngine? = null,
+    private val trackChapter: TrackChapter? = null,
     private val syncScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val transactionRunner: (suspend (suspend () -> Any?) -> Any?)? = null
 ) : MediaRepository {
@@ -420,9 +425,18 @@ class MediaRepositoryImpl(
         }
 
         if (shouldPush) {
-            syncEngine?.let { engine ->
+            if (context != null && trackChapter != null) {
                 syncScope.launch {
-                    runCatching { engine.pushDirtyItem(item.id) }
+                    trackChapter.await(context, item.id, item.progress)
+                }
+            } else {
+                syncEngine?.let { engine ->
+                    syncScope.launch {
+                        val success = runCatching { engine.pushDirtyItem(item.id) }.getOrDefault(false)
+                        if (!success && context != null) {
+                            DelayedTrackingUpdateJob.setupTask(context)
+                        }
+                    }
                 }
             }
         }

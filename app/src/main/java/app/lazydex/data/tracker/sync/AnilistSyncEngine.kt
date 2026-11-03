@@ -6,7 +6,7 @@ import app.lazydex.data.local.dao.MediaItemDao
 import app.lazydex.data.local.dao.MediaLinkDao
 import app.lazydex.data.local.entity.MediaItemEntity
 import app.lazydex.data.local.entity.MediaLinkEntity
-import app.lazydex.data.tracker.anilist.AnilistGraphQLClient
+import app.lazydex.data.tracker.anilist.AnilistApi
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.anilist.TokenBucketLimiter
 import app.lazydex.data.tracker.anilist.dto.AniListFuzzyDateInput
@@ -50,7 +50,7 @@ sealed class SyncResult {
  * and remote deletion reconciliation guard.
  */
 open class AnilistSyncEngine(
-    private val client: AnilistGraphQLClient,
+    private val client: AnilistApi,
     private val db: LazyDexDatabase? = null,
     private val mediaItemDao: MediaItemDao,
     private val mediaLinkDao: MediaLinkDao,
@@ -217,7 +217,7 @@ open class AnilistSyncEngine(
         recordInFlight(localItem.id, link.remoteId, dispatchedAt)
 
         try {
-            val params = AnilistGraphQLClient.SaveMediaListEntryParams(
+            val params = AnilistApi.SaveMediaListEntryParams(
                 id = link.remoteMediaListId?.toIntOrNull(),
                 mediaId = remoteMediaId,
                 status = ThreeWayMergeResolver.lazyDexStatusToAniList(localItem.userStatus, localItem.repeat),

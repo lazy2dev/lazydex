@@ -16,7 +16,7 @@ import app.lazydex.data.local.entity.CategoryEntity
 import app.lazydex.data.local.entity.MediaItemEntity
 import app.lazydex.data.local.entity.MediaLinkEntity
 import app.lazydex.data.local.entity.SyncOutboxEntity
-import app.lazydex.data.tracker.anilist.AnilistGraphQLClient
+import app.lazydex.data.tracker.anilist.AnilistApi
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.anilist.TokenBucketLimiter
 import app.lazydex.data.tracker.sync.AnilistSyncEngine
@@ -420,7 +420,7 @@ class ProgressMutationRulesTest {
     // --- Fakes ---
 
     class FakeSyncEngine : AnilistSyncEngine(
-        client = AnilistGraphQLClient(
+        client = AnilistApi(
             okHttpClient = OkHttpClient(),
             tokenStore = AnilistTokenStore(FakeSharedPreferences()),
             limiter = TokenBucketLimiter()

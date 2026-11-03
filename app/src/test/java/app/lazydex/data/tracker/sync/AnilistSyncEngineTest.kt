@@ -8,7 +8,7 @@ import app.lazydex.data.local.dao.StatusCount
 import app.lazydex.data.local.entity.ActiveMediaItemView
 import app.lazydex.data.local.entity.MediaItemEntity
 import app.lazydex.data.local.entity.MediaLinkEntity
-import app.lazydex.data.tracker.anilist.AnilistGraphQLClient
+import app.lazydex.data.tracker.anilist.AnilistApi
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.anilist.TokenBucketLimiter
 import app.lazydex.domain.model.MediaStats
@@ -51,7 +51,7 @@ class AnilistSyncEngineTest {
     }
 
     private lateinit var okHttpClient: OkHttpClient
-    private lateinit var client: AnilistGraphQLClient
+    private lateinit var client: AnilistApi
     private lateinit var engine: AnilistSyncEngine
 
     private var virtualTimeMs: Long = 1_700_000_000_000L
@@ -86,7 +86,7 @@ class AnilistSyncEngineTest {
             }
             .build()
 
-        client = AnilistGraphQLClient(
+        client = AnilistApi(
             okHttpClient = okHttpClient,
             tokenStore = tokenStore,
             limiter = limiter,
@@ -115,7 +115,7 @@ class AnilistSyncEngineTest {
         headers: Headers = Headers.headersOf("Content-Type", "application/json")
     ): Response {
         return Response.Builder()
-            .request(Request.Builder().url(AnilistGraphQLClient.DEFAULT_BASE_URL).build())
+            .request(Request.Builder().url(AnilistApi.DEFAULT_BASE_URL).build())
             .protocol(Protocol.HTTP_1_1)
             .code(code)
             .message(if (code == 200) "OK" else "Error")

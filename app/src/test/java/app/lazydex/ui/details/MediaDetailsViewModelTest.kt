@@ -4,7 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import app.lazydex.data.local.dao.MediaLinkDao
 import app.lazydex.data.local.entity.MediaLinkEntity
 import app.lazydex.data.repository.ProgressMutationRulesTest
-import app.lazydex.data.tracker.anilist.AnilistGraphQLClient
+import app.lazydex.data.tracker.anilist.AnilistApi
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.anilist.TokenBucketLimiter
 import app.lazydex.data.tracker.sync.AnilistSyncEngine
@@ -108,7 +108,7 @@ class MediaDetailsViewModelTest {
     }
 
     private class TestSyncEngine : AnilistSyncEngine(
-        client = AnilistGraphQLClient(
+        client = AnilistApi(
             okHttpClient = OkHttpClient(),
             tokenStore = AnilistTokenStore(AnilistSyncEngineTest.FakeSharedPreferences()),
             limiter = TokenBucketLimiter(60, 60, 15)

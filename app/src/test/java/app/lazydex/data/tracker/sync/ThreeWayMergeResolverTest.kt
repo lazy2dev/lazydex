@@ -493,5 +493,34 @@ class ThreeWayMergeResolverTest {
         assertEquals("Paused reading", remoteState.notes)
         assertEquals(1600000L, remoteState.updatedAt)
     }
+
+    @Test
+    fun `monotonic progress prevents lower remote progress from overwriting higher local progress`() {
+        val higherLocal = baseLocal.copy(progress = 45.0, updatedAt = 1700000100_000L)
+        val lowerRemote = baseRemote.copy(progress = 30, updatedAt = 1700000500L) // remote updated later but has lower progress
+
+        val result = ThreeWayMergeResolver.resolve(
+            local = higherLocal,
+            remote = lowerRemote,
+            snapshot = baseSnapshot
+        )
+
+        assertEquals(45.0, result.mergedState.progress, 0.001)
+    }
+
+    @Test
+    fun `reread with higher repeat count allows progress to reset to lower number`() {
+        val localFinished = baseLocal.copy(progress = 100.0, repeat = 0, updatedAt = 1700000100_000L)
+        val remoteRereading = baseRemote.copy(progress = 5, repeat = 1, status = "CURRENT", updatedAt = 1700000500L)
+
+        val result = ThreeWayMergeResolver.resolve(
+            local = localFinished,
+            remote = remoteRereading,
+            snapshot = baseSnapshot
+        )
+
+        assertEquals(5.0, result.mergedState.progress, 0.001)
+        assertEquals(1, result.mergedState.repeat)
+    }
 }
 

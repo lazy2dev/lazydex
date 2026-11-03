@@ -35,7 +35,7 @@ import org.junit.Test
 import java.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class AnilistGraphQLClientTest {
+class AnilistApiTest {
 
     private lateinit var fakePrefs: FakeSharedPreferences
     private lateinit var tokenStore: AnilistTokenStore
@@ -75,7 +75,7 @@ class AnilistGraphQLClientTest {
         headers: Headers = Headers.headersOf("Content-Type", "application/json")
     ): Response {
         return Response.Builder()
-            .request(Request.Builder().url(AnilistGraphQLClient.DEFAULT_BASE_URL).build())
+            .request(Request.Builder().url(AnilistApi.DEFAULT_BASE_URL).build())
             .protocol(Protocol.HTTP_1_1)
             .code(code)
             .message(if (code == 200) "OK" else "Error")
@@ -89,7 +89,7 @@ class AnilistGraphQLClientTest {
         tokenStore.accessToken = "test_access_token_123"
 
         val limiter = TokenBucketLimiter(timeProvider = { testScheduler.currentTime })
-        val client = AnilistGraphQLClient(
+        val client = AnilistApi(
             okHttpClient = fakeHttpClient,
             tokenStore = tokenStore,
             limiter = limiter,
@@ -273,7 +273,7 @@ class AnilistGraphQLClientTest {
         tokenStore.accessToken = "auth_token_xyz"
 
         val limiter = TokenBucketLimiter(timeProvider = { testScheduler.currentTime })
-        val client = AnilistGraphQLClient(
+        val client = AnilistApi(
             okHttpClient = fakeHttpClient,
             tokenStore = tokenStore,
             limiter = limiter,
@@ -344,7 +344,7 @@ class AnilistGraphQLClientTest {
         tokenStore.accessToken = "auth_token_viewer"
 
         val limiter = TokenBucketLimiter(timeProvider = { testScheduler.currentTime })
-        val client = AnilistGraphQLClient(
+        val client = AnilistApi(
             okHttpClient = fakeHttpClient,
             tokenStore = tokenStore,
             limiter = limiter,
@@ -384,7 +384,7 @@ class AnilistGraphQLClientTest {
     @Test
     fun `searchMedia sends correct variables and parses media page results`() = runTest {
         val limiter = TokenBucketLimiter(timeProvider = { testScheduler.currentTime })
-        val client = AnilistGraphQLClient(
+        val client = AnilistApi(
             okHttpClient = fakeHttpClient,
             tokenStore = tokenStore,
             limiter = limiter,
@@ -435,7 +435,7 @@ class AnilistGraphQLClientTest {
     @Test
     fun `GraphQL errors on HTTP 200 throw typed AniListApiException`() = runTest {
         val limiter = TokenBucketLimiter(timeProvider = { testScheduler.currentTime })
-        val client = AnilistGraphQLClient(
+        val client = AnilistApi(
             okHttpClient = fakeHttpClient,
             tokenStore = tokenStore,
             limiter = limiter,
@@ -475,7 +475,7 @@ class AnilistGraphQLClientTest {
     @Test
     fun `HTTP 401 response throws AniListApiException with isUnauthorized true`() = runTest {
         val limiter = TokenBucketLimiter(timeProvider = { testScheduler.currentTime })
-        val client = AnilistGraphQLClient(
+        val client = AnilistApi(
             okHttpClient = fakeHttpClient,
             tokenStore = tokenStore,
             limiter = limiter,
@@ -510,7 +510,7 @@ class AnilistGraphQLClientTest {
     @Test
     fun `HTTP 500 server error response throws AniListApiException`() = runTest {
         val limiter = TokenBucketLimiter(timeProvider = { testScheduler.currentTime })
-        val client = AnilistGraphQLClient(
+        val client = AnilistApi(
             okHttpClient = fakeHttpClient,
             tokenStore = tokenStore,
             limiter = limiter,
@@ -536,7 +536,7 @@ class AnilistGraphQLClientTest {
     @Test
     fun `HTTP 429 response triggers notifyRateLimited and retries until success`() = runTest {
         val limiter = TokenBucketLimiter(timeProvider = { testScheduler.currentTime })
-        val client = AnilistGraphQLClient(
+        val client = AnilistApi(
             okHttpClient = fakeHttpClient,
             tokenStore = tokenStore,
             limiter = limiter,
@@ -568,7 +568,7 @@ class AnilistGraphQLClientTest {
     @Test
     fun `HTTP 429 exceeding max retries throws AniListApiException with isRateLimited true`() = runTest {
         val limiter = TokenBucketLimiter(timeProvider = { testScheduler.currentTime })
-        val client = AnilistGraphQLClient(
+        val client = AnilistApi(
             okHttpClient = fakeHttpClient,
             tokenStore = tokenStore,
             limiter = limiter,
@@ -601,7 +601,7 @@ class AnilistGraphQLClientTest {
         tokenStore.accessToken = null
 
         val limiter = TokenBucketLimiter(timeProvider = { testScheduler.currentTime })
-        val client = AnilistGraphQLClient(
+        val client = AnilistApi(
             okHttpClient = fakeHttpClient,
             tokenStore = tokenStore,
             limiter = limiter,

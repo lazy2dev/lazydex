@@ -230,14 +230,16 @@ object ThreeWayMergeResolver {
         remote: RemoteState,
         snapshot: SyncSnapshot?
     ): MergeResult {
-        // Fractional chapter retention: if remote integer equals local integer, preserve local fraction
-        val resolvedProgress = if (remote.progress != null && local.progress.toInt() == remote.progress) {
-            local.progress
-        } else {
-            remote.progress?.toDouble() ?: local.progress
+        // Monotonic progress merge with fractional retention and re-read support
+        val remoteProg = remote.progress?.toDouble() ?: 0.0
+        val isRereading = (remote.repeat ?: 0) > local.repeat || remote.status?.uppercase() == "REPEATING"
+        val resolvedProgress = when {
+            remote.progress != null && local.progress.toInt() == remote.progress -> local.progress
+            isRereading -> remoteProg
+            else -> maxOf(local.progress, remoteProg)
         }
 
-        val resolvedSecondaryProgress = remote.progressVolumes?.toDouble() ?: local.secondaryProgress
+        val resolvedSecondaryProgress = maxOf(local.secondaryProgress, (remote.progressVolumes ?: 0).toDouble())
         val resolvedStatus = remote.status?.let { anilistStatusToLazyDex(it) } ?: local.userStatus
         val resolvedScore = if (remote.scoreRaw == 0) null else (remote.scoreRaw ?: local.scoreRaw)
         val resolvedRepeat = remote.repeat ?: local.repeat
@@ -305,11 +307,12 @@ object ThreeWayMergeResolver {
         remote: RemoteState,
         snapshot: SyncSnapshot?
     ): MergeResult {
-        // Monotonic progress merge:
-        // Fractional chapter retention: if remote integer equals local integer, preserve local fraction
+        // Monotonic progress merge with fractional retention and re-read support
         val remoteProg = remote.progress?.toDouble() ?: 0.0
+        val isRereading = (remote.repeat ?: 0) > local.repeat || remote.status?.uppercase() == "REPEATING"
         val resolvedProgress = when {
             remote.progress != null && local.progress.toInt() == remote.progress -> local.progress
+            isRereading -> remoteProg
             remoteProg > local.progress -> remoteProg
             else -> local.progress
         }

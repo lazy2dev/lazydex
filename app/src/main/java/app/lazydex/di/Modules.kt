@@ -12,10 +12,12 @@ import app.lazydex.data.local.MIGRATION_5_6
 import app.lazydex.data.local.ThemePreferences
 import app.lazydex.data.local.setupV5TriggersAndSeeds
 import app.lazydex.data.repository.MediaRepositoryImpl
-import app.lazydex.data.tracker.anilist.AnilistGraphQLClient
+import app.lazydex.data.tracker.anilist.AnilistApi
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.anilist.TokenBucketLimiter
+import app.lazydex.data.tracker.service.DelayedTrackingStore
 import app.lazydex.data.tracker.sync.AnilistSyncEngine
+import app.lazydex.data.tracker.sync.TrackChapter
 import app.lazydex.domain.repository.MediaRepository
 import app.lazydex.scraper.MetadataScraper
 import app.lazydex.scraper.SafeDns
@@ -72,6 +74,7 @@ val databaseModule = module {
 val repositoryModule = module {
     single<MediaRepository> {
         MediaRepositoryImpl(
+            context = androidContext(),
             db = get(),
             dao = get(),
             categoryDao = get(),
@@ -80,15 +83,17 @@ val repositoryModule = module {
             outboxDao = get(),
             settingDao = get(),
             localCoversDir = get(named("coversDir")),
-            syncEngine = getOrNull()
+            syncEngine = getOrNull(),
+            trackChapter = getOrNull()
         )
     }
 }
 
 val trackerModule = module {
     single { TokenBucketLimiter() }
+    single { DelayedTrackingStore(androidContext()) }
     single {
-        AnilistGraphQLClient(
+        AnilistApi(
             okHttpClient = get(),
             tokenStore = get(),
             limiter = get()
@@ -101,6 +106,13 @@ val trackerModule = module {
             mediaItemDao = get(),
             mediaLinkDao = get(),
             tokenStore = get()
+        )
+    }
+    single {
+        TrackChapter(
+            syncEngine = get(),
+            tokenStore = get(),
+            delayedTrackingStore = get()
         )
     }
 }
