@@ -108,7 +108,6 @@ class AnilistGraphQLClientTest {
             assertEquals("5001", variables?.get("userId")?.jsonPrimitive?.content)
             assertEquals("MANGA", variables?.get("type")?.jsonPrimitive?.content)
             assertEquals("1", variables?.get("chunk")?.jsonPrimitive?.content)
-            assertEquals("500", variables?.get("perPage")?.jsonPrimitive?.content)
 
             createResponse(
                 code = 200,
@@ -173,8 +172,7 @@ class AnilistGraphQLClientTest {
         val collection = client.getMediaListCollection(
             userId = 5001,
             type = "MANGA",
-            chunk = 1,
-            perPage = 500
+            chunk = 1
         )
 
         assertTrue(collection.hasNextChunk)

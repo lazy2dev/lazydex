@@ -35,6 +35,7 @@ Local-only Android media tracker for Novels, Anime, Manga, Games, Movies, TV. No
 
 - **Reference Documentation**: `.agents/reference/`
   - `anilist-api.md` — AniList GraphQL queries, mutations, OAuth, rate limiting
+  - `malsync-2way-sync.md` — MALSync 2-way sync model, diffing, and conflict resolution
   - `mihon-sync.md` — Tracker sync patterns and score conversion
   - `mihon-ui.md` — UI layout and component visual references
 

@@ -48,8 +48,8 @@ class AnilistGraphQLClient(
         }
 
         const val MEDIA_LIST_COLLECTION_QUERY = """
-query (${'$'}userId: Int, ${'$'}type: MediaType, ${'$'}chunk: Int, ${'$'}perPage: Int) {
-  MediaListCollection(userId: ${'$'}userId, type: ${'$'}type, chunk: ${'$'}chunk, perPage: ${'$'}perPage) {
+query (${'$'}userId: Int, ${'$'}type: MediaType, ${'$'}chunk: Int) {
+  MediaListCollection(userId: ${'$'}userId, type: ${'$'}type, chunk: ${'$'}chunk) {
     hasNextChunk
     lists {
       name
@@ -165,14 +165,12 @@ query (${'$'}search: String, ${'$'}type: MediaType, ${'$'}perPage: Int) {
         userId: Int,
         type: String,
         chunk: Int = 1,
-        perPage: Int = 500,
         priority: TokenBucketLimiter.Priority = TokenBucketLimiter.Priority.BACKGROUND
     ): MediaListCollection {
         val variables = buildJsonObject {
             put("userId", userId)
             put("type", type)
             put("chunk", chunk)
-            put("perPage", perPage)
         }
 
         val responseData = execute(
@@ -193,10 +191,9 @@ query (${'$'}search: String, ${'$'}type: MediaType, ${'$'}perPage: Int) {
         userId: Int,
         type: String,
         chunk: Int = 1,
-        perPage: Int = 500,
         priority: TokenBucketLimiter.Priority = TokenBucketLimiter.Priority.BACKGROUND
     ): Pair<List<AniListMediaListEntry>, Boolean> {
-        val collection = getMediaListCollection(userId, type, chunk, perPage, priority)
+        val collection = getMediaListCollection(userId, type, chunk, priority)
         return Pair(collection.deduplicatedEntries, collection.hasNextChunk)
     }
 

@@ -143,7 +143,6 @@ open class AnilistSyncEngine(
                         userId = userId,
                         type = type,
                         chunk = chunk,
-                        perPage = 500,
                         priority = TokenBucketLimiter.Priority.BACKGROUND
                     )
                     hasNext = hasNextChunk

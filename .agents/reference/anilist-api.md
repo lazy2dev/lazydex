@@ -25,8 +25,8 @@ https://anilist.co/api/v2/oauth/authorize?client_id={CLIENT_ID}&response_type=to
 ## 2. Paginated MediaListCollection Query
 
 ```graphql
-query ($userId: Int, $type: MediaType, $chunk: Int, $perPage: Int) {
-  MediaListCollection(userId: $userId, type: $type, chunk: $chunk, perPage: $perPage) {
+query ($userId: Int, $type: MediaType, $chunk: Int) {
+  MediaListCollection(userId: $userId, type: $type, chunk: $chunk) {
     lists {
       name
       isCustomList
