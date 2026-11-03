@@ -42,7 +42,11 @@ data class TrackingSettingsUiState(
     val syncError: String? = null,
     val backgroundSyncEnabled: Boolean = true,
     val strictAdultContent: Boolean = false,
-    val blurAdultCovers: Boolean = false
+    val blurAdultCovers: Boolean = false,
+    val trackOnAdd: Boolean = true,
+    val autoUpdateAfterReading: Boolean = true,
+    val autoUpdateOnMarkRead: String = "ALWAYS",
+    val autoSyncProgressFromTrackers: Boolean = true
 )
 
 data class SettingsUiState(
@@ -432,10 +436,34 @@ class SettingsViewModel(
                     username = store.username,
                     avatarUrl = store.avatarUrl,
                     backgroundSyncEnabled = store.backgroundSyncEnabled,
-                    strictAdultContent = !store.displayAdultContent
+                    strictAdultContent = !store.displayAdultContent,
+                    trackOnAdd = store.trackOnAdd,
+                    autoUpdateAfterReading = store.autoUpdateAfterReading,
+                    autoUpdateOnMarkRead = store.autoUpdateOnMarkRead,
+                    autoSyncProgressFromTrackers = store.autoSyncProgressFromTrackers
                 )
             )
         }
+    }
+
+    fun setTrackOnAdd(enabled: Boolean) {
+        tokenStore?.trackOnAdd = enabled
+        refreshTrackingState()
+    }
+
+    fun setAutoUpdateAfterReading(enabled: Boolean) {
+        tokenStore?.autoUpdateAfterReading = enabled
+        refreshTrackingState()
+    }
+
+    fun setAutoUpdateOnMarkRead(option: String) {
+        tokenStore?.autoUpdateOnMarkRead = option
+        refreshTrackingState()
+    }
+
+    fun setAutoSyncProgressFromTrackers(enabled: Boolean) {
+        tokenStore?.autoSyncProgressFromTrackers = enabled
+        refreshTrackingState()
     }
 
     fun syncAniList() {

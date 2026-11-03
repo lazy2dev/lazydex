@@ -43,9 +43,7 @@ data class MediaItem(
     val deletedAt: Long? = null,
     val isDeleted: Boolean = deletedAt != null,
     val isAdult: Boolean = false,
-    val category: MediaCategory = MediaCategory.fromString(
-        categoryId.removePrefix("cat_").removePrefix("typ_").substringBefore("_")
-    ) ?: MediaCategory.NOVEL
+    val category: MediaCategory = resolveMediaCategory(categoryId)
 ) {
     constructor(
         id: String,

@@ -23,6 +23,7 @@ import app.lazydex.domain.model.ActivityLog
 import app.lazydex.domain.model.Category
 import app.lazydex.domain.model.LengthUnit
 import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.resolveMediaCategory
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.MediaPart
 import app.lazydex.domain.model.MediaStats
@@ -122,9 +123,7 @@ class MediaRepositoryImpl(
     override fun observeCategoryCounts(): Flow<Map<MediaCategory, Int>> = dao.observeCategoryCounts()
         .map { list ->
             val counts = list.associate { count ->
-                val cat = MediaCategory.fromString(
-                    count.category.removePrefix("cat_").removePrefix("typ_").substringBefore("_")
-                )
+                val cat = resolveMediaCategory(count.category)
                 cat to count.count
             }
             MediaCategory.entries.associateWith { counts[it] ?: 0 }

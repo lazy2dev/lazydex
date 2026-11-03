@@ -22,6 +22,10 @@ class AnilistTokenStore(
         private const val KEY_SCORE_FORMAT = "score_format"
         private const val KEY_AUTH_STATE = "auth_state"
         private const val KEY_BACKGROUND_SYNC = "background_sync"
+        private const val KEY_TRACK_ON_ADD = "track_on_add"
+        private const val KEY_AUTO_UPDATE_AFTER_READING = "auto_update_after_reading"
+        private const val KEY_AUTO_UPDATE_ON_MARK_READ = "auto_update_on_mark_read"
+        private const val KEY_AUTO_SYNC_FROM_TRACKERS = "auto_sync_from_trackers"
 
         fun createEncryptedPreferences(context: Context): SharedPreferences {
             val masterKey = MasterKey.Builder(context)
@@ -81,6 +85,30 @@ class AnilistTokenStore(
         get() = preferences.getBoolean(KEY_BACKGROUND_SYNC, true)
         set(value) {
             preferences.edit().putBoolean(KEY_BACKGROUND_SYNC, value).apply()
+        }
+
+    var trackOnAdd: Boolean
+        get() = preferences.getBoolean(KEY_TRACK_ON_ADD, true)
+        set(value) {
+            preferences.edit().putBoolean(KEY_TRACK_ON_ADD, value).apply()
+        }
+
+    var autoUpdateAfterReading: Boolean
+        get() = preferences.getBoolean(KEY_AUTO_UPDATE_AFTER_READING, true)
+        set(value) {
+            preferences.edit().putBoolean(KEY_AUTO_UPDATE_AFTER_READING, value).apply()
+        }
+
+    var autoUpdateOnMarkRead: String
+        get() = preferences.getString(KEY_AUTO_UPDATE_ON_MARK_READ, "ALWAYS") ?: "ALWAYS"
+        set(value) {
+            preferences.edit().putString(KEY_AUTO_UPDATE_ON_MARK_READ, value).apply()
+        }
+
+    var autoSyncProgressFromTrackers: Boolean
+        get() = preferences.getBoolean(KEY_AUTO_SYNC_FROM_TRACKERS, true)
+        set(value) {
+            preferences.edit().putBoolean(KEY_AUTO_SYNC_FROM_TRACKERS, value).apply()
         }
 
     var displayAdultContent: Boolean

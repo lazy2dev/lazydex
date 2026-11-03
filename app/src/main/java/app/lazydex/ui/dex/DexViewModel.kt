@@ -6,6 +6,7 @@ import app.lazydex.data.local.LibraryDisplayMode
 import app.lazydex.data.local.ThemePreferences
 import app.lazydex.domain.model.Category
 import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.resolveMediaCategory
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.SortDirection
 import app.lazydex.domain.model.SortField
@@ -52,7 +53,7 @@ data class DexUiState(
     val dateRangeEnd: Long? = null,
     val perCategoryCounts: Map<MediaCategory, Int> = emptyMap(),
     val perStatusCounts: Map<StatusFilter, Int> = emptyMap(),
-    val displayMode: LibraryDisplayMode = LibraryDisplayMode.COMPACT_GRID,
+    val displayMode: LibraryDisplayMode = LibraryDisplayMode.LIST,
     val gridColumns: Int = 0,
     val showCategoryTabs: Boolean = true,
     val showProgressBadge: Boolean = true,
@@ -270,9 +271,7 @@ class DexViewModel(
     fun selectCategoryId(categoryId: String?) {
         selectedCategoryId.value = categoryId
         selectedSubtypeId.value = null
-        val legacyCat = categoryId?.removePrefix("cat_")?.removePrefix("typ_")?.substringBefore("_")?.let {
-            MediaCategory.fromString(it)
-        }
+        val legacyCat = categoryId?.let { resolveMediaCategory(it) }
         mutableFilterState.update { it.copy(category = legacyCat, genres = emptySet(), tags = emptySet()) }
     }
 

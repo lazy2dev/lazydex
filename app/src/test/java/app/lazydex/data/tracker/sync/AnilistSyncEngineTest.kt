@@ -209,7 +209,7 @@ class AnilistSyncEngineTest {
         assertEquals(1, fakeMediaItemDao.items.size)
         val item = fakeMediaItemDao.items.values.first()
         assertEquals("One Piece", item.title)
-        assertEquals("cat_manga", item.categoryId)
+        assertEquals("typ_manga_jp", item.categoryId)
         assertEquals("IN_PROGRESS", item.userStatus)
         assertEquals(25.0, item.progress, 0.001)
         assertEquals(100.0, item.progressTotal!!, 0.001)
@@ -234,10 +234,10 @@ class AnilistSyncEngineTest {
     }
 
     @Test
-    fun `inbound sync suggests merge when local item matches title without duplicating`() = runTest(testDispatcher) {
+    fun `inbound sync updates linked item by remoteId with monotonic progress and preserves status`() = runTest(testDispatcher) {
         val existingItem = MediaItemEntity(
             id = "local_frieren",
-            categoryId = "cat_manga",
+            categoryId = "typ_manga_jp",
             title = "Frieren: Beyond Journey's End",
             titleEnglish = "Frieren: Beyond Journey's End",
             titleRomaji = "Sousou no Frieren",
@@ -274,6 +274,21 @@ class AnilistSyncEngineTest {
             deletedAt = null
         )
         fakeMediaItemDao.items[existingItem.id] = existingItem
+
+        val existingLink = MediaLinkEntity(
+            id = "link_frieren",
+            mediaId = existingItem.id,
+            kind = "TRACKER",
+            providerId = "anilist",
+            remoteId = "2002",
+            remoteMediaListId = "905",
+            url = "https://anilist.co/manga/2002",
+            state = "LINKED",
+            syncStatus = "SYNCED",
+            createdAt = 1700000000,
+            updatedAt = 1700000000
+        )
+        fakeMediaLinkDao.links[existingLink.id] = existingLink
 
         val mangaJson = """
         {
@@ -336,12 +351,17 @@ class AnilistSyncEngineTest {
         assertEquals(1, fakeMediaItemDao.items.size)
         assertTrue(fakeMediaItemDao.items.containsKey("local_frieren"))
 
-        // 2. Link created for local_frieren with state = "SUGGESTED"
+        val updatedItem = fakeMediaItemDao.items["local_frieren"]!!
+        // 2. Monotonic progress: advanced from 10.0 to 15.0
+        assertEquals(15.0, updatedItem.progress, 0.001)
+        assertEquals("IN_PROGRESS", updatedItem.userStatus)
+
+        // 3. Link remains LINKED
         assertEquals(1, fakeMediaLinkDao.links.size)
         val link = fakeMediaLinkDao.links.values.first()
         assertEquals("local_frieren", link.mediaId)
         assertEquals("2002", link.remoteId)
-        assertEquals("SUGGESTED", link.state)
+        assertEquals("LINKED", link.state)
     }
 
     @Test
@@ -417,12 +437,39 @@ class AnilistSyncEngineTest {
 
         val novelItem = fakeMediaItemDao.items.values.find { it.title == "Overlord Light Novel" }
         assertNotNull(novelItem)
-        assertEquals("cat_novel", novelItem!!.categoryId)
+        assertEquals("typ_novel_ln", novelItem!!.categoryId)
 
         val animeItem = fakeMediaItemDao.items.values.find { it.title == "Frieren" }
         assertNotNull(animeItem)
-        assertEquals("cat_anime", animeItem!!.categoryId)
+        assertEquals("typ_anime_series", animeItem!!.categoryId)
         assertEquals(24.0, animeItem.progressTotal!!, 0.001)
+    }
+
+    @Test
+    fun `mapToCategoryId maps countries and formats to specific subtypes correctly`() {
+        // Manga country mapping
+        assertEquals("typ_manhwa", engine.mapToCategoryId("MANGA", "MANGA", countryOfOrigin = "KR"))
+        assertEquals("typ_manhua", engine.mapToCategoryId("MANGA", "MANGA", countryOfOrigin = "CN"))
+        assertEquals("typ_manhua", engine.mapToCategoryId("MANGA", "MANGA", countryOfOrigin = "TW"))
+        assertEquals("typ_manga_jp", engine.mapToCategoryId("MANGA", "MANGA", countryOfOrigin = "JP"))
+
+        // Fallback to tags when country is missing
+        assertEquals("typ_manhwa", engine.mapToCategoryId("MANGA", "MANGA", countryOfOrigin = null, tags = listOf("Action", "Manhwa")))
+        assertEquals("typ_manhwa", engine.mapToCategoryId("MANGA", "MANGA", countryOfOrigin = null, tags = listOf("Webtoon", "Romance")))
+        assertEquals("typ_manhua", engine.mapToCategoryId("MANGA", "MANGA", countryOfOrigin = null, tags = listOf("Cultivation", "Manhua")))
+        assertEquals("typ_manga_jp", engine.mapToCategoryId("MANGA", "MANGA", countryOfOrigin = null, tags = listOf("Action")))
+
+        // Novel country mapping
+        assertEquals("typ_novel_cn", engine.mapToCategoryId("NOVEL", "MANGA", countryOfOrigin = "CN"))
+        assertEquals("typ_novel_kr", engine.mapToCategoryId("NOVEL", "MANGA", countryOfOrigin = "KR"))
+        assertEquals("typ_novel_ln", engine.mapToCategoryId("NOVEL", "MANGA", countryOfOrigin = "JP"))
+        assertEquals("typ_novel_ln", engine.mapToCategoryId("NOVEL", "MANGA", countryOfOrigin = null))
+
+        // Anime format mapping
+        assertEquals("typ_anime_movie", engine.mapToCategoryId("MOVIE", "ANIME"))
+        assertEquals("typ_anime_ova", engine.mapToCategoryId("OVA", "ANIME"))
+        assertEquals("typ_anime_ova", engine.mapToCategoryId("SPECIAL", "ANIME"))
+        assertEquals("typ_anime_series", engine.mapToCategoryId("TV", "ANIME"))
     }
 
     @Test
@@ -692,7 +739,7 @@ class AnilistSyncEngineTest {
     }
 
     @Test
-    fun `remote deletion reconciliation marks missing remote items as UNLINKED without deleting local data`() = runTest(testDispatcher) {
+    fun `safe import preserves existing links without unlinking when items are missing on remote`() = runTest(testDispatcher) {
         val localItem = MediaItemEntity(
             id = "local-manga-deleted-on-remote",
             categoryId = "cat_manga",
@@ -737,11 +784,11 @@ class AnilistSyncEngineTest {
         val result = engine.syncAll()
         assertTrue(result is SyncResult.Success)
         val success = result as SyncResult.Success
-        assertEquals(1, success.unlinkedCount)
+        assertEquals(0, success.unlinkedCount)
 
-        // Link is UNLINKED
+        // Link remains LINKED in safe non-destructive import
         val updatedLink = fakeMediaLinkDao.links[link.id]!!
-        assertEquals("UNLINKED", updatedLink.state)
+        assertEquals("LINKED", updatedLink.state)
 
         // Local media item, notes, and progress are NEVER deleted
         val localItemAfterSync = fakeMediaItemDao.items[localItem.id]

@@ -63,6 +63,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.lazydex.R
+import app.lazydex.ui.settings.components.ListPreferenceWidget
 import app.lazydex.ui.settings.components.PreferenceGroupHeader
 import app.lazydex.ui.settings.components.SwitchPreferenceWidget
 import app.lazydex.ui.settings.components.TrackingPreferenceWidget
@@ -141,9 +142,48 @@ fun SettingsTrackingScreen(
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
         ) {
-            // ==================== 1. SERVICES ====================
+            // ==================== 1. TRACKING PREFERENCES (KOMIKKU 1:1) ====================
+            SwitchPreferenceWidget(
+                title = "Track on adding to library",
+                subtitle = "Automatically track items when added to library",
+                checked = tracking.trackOnAdd,
+                onCheckedChange = { viewModel.setTrackOnAdd(it) }
+            )
+
+            SwitchPreferenceWidget(
+                title = "Update progress after reading",
+                subtitle = "Sync latest chapter or episode progress to tracker",
+                checked = tracking.autoUpdateAfterReading,
+                onCheckedChange = { viewModel.setAutoUpdateAfterReading(it) }
+            )
+
+            ListPreferenceWidget(
+                title = "Update progress when marked as read",
+                value = tracking.autoUpdateOnMarkRead,
+                entries = mapOf(
+                    "ALWAYS" to "Always",
+                    "ASK" to "Ask every time",
+                    "NEVER" to "Never"
+                ),
+                onValueChange = { viewModel.setAutoUpdateOnMarkRead(it) }
+            )
+
+            SwitchPreferenceWidget(
+                title = "Auto sync progress from Trackers",
+                subtitle = "Fetch latest reading progress from linked services",
+                checked = tracking.autoSyncProgressFromTrackers,
+                onCheckedChange = { viewModel.setAutoSyncProgressFromTrackers(it) }
+            )
+
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+
+            // ==================== 2. SERVICES ====================
             PreferenceGroupHeader(title = "SERVICES")
 
+            // Active Tracker: AniList
             TrackingPreferenceWidget(
                 title = "AniList",
                 subtitle = if (tracking.isLoggedIn) {
@@ -152,7 +192,7 @@ fun SettingsTrackingScreen(
                     "Tap to connect AniList account"
                 },
                 checked = tracking.isLoggedIn,
-                logoResId = R.drawable.ic_anilist,
+                logoResId = R.drawable.brand_anilist,
                 onClick = {
                     if (tracking.isLoggedIn) {
                         showLogoutDialog = true
@@ -162,170 +202,60 @@ fun SettingsTrackingScreen(
                 }
             )
 
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
-
-            // ==================== 2. SYNC & REFRESH ====================
-            PreferenceGroupHeader(title = "SYNC & REFRESH")
-
-            OutlinedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Sync Library with AniList",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "2-way state synchronization for Anime, Manga, and Novels.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Button(
-                            onClick = { viewModel.syncAniList() },
-                            enabled = tracking.isLoggedIn && !tracking.isSyncing
-                        ) {
-                            if (tracking.isSyncing) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = "Syncing")
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.Sync,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(text = "Sync Now")
-                            }
-                        }
-                    }
-
-                    // MAL-Sync style live progress bar
-                    if (tracking.isSyncing || tracking.syncTotal > 0) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        val percent = if (tracking.syncTotal > 0) {
-                            ((tracking.syncCurrent.toFloat() / tracking.syncTotal) * 100).toInt().coerceIn(0, 100)
-                        } else {
-                            0
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = if (tracking.isSyncing) {
-                                    "Syncing items: ${tracking.syncCurrent} / ${tracking.syncTotal} items"
-                                } else {
-                                    "Last sync completed: ${tracking.syncCurrent} / ${tracking.syncTotal} items"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = "$percent%",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        if (tracking.isSyncing && tracking.syncTotal == 0) {
-                            LinearProgressIndicator(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(6.dp)
-                                    .clip(RoundedCornerShape(3.dp))
-                            )
-                        } else {
-                            val progressFloat = if (tracking.syncTotal > 0) {
-                                (tracking.syncCurrent.toFloat() / tracking.syncTotal).coerceIn(0f, 1f)
-                            } else {
-                                1f
-                            }
-                            LinearProgressIndicator(
-                                progress = { progressFloat },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(6.dp)
-                                    .clip(RoundedCornerShape(3.dp))
-                            )
-                        }
-                    }
-
-                    // Error banner with retry affordance
-                    if (!tracking.syncError.isNullOrBlank()) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ErrorOutline,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = tracking.syncError,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconButton(
-                                onClick = { viewModel.syncAniList() },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = "Retry",
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
-                }
+            // Safe Non-Destructive List Importer (available when logged into AniList)
+            if (tracking.isLoggedIn) {
+                AniListImportCard(
+                    isImporting = tracking.isSyncing,
+                    syncCurrent = tracking.syncCurrent,
+                    syncTotal = tracking.syncTotal,
+                    errorMessage = tracking.syncError,
+                    onImportNow = { viewModel.syncAniList() }
+                )
             }
 
+            // Placeholder Trackers (Komikku list)
+            TrackingPreferenceWidget(
+                title = "MyAnimeList",
+                subtitle = "Coming soon",
+                checked = false,
+                enabled = false,
+                logoResId = R.drawable.brand_myanimelist
+            )
+
+            TrackingPreferenceWidget(
+                title = "Kitsu",
+                subtitle = "Coming soon",
+                checked = false,
+                enabled = false,
+                logoResId = R.drawable.brand_kitsu
+            )
+
+            TrackingPreferenceWidget(
+                title = "MangaUpdates",
+                subtitle = "Coming soon",
+                checked = false,
+                enabled = false,
+                logoResId = R.drawable.brand_mangaupdates
+            )
+
+            TrackingPreferenceWidget(
+                title = "Shikimori",
+                subtitle = "Coming soon",
+                checked = false,
+                enabled = false,
+                logoResId = R.drawable.brand_shikimori
+            )
+
+            TrackingPreferenceWidget(
+                title = "Bangumi",
+                subtitle = "Coming soon",
+                checked = false,
+                enabled = false,
+                logoResId = R.drawable.brand_bangumi
+            )
+
             HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
             )
 
@@ -341,12 +271,176 @@ fun SettingsTrackingScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "AniList 2-way sync keeps local reading/watching progress, volumes, scores, and status synchronized across devices without any cloud account needed for LazyDex.",
+                text = "Komikku-style tracking pushes chapter progress as you read, and safe list import pulls your AniList items without overwriting existing local data.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
             Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun AniListImportCard(
+    isImporting: Boolean,
+    syncCurrent: Int,
+    syncTotal: Int,
+    errorMessage: String?,
+    onImportNow: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedCard(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Import from AniList",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Pulls Anime, Manga & Novels into library without overwriting existing local data.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Button(
+                    onClick = onImportNow,
+                    enabled = !isImporting
+                ) {
+                    if (isImporting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = "Importing")
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Sync,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(text = "Import Now")
+                    }
+                }
+            }
+
+            // Live progress bar
+            if (isImporting || syncTotal > 0) {
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                Spacer(modifier = Modifier.height(12.dp))
+
+                val percent = if (syncTotal > 0) {
+                    ((syncCurrent.toFloat() / syncTotal) * 100).toInt().coerceIn(0, 100)
+                } else {
+                    0
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (isImporting) {
+                            "Importing items: $syncCurrent / $syncTotal items"
+                        } else {
+                            "Last import completed: $syncCurrent / $syncTotal items"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "$percent%",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (isImporting && syncTotal == 0) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                    )
+                } else {
+                    val progressFloat = if (syncTotal > 0) {
+                        (syncCurrent.toFloat() / syncTotal).coerceIn(0f, 1f)
+                    } else {
+                        1f
+                    }
+                    LinearProgressIndicator(
+                        progress = { progressFloat },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                    )
+                }
+            }
+
+            // Error banner with retry affordance
+            if (!errorMessage.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ErrorOutline,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = errorMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = onImportNow,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Retry",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }

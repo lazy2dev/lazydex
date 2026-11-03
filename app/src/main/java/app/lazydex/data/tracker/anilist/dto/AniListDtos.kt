@@ -99,6 +99,7 @@ data class AniListMedia(
     val id: Int,
     val idMal: Int? = null,
     val format: String? = null,
+    val countryOfOrigin: String? = null,
     val status: String? = null,
     val isAdult: Boolean? = null,
     val episodes: Int? = null,

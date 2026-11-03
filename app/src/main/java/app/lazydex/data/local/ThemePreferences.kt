@@ -34,7 +34,7 @@ enum class LibraryDisplayMode {
 }
 
 data class DisplayPreferences(
-    val displayMode: LibraryDisplayMode = LibraryDisplayMode.COMPACT_GRID,
+    val displayMode: LibraryDisplayMode = LibraryDisplayMode.LIST,
     val gridColumns: Int = 0,
     val showCategoryTabs: Boolean = true,
     val showProgressBadge: Boolean = true,
@@ -122,11 +122,11 @@ open class ThemePreferences(private val context: Context? = null) {
 
     open val displayPreferences: Flow<DisplayPreferences> by lazy {
         dataStore.data.map { preferences ->
-            val modeStr = preferences[DISPLAY_MODE_KEY] ?: LibraryDisplayMode.COMPACT_GRID.name
+            val modeStr = preferences[DISPLAY_MODE_KEY] ?: LibraryDisplayMode.LIST.name
             val mode = try {
                 LibraryDisplayMode.valueOf(modeStr)
             } catch (_: Exception) {
-                LibraryDisplayMode.COMPACT_GRID
+                LibraryDisplayMode.LIST
             }
             DisplayPreferences(
                 displayMode = mode,

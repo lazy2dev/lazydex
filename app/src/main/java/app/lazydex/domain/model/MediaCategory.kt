@@ -15,6 +15,15 @@ enum class MediaCategory(val displayName: String) {
     }
 }
 
+fun resolveMediaCategory(categoryId: String?): MediaCategory {
+    if (categoryId == null) return MediaCategory.NOVEL
+    val raw = categoryId.removePrefix("cat_").removePrefix("typ_").substringBefore("_").lowercase()
+    return when (raw) {
+        "manhwa", "manhua" -> MediaCategory.MANGA
+        else -> MediaCategory.fromString(raw) ?: MediaCategory.NOVEL
+    }
+}
+
 fun MediaCategory?.statusLabel(statusFilter: StatusFilter): String {
     return when (statusFilter) {
         StatusFilter.ALL -> "All"

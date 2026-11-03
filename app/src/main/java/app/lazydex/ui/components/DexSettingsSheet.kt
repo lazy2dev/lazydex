@@ -92,7 +92,7 @@ fun DexSettingsSheet(
     onSetRatingRange: ((Double?, Double?) -> Unit)? = null,
     onSelectSortField: (SortField) -> Unit,
     onSelectSortDirection: (SortDirection) -> Unit,
-    displayMode: LibraryDisplayMode = LibraryDisplayMode.COMPACT_GRID,
+    displayMode: LibraryDisplayMode = LibraryDisplayMode.LIST,
     onSelectDisplayMode: (LibraryDisplayMode) -> Unit = {},
     gridColumns: Int = 0,
     onSelectGridColumns: (Int) -> Unit = {},
@@ -468,13 +468,15 @@ private fun DisplayPage(
     ) {
         HeadingItem(text = "Display mode")
 
-        val displayModes = listOf(
-            "Compact grid" to LibraryDisplayMode.COMPACT_GRID,
-            "Comfortable grid" to LibraryDisplayMode.COMFORTABLE_GRID,
-            "List" to LibraryDisplayMode.LIST,
-            "Cover-only grid" to LibraryDisplayMode.COVER_ONLY_GRID,
-            "Panorama comfortable grid" to LibraryDisplayMode.PANORAMA_COMFORTABLE_GRID,
-        )
+        val displayModes = remember {
+            listOf(
+                "Compact grid" to LibraryDisplayMode.COMPACT_GRID,
+                "Comfortable grid" to LibraryDisplayMode.COMFORTABLE_GRID,
+                "List" to LibraryDisplayMode.LIST,
+                "Cover-only grid" to LibraryDisplayMode.COVER_ONLY_GRID,
+                "Panorama comfortable grid" to LibraryDisplayMode.PANORAMA_COMFORTABLE_GRID,
+            ).sortedBy { it.first.length }
+        }
 
         FlowRow(
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),

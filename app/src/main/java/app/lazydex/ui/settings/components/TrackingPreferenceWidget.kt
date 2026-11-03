@@ -44,19 +44,22 @@ fun TrackingPreferenceWidget(
     checked: Boolean,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
-    @DrawableRes logoResId: Int = R.drawable.ic_anilist,
+    @DrawableRes logoResId: Int = R.drawable.brand_anilist,
+    enabled: Boolean = true,
     onClick: (() -> Unit)? = null
 ) {
+    val alpha = if (enabled) 1f else 0.45f
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(enabled = onClick != null, onClick = { onClick?.invoke() })
+            .clickable(enabled = enabled && onClick != null, onClick = { onClick?.invoke() })
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         TrackLogoIcon(
             logoResId = logoResId,
-            contentDescription = title
+            contentDescription = title,
+            modifier = Modifier.clip(MaterialTheme.shapes.medium)
         )
         Column(
             modifier = Modifier
@@ -66,14 +69,14 @@ fun TrackingPreferenceWidget(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
                 fontSize = 16.sp
             )
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
                     fontSize = 13.sp
                 )
             }

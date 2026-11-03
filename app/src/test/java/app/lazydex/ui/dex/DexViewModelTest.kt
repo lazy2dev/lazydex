@@ -184,5 +184,17 @@ class DexViewModelTest {
         assertEquals(1, items.size)
         assertEquals("Omniscient Reader", items[0].title)
     }
+
+    @Test
+    fun `default display mode is LIST and selectCategoryId resolves manhwa category`() = runTest(testDispatcher) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(app.lazydex.data.local.LibraryDisplayMode.LIST, viewModel.uiState.value.displayMode)
+
+        viewModel.selectCategoryId("typ_manhwa")
+        advanceUntilIdle()
+        assertEquals(MediaCategory.MANGA, viewModel.uiState.value.selectedCategory)
+    }
 }
 

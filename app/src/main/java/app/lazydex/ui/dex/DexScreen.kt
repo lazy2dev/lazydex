@@ -69,6 +69,10 @@ import app.lazydex.ui.components.CategoryCreatorSheet
 import app.lazydex.ui.components.DexSettingsSheet
 import app.lazydex.ui.components.EmptyState
 import app.lazydex.ui.components.MediaCard
+import app.lazydex.ui.components.VerticalFastScroller
+import app.lazydex.ui.components.VerticalGridFastScroller
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -346,23 +350,31 @@ fun DexScreen(
                     }
                     else -> {
                         if (uiState.displayMode == LibraryDisplayMode.LIST) {
-                            LazyColumn(
-                                contentPadding = PaddingValues(vertical = 4.dp),
+                            val listState = rememberLazyListState()
+                            VerticalFastScroller(
+                                listState = listState,
                                 modifier = Modifier.fillMaxSize()
                             ) {
-                                items(
-                                    items = uiState.items,
-                                    key = { it.id }
-                                ) { item ->
-                                    MediaCard(
-                                        item = item,
-                                        onClick = { onNavigateToEditItem(item.id) },
-                                        displayMode = uiState.displayMode,
-                                        showProgressBadge = uiState.showProgressBadge,
-                                        showStatusBadge = uiState.showStatusBadge,
-                                        showScoreBadge = uiState.showScoreBadge,
-                                        blurAdultCovers = uiState.blurAdultCovers,
-                                    )
+                                LazyColumn(
+                                    state = listState,
+                                    contentPadding = PaddingValues(vertical = 4.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    items(
+                                        items = uiState.items,
+                                        key = { it.id },
+                                        contentType = { uiState.displayMode }
+                                    ) { item ->
+                                        MediaCard(
+                                            item = item,
+                                            onClick = { onNavigateToEditItem(item.id) },
+                                            displayMode = uiState.displayMode,
+                                            showProgressBadge = uiState.showProgressBadge,
+                                            showStatusBadge = uiState.showStatusBadge,
+                                            showScoreBadge = uiState.showScoreBadge,
+                                            blurAdultCovers = uiState.blurAdultCovers,
+                                        )
+                                    }
                                 }
                             }
                         } else {
@@ -371,27 +383,40 @@ fun DexScreen(
                                 uiState.displayMode == LibraryDisplayMode.PANORAMA_COMFORTABLE_GRID -> GridCells.Adaptive(minSize = 160.dp)
                                 else -> GridCells.Adaptive(minSize = 128.dp)
                             }
+                            val gridState = rememberLazyGridState()
+                            val horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            val gridContentPadding = PaddingValues(8.dp)
 
-                            LazyVerticalGrid(
+                            VerticalGridFastScroller(
+                                state = gridState,
                                 columns = gridCells,
-                                contentPadding = PaddingValues(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                arrangement = horizontalArrangement,
+                                contentPadding = gridContentPadding,
                                 modifier = Modifier.fillMaxSize()
                             ) {
-                                items(
-                                    items = uiState.items,
-                                    key = { it.id }
-                                ) { item ->
-                                    MediaCard(
-                                        item = item,
-                                        onClick = { onNavigateToEditItem(item.id) },
-                                        displayMode = uiState.displayMode,
-                                        showProgressBadge = uiState.showProgressBadge,
-                                        showStatusBadge = uiState.showStatusBadge,
-                                        showScoreBadge = uiState.showScoreBadge,
-                                        blurAdultCovers = uiState.blurAdultCovers,
-                                    )
+                                LazyVerticalGrid(
+                                    columns = gridCells,
+                                    state = gridState,
+                                    contentPadding = gridContentPadding,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    horizontalArrangement = horizontalArrangement,
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    items(
+                                        items = uiState.items,
+                                        key = { it.id },
+                                        contentType = { uiState.displayMode }
+                                    ) { item ->
+                                        MediaCard(
+                                            item = item,
+                                            onClick = { onNavigateToEditItem(item.id) },
+                                            displayMode = uiState.displayMode,
+                                            showProgressBadge = uiState.showProgressBadge,
+                                            showStatusBadge = uiState.showStatusBadge,
+                                            showScoreBadge = uiState.showScoreBadge,
+                                            blurAdultCovers = uiState.blurAdultCovers,
+                                        )
+                                    }
                                 }
                             }
                         }

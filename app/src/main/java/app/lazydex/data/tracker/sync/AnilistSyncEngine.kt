@@ -98,11 +98,43 @@ open class AnilistSyncEngine(
         }
     }
 
-    fun mapToCategoryId(format: String?, type: String): String {
-        return when {
-            format?.uppercase() == "NOVEL" -> "cat_novel"
-            type.uppercase() == "ANIME" || format?.uppercase() in ANIME_FORMATS -> "cat_anime"
-            else -> "cat_manga"
+    fun mapToCategoryId(
+        format: String?,
+        type: String,
+        countryOfOrigin: String? = null,
+        tags: List<String> = emptyList()
+    ): String {
+        val fmt = format?.uppercase()
+        val c = countryOfOrigin?.uppercase()
+        val typ = type.uppercase()
+
+        if (fmt == "NOVEL") {
+            return when (c) {
+                "CN" -> "typ_novel_cn"
+                "KR" -> "typ_novel_kr"
+                else -> "typ_novel_ln"
+            }
+        }
+        if (typ == "ANIME" || fmt in ANIME_FORMATS) {
+            return when (fmt) {
+                "MOVIE" -> "typ_anime_movie"
+                "OVA", "ONA", "SPECIAL" -> "typ_anime_ova"
+                else -> "typ_anime_series"
+            }
+        }
+        // Manga family
+        return when (c) {
+            "KR" -> "typ_manhwa"
+            "CN", "TW" -> "typ_manhua"
+            "JP" -> "typ_manga_jp"
+            else -> {
+                val tagLower = tags.map { it.lowercase() }
+                when {
+                    "manhwa" in tagLower || "webtoon" in tagLower -> "typ_manhwa"
+                    "manhua" in tagLower -> "typ_manhua"
+                    else -> "typ_manga_jp"
+                }
+            }
         }
     }
 
@@ -130,10 +162,7 @@ open class AnilistSyncEngine(
         val seenRemoteIds = mutableSetOf<String>()
 
         try {
-            // 1. Push pending dirty local changes before pulling
-            pushedCount = pushDirtyLinks()
-
-            // 2. Inbound sync: process all chunks for MANGA and ANIME
+            // 1. Inbound import: process all chunks for MANGA and ANIME without mass uploading local DB
             for (type in TRACKED_TYPES) {
                 var chunk = 1
                 var hasNext = true
@@ -162,19 +191,7 @@ open class AnilistSyncEngine(
                 }
             }
 
-            // Successfully processed all chunks without exception
             isFullSyncComplete = true
-
-            // 3. Remote deletion reconciliation guard:
-            // Runs strictly ONLY when isFullSyncComplete == true
-            if (isFullSyncComplete) {
-                _syncProgress.update { it.copy(message = "Reconciling remote deletions...") }
-                unlinkedCount = reconcileRemoteDeletions(seenRemoteIds)
-            }
-
-            // 4. Push any concurrent merges that resulted in DIRTY_LOCAL
-            val additionalPushed = pushDirtyLinks()
-            val totalPushed = pushedCount + additionalPushed
 
             val now = timeProvider()
             _syncProgress.value = SyncProgress(
@@ -182,13 +199,13 @@ open class AnilistSyncEngine(
                 current = pulledCount,
                 total = pulledCount,
                 lastSyncedAt = now,
-                message = "Sync completed"
+                message = "Import completed"
             )
 
             SyncResult.Success(
-                pushedCount = totalPushed,
+                pushedCount = 0,
                 pulledCount = pulledCount,
-                unlinkedCount = unlinkedCount
+                unlinkedCount = 0
             )
         } catch (e: Throwable) {
             val errorMsg = e.message ?: "Sync failed"
@@ -324,6 +341,9 @@ open class AnilistSyncEngine(
 
     /**
      * Ingests a single sub-batch of entries inside an active transaction.
+     * Pure ID-based match:
+     * - If remoteId already linked in DB: safe update (keep user status/score/notes, monotonic max progress, fill missing metadata).
+     * - If remoteId not in DB: insert brand new item and link directly.
      */
     private suspend fun processInboundBatch(
         batch: List<AniListMediaListEntry>,
@@ -339,33 +359,47 @@ open class AnilistSyncEngine(
             if (existingLink != null) {
                 val localItem = mediaItemDao.getById(existingLink.mediaId)
                 if (localItem != null) {
-                    val snapshot = SyncSnapshot.fromJson(existingLink.syncedSnapshot)
-                    val localState = LocalState.from(localItem)
-                    val remoteState = RemoteState.from(entry)
-                    val inFlightDispatchedAt = getInFlightDispatchedAt(localItem.id, remoteId)
-
-                    val mergeResult = ThreeWayMergeResolver.resolve(
-                        local = localState,
-                        remote = remoteState,
-                        snapshot = snapshot,
-                        dispatchedAt = inFlightDispatchedAt
-                    )
-
                     val isAnime = type.uppercase() == "ANIME" || entry.media?.format in ANIME_FORMATS
+
+                    // Monotonic progress merge (max) with fractional retention
+                    val remoteProg = entry.progress?.toDouble() ?: 0.0
+                    val resolvedProgress = when {
+                        entry.progress != null && localItem.progress.toInt() == entry.progress -> localItem.progress
+                        remoteProg > localItem.progress -> remoteProg
+                        else -> localItem.progress
+                    }
+                    val remoteVols = (entry.progressVolumes ?: 0).toDouble()
+                    val resolvedSecondaryProgress = maxOf(localItem.secondaryProgress, remoteVols)
+
+                    // Safe retention: never overwrite local status, score, or notes if user has them
+                    val resolvedStatus = if (localItem.userStatus.isNotBlank() && localItem.userStatus != "PLANNING") {
+                        localItem.userStatus
+                    } else {
+                        entry.status?.let { ThreeWayMergeResolver.anilistStatusToLazyDex(it) } ?: localItem.userStatus
+                    }
+                    val resolvedScore = localItem.scoreRaw ?: (if (entry.scoreRaw == 0) null else entry.scoreRaw)
+                    val resolvedNotes = if (localItem.notes.isNotBlank()) localItem.notes else (entry.notes ?: "")
+                    val resolvedRepeat = maxOf(localItem.repeat, entry.repeat ?: 0)
+                    val resolvedPrivate = localItem.isPrivate
+
+                    // Metadata fill: update totals and missing metadata
                     val updatedProgressTotal = (if (isAnime) entry.media?.episodes else entry.media?.chapters)?.toDouble() ?: localItem.progressTotal
                     val updatedSecondaryProgressTotal = entry.media?.volumes?.toDouble() ?: localItem.secondaryProgressTotal
-                    val updatedCoverImageUrl = entry.media?.coverImage?.best ?: localItem.coverImageUrl
-                    val updatedBannerImage = entry.media?.bannerImage ?: localItem.bannerImage
-                    val updatedTitleEnglish = entry.media?.title?.english ?: localItem.titleEnglish
-                    val updatedTitleRomaji = entry.media?.title?.romaji ?: localItem.titleRomaji
-                    val updatedTitleNative = entry.media?.title?.nativeTitle ?: localItem.titleNative
-                    val updatedIsAdult = entry.media?.isAdult ?: localItem.isAdult
-                    val updatedGenres = if (entry.media?.genres.isNullOrEmpty()) localItem.genres else Json.encodeToString(entry.media!!.genres)
+                    val updatedCoverImageUrl = if (localItem.coverImageUrl.isNullOrBlank()) (entry.media?.coverImage?.best ?: "") else localItem.coverImageUrl
+                    val updatedBannerImage = localItem.bannerImage ?: entry.media?.bannerImage
+                    val updatedTitleEnglish = localItem.titleEnglish ?: entry.media?.title?.english
+                    val updatedTitleRomaji = localItem.titleRomaji ?: entry.media?.title?.romaji
+                    val updatedTitleNative = localItem.titleNative ?: entry.media?.title?.nativeTitle
+                    val updatedIsAdult = localItem.isAdult || (entry.media?.isAdult ?: false)
+
+                    val updatedGenres = if (localItem.genres.isBlank() || localItem.genres == "[]") {
+                        if (entry.media?.genres.isNullOrEmpty()) "[]" else Json.encodeToString(entry.media!!.genres)
+                    } else {
+                        localItem.genres
+                    }
                     val incomingTags = entry.media?.tags?.map { it.name }
-                    val updatedTags = if (incomingTags.isNullOrEmpty()) {
-                        localItem.tags
-                    } else if (localItem.tags.isBlank() || localItem.tags == "[]") {
-                        Json.encodeToString(incomingTags)
+                    val updatedTags = if (localItem.tags.isBlank() || localItem.tags == "[]") {
+                        if (incomingTags.isNullOrEmpty()) "[]" else Json.encodeToString(incomingTags)
                     } else {
                         localItem.tags
                     }
@@ -378,15 +412,22 @@ open class AnilistSyncEngine(
                     val updatedEndYear = localItem.endYear ?: entry.completedAt?.year
                     val updatedEndMonth = localItem.endMonth ?: entry.completedAt?.month
                     val updatedEndDay = localItem.endDay ?: entry.completedAt?.day
+                    val resolvedCategory = mapToCategoryId(
+                        entry.media?.format,
+                        type,
+                        entry.media?.countryOfOrigin,
+                        entry.media?.tags?.map { it.name } ?: emptyList()
+                    )
 
                     val updatedItem = localItem.copy(
-                        userStatus = mergeResult.mergedState.userStatus,
-                        progress = mergeResult.mergedState.progress,
-                        secondaryProgress = mergeResult.mergedState.secondaryProgress,
-                        scoreRaw = mergeResult.mergedState.scoreRaw,
-                        repeat = mergeResult.mergedState.repeat,
-                        isPrivate = mergeResult.mergedState.isPrivate,
-                        notes = mergeResult.mergedState.notes,
+                        categoryId = resolvedCategory,
+                        userStatus = resolvedStatus,
+                        progress = resolvedProgress,
+                        secondaryProgress = resolvedSecondaryProgress,
+                        scoreRaw = resolvedScore,
+                        repeat = resolvedRepeat,
+                        isPrivate = resolvedPrivate,
+                        notes = resolvedNotes,
                         progressTotal = updatedProgressTotal,
                         secondaryProgressTotal = updatedSecondaryProgressTotal,
                         coverImageUrl = updatedCoverImageUrl,
@@ -404,78 +445,28 @@ open class AnilistSyncEngine(
                         endYear = updatedEndYear,
                         endMonth = updatedEndMonth,
                         endDay = updatedEndDay,
-                        updatedAt = mergeResult.mergedState.updatedAt
+                        updatedAt = now
                     )
                     mediaItemDao.upsert(updatedItem)
 
                     val updatedLink = existingLink.copy(
                         remoteMediaListId = entry.id.toString(),
-                        syncStatus = mergeResult.syncStatus,
+                        syncStatus = ThreeWayMergeResolver.SYNC_STATUS_SYNCED,
                         state = "LINKED",
                         lastSyncedAt = now,
-                        syncedSnapshot = mergeResult.newSnapshot.toJson(),
                         updatedAt = now
                     )
                     mediaLinkDao.upsert(updatedLink)
                 }
             } else {
-                val categoryId = mapToCategoryId(entry.media?.format, type)
-                val targetTitles = listOfNotNull(
-                    entry.media?.title?.userPreferred,
-                    entry.media?.title?.english,
-                    entry.media?.title?.romaji,
-                    entry.media?.title?.nativeTitle
+                // New item from remote (pure ID-based insert)
+                val newMediaId = UUID.randomUUID().toString()
+                val categoryId = mapToCategoryId(
+                    entry.media?.format,
+                    type,
+                    entry.media?.countryOfOrigin,
+                    entry.media?.tags?.map { it.name } ?: emptyList()
                 )
-
-                // Check for existing local item with matching title & category family that lacks an active AniList link
-                val localCandidates = mediaItemDao.getActiveByCategoryId(categoryId)
-                val matchingLocal = localCandidates.firstOrNull { localItem ->
-                    val hasExistingLink = mediaLinkDao.getByMediaId(localItem.id)
-                        .any { it.providerId == PROVIDER_ID && it.state == "LINKED" }
-                    if (hasExistingLink) return@firstOrNull false
-
-                    val localTitles = listOfNotNull(
-                        localItem.title,
-                        localItem.titleEnglish,
-                        localItem.titleRomaji,
-                        localItem.titleNative
-                    )
-                    TitleMatcher.isMatch(localTitles, targetTitles)
-                }
-
-                if (matchingLocal != null) {
-                    // In-app Merge Suggester: Attach suggested link to existing local item without creating duplicate card
-                    val snapshot = SyncSnapshot(
-                        remoteUpdatedAt = entry.updatedAt?.let { if (it > 100_000_000_000L) it / 1000L else it } ?: (now / 1000L),
-                        localUpdatedAt = matchingLocal.updatedAt,
-                        progress = entry.progress?.toDouble() ?: 0.0,
-                        secondaryProgress = entry.progressVolumes?.toDouble() ?: 0.0,
-                        status = ThreeWayMergeResolver.anilistStatusToLazyDex(entry.status),
-                        scoreRaw = if (entry.scoreRaw == 0) null else entry.scoreRaw,
-                        repeat = entry.repeat ?: 0,
-                        isPrivate = entry.isPrivate ?: false,
-                        notes = entry.notes ?: ""
-                    )
-                    val suggestedLink = MediaLinkEntity(
-                        id = UUID.randomUUID().toString(),
-                        mediaId = matchingLocal.id,
-                        kind = "TRACKER",
-                        providerId = PROVIDER_ID,
-                        remoteId = remoteId,
-                        remoteMediaListId = entry.id.toString(),
-                        url = "https://anilist.co/${type.lowercase()}/$remoteId",
-                        state = "SUGGESTED",
-                        syncStatus = ThreeWayMergeResolver.SYNC_STATUS_SYNCED,
-                        lastSyncedAt = now,
-                        syncedSnapshot = snapshot.toJson(),
-                        createdAt = now,
-                        updatedAt = now
-                    )
-                    mediaLinkDao.upsert(suggestedLink)
-                } else {
-                    // New item from remote (no matching local item exists)
-                    val newMediaId = UUID.randomUUID().toString()
-                val categoryId = mapToCategoryId(entry.media?.format, type)
                 val userStatus = ThreeWayMergeResolver.anilistStatusToLazyDex(entry.status)
                 val progress = entry.progress?.toDouble() ?: 0.0
                 val secondaryProgress = entry.progressVolumes?.toDouble() ?: 0.0
@@ -490,7 +481,7 @@ open class AnilistSyncEngine(
                 val titleEnglish = entry.media?.title?.english
                 val titleRomaji = entry.media?.title?.romaji
                 val titleNative = entry.media?.title?.nativeTitle
-                val coverImageUrl = entry.media?.coverImage?.best
+                val coverImageUrl = entry.media?.coverImage?.best ?: ""
                 val bannerImage = entry.media?.bannerImage
                 val genres = if (entry.media?.genres.isNullOrEmpty()) "[]" else Json.encodeToString(entry.media!!.genres)
                 val isAdult = entry.media?.isAdult ?: false
@@ -564,7 +555,6 @@ open class AnilistSyncEngine(
                     updatedAt = now
                 )
                 mediaLinkDao.upsert(newLink)
-                }
             }
         }
     }

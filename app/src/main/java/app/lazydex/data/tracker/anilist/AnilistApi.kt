@@ -72,6 +72,7 @@ query (${'$'}userId: Int, ${'$'}type: MediaType, ${'$'}chunk: Int) {
           id
           idMal
           format
+          countryOfOrigin
           status
           isAdult
           episodes
@@ -152,6 +153,7 @@ query (${'$'}search: String, ${'$'}type: MediaType, ${'$'}perPage: Int) {
       title { userPreferred english romaji native }
       coverImage { large extraLarge medium }
       format
+      countryOfOrigin
       status
       episodes
       chapters
