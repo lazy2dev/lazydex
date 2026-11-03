@@ -84,7 +84,8 @@ val repositoryModule = module {
             settingDao = get(),
             localCoversDir = get(named("coversDir")),
             syncEngine = getOrNull(),
-            trackChapter = getOrNull()
+            trackChapter = getOrNull(),
+            tokenStore = getOrNull()
         )
     }
 }

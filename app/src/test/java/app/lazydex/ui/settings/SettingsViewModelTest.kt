@@ -433,6 +433,52 @@ class SettingsViewModelTest {
         collectJob.cancel()
     }
 
+    @Test
+    fun testTrackingPreferencesOption2() = runTest {
+        val repo = FakeRepository()
+        val prefs = FakeThemePreferences()
+        val fakePrefs = FakeTrackingSharedPreferences()
+        val tokenStore = AnilistTokenStore(fakePrefs)
+
+        val viewModel = SettingsViewModel(
+            repository = repo,
+            themePreferences = prefs,
+            localCoversDir = tempCoversDir,
+            cacheDir = tempCacheDir,
+            tokenStore = tokenStore,
+            ioDispatcher = testDispatcher
+        )
+
+        val collectJob = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+
+        // Verify default tracking preferences
+        assertTrue(viewModel.uiState.value.tracking.trackOnAdd)
+        assertTrue(viewModel.uiState.value.tracking.autoUpdateAfterReading)
+        assertEquals("ALWAYS", viewModel.uiState.value.tracking.autoUpdateOnMarkRead)
+        assertTrue(viewModel.uiState.value.tracking.autoSyncProgressFromTrackers)
+
+        // Mutate preferences
+        viewModel.setTrackOnAdd(false)
+        assertFalse(viewModel.uiState.value.tracking.trackOnAdd)
+        assertFalse(tokenStore.trackOnAdd)
+
+        viewModel.setAutoUpdateAfterReading(false)
+        assertFalse(viewModel.uiState.value.tracking.autoUpdateAfterReading)
+        assertFalse(tokenStore.autoUpdateAfterReading)
+
+        viewModel.setAutoUpdateOnMarkRead("ASK")
+        assertEquals("ASK", viewModel.uiState.value.tracking.autoUpdateOnMarkRead)
+        assertEquals("ASK", tokenStore.autoUpdateOnMarkRead)
+
+        viewModel.setAutoSyncProgressFromTrackers(false)
+        assertFalse(viewModel.uiState.value.tracking.autoSyncProgressFromTrackers)
+        assertFalse(tokenStore.autoSyncProgressFromTrackers)
+
+        collectJob.cancel()
+    }
+
     private class FakeTrackingSharedPreferences : SharedPreferences {
         private val data = mutableMapOf<String, Any?>()
 

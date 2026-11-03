@@ -142,7 +142,7 @@ fun SettingsTrackingScreen(
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
         ) {
-            // ==================== 1. TRACKING PREFERENCES (KOMIKKU 1:1) ====================
+            // ==================== 1. TRACKING PREFERENCES (OPTION 2: MEDIA TRACKER) ====================
             SwitchPreferenceWidget(
                 title = "Track on adding to library",
                 subtitle = "Automatically track items when added to library",
@@ -151,14 +151,14 @@ fun SettingsTrackingScreen(
             )
 
             SwitchPreferenceWidget(
-                title = "Update progress after reading",
-                subtitle = "Sync latest chapter or episode progress to tracker",
+                title = "Update tracker on progress change",
+                subtitle = "Sync latest chapter, episode, or volume progress to tracker",
                 checked = tracking.autoUpdateAfterReading,
                 onCheckedChange = { viewModel.setAutoUpdateAfterReading(it) }
             )
 
             ListPreferenceWidget(
-                title = "Update progress when marked as read",
+                title = "Update tracker when marked completed",
                 value = tracking.autoUpdateOnMarkRead,
                 entries = mapOf(
                     "ALWAYS" to "Always",
@@ -169,8 +169,8 @@ fun SettingsTrackingScreen(
             )
 
             SwitchPreferenceWidget(
-                title = "Auto sync progress from Trackers",
-                subtitle = "Fetch latest reading progress from linked services",
+                title = "Auto sync progress from trackers",
+                subtitle = "Fetch latest progress from linked tracking services",
                 checked = tracking.autoSyncProgressFromTrackers,
                 onCheckedChange = { viewModel.setAutoSyncProgressFromTrackers(it) }
             )
@@ -271,7 +271,7 @@ fun SettingsTrackingScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Komikku-style tracking pushes chapter progress as you read, and safe list import pulls your AniList items without overwriting existing local data.",
+                text = "Track progress as you read or watch, and safe list import pulls your AniList items without overwriting existing local data.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 modifier = Modifier.padding(horizontal = 16.dp)

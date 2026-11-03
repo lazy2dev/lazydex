@@ -130,4 +130,22 @@ class TrackChapterTest {
         assertEquals("media-1", items.first().mediaId)
         assertEquals(20f, items.first().lastProgressRead)
     }
+
+    @Test
+    fun `when autoUpdateAfterReading is false TrackChapter does not push`() = runTest {
+        tokenStore.accessToken = "valid_token"
+        tokenStore.userId = 1234
+        tokenStore.autoUpdateAfterReading = false
+
+        val stubEngine = StubSyncEngine { id ->
+            pushedIds.add(id)
+            true
+        }
+        val tracker = TrackChapter(stubEngine, tokenStore, delayedTrackingStore)
+
+        tracker.await(fakeContext, "media-1", 20.0, setupJobOnFailure = false)
+
+        assertTrue(pushedIds.isEmpty())
+        assertTrue(delayedTrackingStore.getItems().isEmpty())
+    }
 }

@@ -364,12 +364,17 @@ open class AnilistSyncEngine(
                     // Monotonic progress merge (max) with fractional retention
                     val remoteProg = entry.progress?.toDouble() ?: 0.0
                     val resolvedProgress = when {
+                        !tokenStore.autoSyncProgressFromTrackers -> localItem.progress
                         entry.progress != null && localItem.progress.toInt() == entry.progress -> localItem.progress
                         remoteProg > localItem.progress -> remoteProg
                         else -> localItem.progress
                     }
                     val remoteVols = (entry.progressVolumes ?: 0).toDouble()
-                    val resolvedSecondaryProgress = maxOf(localItem.secondaryProgress, remoteVols)
+                    val resolvedSecondaryProgress = if (!tokenStore.autoSyncProgressFromTrackers) {
+                        localItem.secondaryProgress
+                    } else {
+                        maxOf(localItem.secondaryProgress, remoteVols)
+                    }
 
                     // Safe retention: never overwrite local status, score, or notes if user has them
                     val resolvedStatus = if (localItem.userStatus.isNotBlank() && localItem.userStatus != "PLANNING") {

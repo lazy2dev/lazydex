@@ -644,6 +644,9 @@ class MediaDetailsViewModel(
                         observeItem(savedItem.id)
                     }
                 }
+                if (wasNew && tokenStore?.isLoggedIn == true && tokenStore.trackOnAdd && savedItem.title.isNotBlank()) {
+                    autoTrackMedia(savedItem.id, savedItem.title, savedItem.category)
+                }
             } catch (e: DuplicateUrlException) {
                 _uiState.value = _uiState.value.copy(
                     errorMsg = "A media tracker with this URL already exists.",
@@ -785,6 +788,45 @@ class MediaDetailsViewModel(
             linkDao.upsert(newLink)
             _uiState.value = _uiState.value.copy(suggestedTracker = null, trackerSearchResults = emptyList())
             syncWithAniList()
+        }
+    }
+
+    private fun autoTrackMedia(mediaId: String, title: String, category: MediaCategory) {
+        val anilistClient = client ?: return
+        val linkDao = mediaLinkDao ?: return
+        viewModelScope.launch {
+            try {
+                val mediaType = if (category == MediaCategory.ANIME || category == MediaCategory.TV || category == MediaCategory.MOVIE) "ANIME" else "MANGA"
+                val results = withContext(Dispatchers.IO) {
+                    anilistClient.searchMedia(title.trim(), mediaType, perPage = 1)
+                }
+                val match = results.firstOrNull() ?: return@launch
+                val now = System.currentTimeMillis()
+                val type = if (mediaType == "ANIME") "anime" else "manga"
+
+                val existing = linkDao.getByMediaId(mediaId)
+                if (existing.none { it.providerId == "anilist" }) {
+                    val newLink = MediaLinkEntity(
+                        id = UUID.randomUUID().toString(),
+                        mediaId = mediaId,
+                        kind = "TRACKER",
+                        providerId = "anilist",
+                        remoteId = match.id.toString(),
+                        remoteMediaListId = null,
+                        url = "https://anilist.co/$type/${match.id}",
+                        state = "LINKED",
+                        syncStatus = "DIRTY_LOCAL",
+                        lastSyncedAt = null,
+                        syncedSnapshot = "{}",
+                        createdAt = now,
+                        updatedAt = now,
+                    )
+                    linkDao.upsert(newLink)
+                    syncEngine?.pushDirtyItem(mediaId)
+                }
+            } catch (_: Exception) {
+                // Silently ignore background auto-track failure
+            }
         }
     }
 

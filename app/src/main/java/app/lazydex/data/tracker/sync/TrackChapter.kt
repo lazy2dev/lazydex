@@ -23,6 +23,7 @@ class TrackChapter(
         setupJobOnFailure: Boolean = true
     ) {
         if (!tokenStore.isLoggedIn) return
+        if (!tokenStore.autoUpdateAfterReading) return
 
         try {
             val success = syncEngine.pushDirtyItem(mediaId)

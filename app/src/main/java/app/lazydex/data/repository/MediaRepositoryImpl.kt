@@ -16,6 +16,7 @@ import app.lazydex.data.local.entity.ActivityEntity
 import app.lazydex.data.local.entity.CategoryEntity
 import app.lazydex.data.local.entity.MediaItemEntity
 import app.lazydex.data.local.entity.SyncOutboxEntity
+import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.service.DelayedTrackingUpdateJob
 import app.lazydex.data.tracker.sync.AnilistSyncEngine
 import app.lazydex.data.tracker.sync.TrackChapter
@@ -59,6 +60,7 @@ class MediaRepositoryImpl(
     private val partDao: MediaPartDao? = null,
     private val syncEngine: AnilistSyncEngine? = null,
     private val trackChapter: TrackChapter? = null,
+    private val tokenStore: AnilistTokenStore? = null,
     private val syncScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val transactionRunner: (suspend (suspend () -> Any?) -> Any?)? = null
 ) : MediaRepository {
@@ -415,7 +417,14 @@ class MediaRepositoryImpl(
                 )
             )
 
-            if (statusChanged || progressChanged || scoreChanged || current == null) {
+            val autoUpdateOnMarkRead = tokenStore?.autoUpdateOnMarkRead ?: "ALWAYS"
+            val skipStatusPush = statusChanged && normalized.userStatus == UserStatus.COMPLETED && autoUpdateOnMarkRead == "NEVER"
+            val allowProgressPush = tokenStore?.autoUpdateAfterReading ?: true
+            val effectiveProgressChanged = progressChanged && allowProgressPush
+
+            val shouldMarkDirty = (statusChanged && !skipStatusPush) || effectiveProgressChanged || scoreChanged || (current == null && (tokenStore?.trackOnAdd ?: true))
+
+            if (shouldMarkDirty) {
                 val dirtyRows = linkDao.updateSyncStatusByMediaId(item.id, "DIRTY_LOCAL", now)
                 if (dirtyRows > 0) {
                     shouldPush = true

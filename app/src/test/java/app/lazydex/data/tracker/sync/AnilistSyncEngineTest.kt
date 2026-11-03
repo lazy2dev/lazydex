@@ -365,6 +365,120 @@ class AnilistSyncEngineTest {
     }
 
     @Test
+    fun `when autoSyncProgressFromTrackers is false inbound sync does not overwrite local progress`() = runTest(testDispatcher) {
+        tokenStore.autoSyncProgressFromTrackers = false
+
+        val existingItem = MediaItemEntity(
+            id = "local_frieren",
+            categoryId = "typ_manga_jp",
+            title = "Frieren: Beyond Journey's End",
+            titleEnglish = "Frieren: Beyond Journey's End",
+            titleRomaji = "Sousou no Frieren",
+            titleNative = "葬送のフリーレン",
+            coverImagePath = "",
+            coverImageUrl = null,
+            bannerImage = null,
+            description = "Local added manga",
+            author = "",
+            userStatus = "IN_PROGRESS",
+            progress = 10.0,
+            progressTotal = null,
+            secondaryProgress = 2.0,
+            secondaryProgressTotal = null,
+            scoreRaw = null,
+            repeat = 0,
+            notes = "",
+            genres = "[]",
+            tags = "[]",
+            isPrivate = false,
+            isAdult = false,
+            startYear = null,
+            startMonth = null,
+            startDay = null,
+            endYear = null,
+            endMonth = null,
+            endDay = null,
+            durationMinutes = null,
+            avgChapterLength = null,
+            lengthUnitOverride = null,
+            playbackSpeed = 1.0,
+            createdAt = 1700000000,
+            updatedAt = 1700000000,
+            deletedAt = null
+        )
+        fakeMediaItemDao.items[existingItem.id] = existingItem
+
+        val existingLink = MediaLinkEntity(
+            id = "link_frieren",
+            mediaId = "local_frieren",
+            kind = "TRACKER",
+            providerId = "anilist",
+            remoteId = "2002",
+            remoteMediaListId = "3003",
+            url = "https://anilist.co/manga/2002",
+            state = "LINKED",
+            syncStatus = "SYNCED",
+            lastSyncedAt = 1000L,
+            syncedSnapshot = """{"progress":10.0,"secondaryProgress":2.0,"status":"CURRENT"}""",
+            createdAt = 1000L,
+            updatedAt = 1000L
+        )
+        fakeMediaLinkDao.links[existingLink.id] = existingLink
+
+        val mangaJson = """
+        {
+          "data": {
+            "MediaListCollection": {
+              "hasNextChunk": false,
+              "lists": [
+                {
+                  "name": "Reading",
+                  "isCustomList": false,
+                  "status": "CURRENT",
+                  "entries": [
+                    {
+                      "id": 3003,
+                      "mediaId": 2002,
+                      "status": "CURRENT",
+                      "progress": 25,
+                      "progressVolumes": 5,
+                      "media": {
+                        "id": 2002,
+                        "format": "MANGA",
+                        "countryOfOrigin": "JP",
+                        "title": { "romaji": "Sousou no Frieren" },
+                        "chapters": 130
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+        """.trimIndent()
+
+        val emptyAnimeJson = """
+        { "data": { "MediaListCollection": { "hasNextChunk": false, "lists": [] } } }
+        """.trimIndent()
+
+        responseHandler = { _, body ->
+            when {
+              body.contains("\"type\":\"MANGA\"") -> createResponse(200, mangaJson)
+              else -> createResponse(200, emptyAnimeJson)
+            }
+        }
+
+        val result = engine.syncAll()
+        assertTrue(result is SyncResult.Success)
+
+        val updatedItem = fakeMediaItemDao.items["local_frieren"]!!
+        // Local progress must remain preserved because autoSyncProgressFromTrackers = false
+        assertEquals(10.0, updatedItem.progress, 0.001)
+        assertEquals(2.0, updatedItem.secondaryProgress, 0.001)
+    }
+
+    @Test
     fun `novel format maps to cat_novel and anime maps to cat_anime`() = runTest(testDispatcher) {
         val mixedJson = """
         {
