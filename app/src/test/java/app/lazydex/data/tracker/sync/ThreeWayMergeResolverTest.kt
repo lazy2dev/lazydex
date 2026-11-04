@@ -446,7 +446,8 @@ class ThreeWayMergeResolverTest {
     fun `from Entity and DTO factories extract expected properties`() {
         val entity = MediaItemEntity(
             id = "media-1",
-            categoryId = "cat-manga",
+            type = "MANGA",
+            format = "MANGA",
             title = "Test Manga",
             userStatus = "COMPLETED",
             progress = 55.0,

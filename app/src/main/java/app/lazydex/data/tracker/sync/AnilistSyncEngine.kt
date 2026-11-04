@@ -98,6 +98,40 @@ open class AnilistSyncEngine(
         }
     }
 
+    fun mapToTypeAndFormat(
+        format: String?,
+        type: String,
+        countryOfOrigin: String? = null
+    ): Triple<String, String, String?> {
+        val fmt = format?.uppercase() ?: ""
+        val c = countryOfOrigin?.uppercase()
+        val typ = type.uppercase()
+
+        if (fmt == "NOVEL") {
+            val novelFormat = when (c) {
+                "CN", "KR" -> "WEB_NOVEL"
+                else -> "LIGHT_NOVEL"
+            }
+            return Triple("NOVEL", novelFormat, c)
+        }
+        if (typ == "ANIME" || fmt in ANIME_FORMATS) {
+            val animeFormat = when (fmt) {
+                "MOVIE" -> "MOVIE"
+                "OVA" -> "OVA"
+                "ONA" -> "ONA"
+                "SPECIAL" -> "SPECIAL"
+                "TV_SHORT" -> "TV_SHORT"
+                else -> "TV"
+            }
+            return Triple("ANIME", animeFormat, c)
+        }
+        val mangaFormat = when (fmt) {
+            "ONE_SHOT" -> "ONE_SHOT"
+            else -> "MANGA"
+        }
+        return Triple("MANGA", mangaFormat, c)
+    }
+
     fun mapToCategoryId(
         format: String?,
         type: String,
@@ -417,15 +451,16 @@ open class AnilistSyncEngine(
                     val updatedEndYear = localItem.endYear ?: entry.completedAt?.year
                     val updatedEndMonth = localItem.endMonth ?: entry.completedAt?.month
                     val updatedEndDay = localItem.endDay ?: entry.completedAt?.day
-                    val resolvedCategory = mapToCategoryId(
+                    val (resolvedType, resolvedFormat, resolvedCountry) = mapToTypeAndFormat(
                         entry.media?.format,
                         type,
-                        entry.media?.countryOfOrigin,
-                        entry.media?.tags?.map { it.name } ?: emptyList()
+                        entry.media?.countryOfOrigin
                     )
 
                     val updatedItem = localItem.copy(
-                        categoryId = resolvedCategory,
+                        type = resolvedType,
+                        format = resolvedFormat,
+                        countryOfOrigin = resolvedCountry ?: localItem.countryOfOrigin,
                         userStatus = resolvedStatus,
                         progress = resolvedProgress,
                         secondaryProgress = resolvedSecondaryProgress,
@@ -466,16 +501,15 @@ open class AnilistSyncEngine(
             } else {
                 // New item from remote (pure ID-based insert)
                 val newMediaId = UUID.randomUUID().toString()
-                val categoryId = mapToCategoryId(
+                val (itemType, itemFormat, itemCountry) = mapToTypeAndFormat(
                     entry.media?.format,
                     type,
-                    entry.media?.countryOfOrigin,
-                    entry.media?.tags?.map { it.name } ?: emptyList()
+                    entry.media?.countryOfOrigin
                 )
                 val userStatus = ThreeWayMergeResolver.anilistStatusToLazyDex(entry.status)
                 val progress = entry.progress?.toDouble() ?: 0.0
                 val secondaryProgress = entry.progressVolumes?.toDouble() ?: 0.0
-                val isAnime = type.uppercase() == "ANIME" || entry.media?.format in ANIME_FORMATS
+                val isAnime = itemType == "ANIME" || entry.media?.format in ANIME_FORMATS
                 val progressTotal = (if (isAnime) entry.media?.episodes else entry.media?.chapters)?.toDouble()
                 val secondaryProgressTotal = entry.media?.volumes?.toDouble()
                 val scoreRaw = if (entry.scoreRaw == 0) null else entry.scoreRaw
@@ -494,7 +528,9 @@ open class AnilistSyncEngine(
 
                 val newItem = MediaItemEntity(
                     id = newMediaId,
-                    categoryId = categoryId,
+                    type = itemType,
+                    format = itemFormat,
+                    countryOfOrigin = itemCountry,
                     title = title,
                     titleEnglish = titleEnglish,
                     titleRomaji = titleRomaji,

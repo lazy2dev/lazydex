@@ -2,6 +2,7 @@ package app.lazydex.data.tracker.sync
 
 import android.content.SharedPreferences
 import app.lazydex.data.local.dao.CategoryCount
+import app.lazydex.data.local.dao.TypeCount
 import app.lazydex.data.local.dao.MediaItemDao
 import app.lazydex.data.local.dao.MediaLinkDao
 import app.lazydex.data.local.dao.StatusCount
@@ -209,7 +210,8 @@ class AnilistSyncEngineTest {
         assertEquals(1, fakeMediaItemDao.items.size)
         val item = fakeMediaItemDao.items.values.first()
         assertEquals("One Piece", item.title)
-        assertEquals("typ_manga_jp", item.categoryId)
+        assertEquals("MANGA", item.type)
+        assertEquals("MANGA", item.format)
         assertEquals("IN_PROGRESS", item.userStatus)
         assertEquals(25.0, item.progress, 0.001)
         assertEquals(100.0, item.progressTotal!!, 0.001)
@@ -237,7 +239,8 @@ class AnilistSyncEngineTest {
     fun `inbound sync updates linked item by remoteId with monotonic progress and preserves status`() = runTest(testDispatcher) {
         val existingItem = MediaItemEntity(
             id = "local_frieren",
-            categoryId = "typ_manga_jp",
+            type = "MANGA",
+            format = "MANGA",
             title = "Frieren: Beyond Journey's End",
             titleEnglish = "Frieren: Beyond Journey's End",
             titleRomaji = "Sousou no Frieren",
@@ -370,7 +373,8 @@ class AnilistSyncEngineTest {
 
         val existingItem = MediaItemEntity(
             id = "local_frieren",
-            categoryId = "typ_manga_jp",
+            type = "MANGA",
+            format = "MANGA",
             title = "Frieren: Beyond Journey's End",
             titleEnglish = "Frieren: Beyond Journey's End",
             titleRomaji = "Sousou no Frieren",
@@ -551,11 +555,13 @@ class AnilistSyncEngineTest {
 
         val novelItem = fakeMediaItemDao.items.values.find { it.title == "Overlord Light Novel" }
         assertNotNull(novelItem)
-        assertEquals("typ_novel_ln", novelItem!!.categoryId)
+        assertEquals("NOVEL", novelItem!!.type)
+        assertEquals("LIGHT_NOVEL", novelItem.format)
 
         val animeItem = fakeMediaItemDao.items.values.find { it.title == "Frieren" }
         assertNotNull(animeItem)
-        assertEquals("typ_anime_series", animeItem!!.categoryId)
+        assertEquals("ANIME", animeItem!!.type)
+        assertEquals("TV", animeItem.format)
         assertEquals(24.0, animeItem.progressTotal!!, 0.001)
     }
 
@@ -656,7 +662,8 @@ class AnilistSyncEngineTest {
         // Local has 12.5 chapters
         val localItem = MediaItemEntity(
             id = "manga-fractional",
-            categoryId = "cat_manga",
+            type = "MANGA",
+            format = "MANGA",
             title = "Chainsaw Man",
             userStatus = "IN_PROGRESS",
             progress = 12.5,
@@ -736,7 +743,8 @@ class AnilistSyncEngineTest {
     fun `race condition fence prevents delayed network response from clobbering concurrent user tap`() = runTest(testDispatcher) {
         val localItem = MediaItemEntity(
             id = "item-race",
-            categoryId = "cat_manga",
+            type = "MANGA",
+            format = "MANGA",
             title = "Jujutsu Kaisen",
             userStatus = "IN_PROGRESS",
             progress = 10.0,
@@ -801,7 +809,8 @@ class AnilistSyncEngineTest {
         // Pre-existing local linked item
         val localItem = MediaItemEntity(
             id = "local-manga-1",
-            categoryId = "cat_manga",
+            type = "MANGA",
+            format = "MANGA",
             title = "Dorohedoro",
             userStatus = "IN_PROGRESS",
             progress = 50.0,
@@ -856,7 +865,8 @@ class AnilistSyncEngineTest {
     fun `safe import preserves existing links without unlinking when items are missing on remote`() = runTest(testDispatcher) {
         val localItem = MediaItemEntity(
             id = "local-manga-deleted-on-remote",
-            categoryId = "cat_manga",
+            type = "MANGA",
+            format = "MANGA",
             title = "Old Manga Deleted On AniList",
             notes = "My precious private notes",
             userStatus = "COMPLETED",
@@ -968,7 +978,8 @@ class AnilistSyncEngineTest {
         // Local has progress 25
         val localItem = MediaItemEntity(
             id = "item-concurrent",
-            categoryId = "cat_manga",
+            type = "MANGA",
+            format = "MANGA",
             title = "Bleach",
             userStatus = "IN_PROGRESS",
             progress = 25.0,
@@ -1149,16 +1160,20 @@ class AnilistSyncEngineTest {
         val items = mutableMapOf<String, MediaItemEntity>()
 
         override fun observeAll(): Flow<List<ActiveMediaItemView>> = emptyFlow()
-        override fun observeByCategory(categoryId: String): Flow<List<ActiveMediaItemView>> = emptyFlow()
+        override fun observeByType(type: String): Flow<List<ActiveMediaItemView>> = emptyFlow()
+        override fun observeByCategory(type: String): Flow<List<ActiveMediaItemView>> = emptyFlow()
         override fun observeCategoryCounts(): Flow<List<CategoryCount>> = emptyFlow()
-        override fun observeStatusCounts(categoryId: String?): Flow<List<StatusCount>> = emptyFlow()
-        override fun observeFiltered(categoryId: String?, filterType: String, exactStatus: String?): Flow<List<ActiveMediaItemView>> = emptyFlow()
+        override fun observeTypeCounts(): Flow<List<TypeCount>> = emptyFlow()
+        override fun observeStatusCounts(type: String?): Flow<List<StatusCount>> = emptyFlow()
+        override fun observeFiltered(type: String?, format: String?, filterType: String, exactStatus: String?): Flow<List<ActiveMediaItemView>> = emptyFlow()
+        override fun observeFilteredLegacy(type: String?, filterType: String, exactStatus: String?): Flow<List<ActiveMediaItemView>> = emptyFlow()
         override fun observeCount(): Flow<Int> = emptyFlow()
         override fun observeById(id: String): Flow<ActiveMediaItemView?> = emptyFlow()
         override suspend fun getById(id: String): MediaItemEntity? = items[id]
         override suspend fun getActiveById(id: String): ActiveMediaItemView? = null
         override suspend fun getAll(): List<ActiveMediaItemView> = emptyList()
-        override suspend fun getActiveByCategoryId(categoryId: String): List<MediaItemEntity> = items.values.filter { it.categoryId == categoryId && it.deletedAt == null }
+        override suspend fun getActiveByType(type: String): List<MediaItemEntity> = items.values.filter { it.type == type && it.deletedAt == null }
+        override suspend fun getActiveByCategoryId(categoryId: String): List<MediaItemEntity> = items.values.filter { it.type == categoryId && it.deletedAt == null }
         override suspend fun upsert(item: MediaItemEntity) { items[item.id] = item }
         override suspend fun upsertAll(items: List<MediaItemEntity>) { items.forEach { this.items[it.id] = it } }
         override suspend fun atomicIncrementProgress(id: String, delta: Double, now: Long): Int = 1

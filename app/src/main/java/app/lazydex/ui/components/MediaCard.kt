@@ -102,6 +102,20 @@ fun MediaCardUiState.toMediaItem(): MediaItem {
     val calcRating = scoreRaw?.let { it / 20.0 }
     return MediaItem(
         id = id,
+        type = when (category) {
+            MediaCategory.NOVEL -> "NOVEL"
+            MediaCategory.MANGA -> "MANGA"
+            MediaCategory.ANIME, MediaCategory.MOVIE, MediaCategory.TV -> "ANIME"
+            MediaCategory.GAME -> "GAME"
+        },
+        format = when (category) {
+            MediaCategory.NOVEL -> "NOVEL"
+            MediaCategory.MANGA -> "MANGA"
+            MediaCategory.MOVIE -> "MOVIE"
+            MediaCategory.TV, MediaCategory.ANIME -> "TV"
+            MediaCategory.GAME -> "PC"
+        },
+        countryOfOrigin = null,
         title = title,
         coverImagePath = coverPath,
         coverImageUrl = coverUrl,
@@ -114,8 +128,7 @@ fun MediaCardUiState.toMediaItem(): MediaItem {
         userStatus = userStatus,
         rating = calcRating,
         lastUpdated = lastUpdated,
-        dateAdded = lastUpdated,
-        category = category,
+        dateAdded = lastUpdated
     )
 }
 
@@ -138,26 +151,33 @@ fun resolveFormatName(
             "MANGA" -> "Manga"
             "NOVEL" -> "Light Novel"
             "ONE_SHOT" -> "One Shot"
+            "WEB_NOVEL" -> "Web Novel"
+            "LIGHT_NOVEL" -> "Light Novel"
+            "MANHWA" -> "Manhwa"
+            "MANHUA" -> "Manhua"
+            "PC" -> "PC"
+            "ANDROID" -> "Android"
+            "CONSOLE" -> "Console"
+            "CROSS_PLATFORM" -> "Cross Platform"
             else -> extraFormat.replace('_', ' ').split(" ").joinToString(" ") { word ->
                 word.lowercase().replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
             }
         }
     }
-    return when (categoryId) {
-        "typ_novel_ln" -> "Light Novel"
-        "typ_novel_cn", "typ_novel_kr" -> "Web Novel"
-        "cat_novel" -> "Novel"
-        "typ_manhwa" -> "Manhwa"
-        "typ_manhua" -> "Manhua"
-        "typ_manga_jp" -> "Manga"
-        "cat_manga" -> "Manga"
-        "typ_anime_series" -> "Anime Series"
-        "typ_anime_movie" -> "Anime Movie"
-        "typ_anime_ova" -> "OVA"
-        "cat_anime" -> "Anime"
-        "cat_movie" -> "Movie"
-        "cat_tv" -> "TV"
-        "cat_game" -> "Game"
+    return when (categoryId.uppercase()) {
+        "TYP_NOVEL_LN", "LIGHT_NOVEL" -> "Light Novel"
+        "TYP_NOVEL_CN", "TYP_NOVEL_KR", "WEB_NOVEL" -> "Web Novel"
+        "CAT_NOVEL", "NOVEL" -> "Novel"
+        "TYP_MANHWA", "MANHWA" -> "Manhwa"
+        "TYP_MANHUA", "MANHUA" -> "Manhua"
+        "TYP_MANGA_JP", "CAT_MANGA", "MANGA" -> "Manga"
+        "TYP_ANIME_SERIES", "TV" -> "TV Series"
+        "TYP_ANIME_MOVIE", "MOVIE" -> "Movie"
+        "TYP_ANIME_OVA", "OVA" -> "OVA"
+        "CAT_ANIME", "ANIME" -> "Anime"
+        "CAT_MOVIE" -> "Movie"
+        "CAT_TV" -> "TV"
+        "CAT_GAME", "GAME", "PC" -> "Game"
         else -> category?.displayName ?: ""
     }
 }

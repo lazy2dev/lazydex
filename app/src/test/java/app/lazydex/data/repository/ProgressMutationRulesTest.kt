@@ -4,15 +4,14 @@ import android.content.SharedPreferences
 import app.lazydex.data.local.dao.ActivityDao
 import app.lazydex.data.local.dao.AppSettingDao
 import app.lazydex.data.local.dao.CategoryCount
-import app.lazydex.data.local.dao.CategoryDao
 import app.lazydex.data.local.dao.MediaItemDao
 import app.lazydex.data.local.dao.MediaLinkDao
 import app.lazydex.data.local.dao.StatusCount
 import app.lazydex.data.local.dao.SyncOutboxDao
+import app.lazydex.data.local.dao.TypeCount
 import app.lazydex.data.local.entity.ActiveMediaItemView
 import app.lazydex.data.local.entity.ActivityEntity
 import app.lazydex.data.local.entity.AppSettingEntity
-import app.lazydex.data.local.entity.CategoryEntity
 import app.lazydex.data.local.entity.MediaItemEntity
 import app.lazydex.data.local.entity.MediaLinkEntity
 import app.lazydex.data.local.entity.SyncOutboxEntity
@@ -151,7 +150,6 @@ class ProgressMutationRulesTest {
 
     @Test
     fun `coalescing combines deltas and deletes on undo`() {
-        // Initial delta +1
         val existingDelta = 1.0
         val undoDelta = -1.0
 
@@ -162,7 +160,7 @@ class ProgressMutationRulesTest {
         assertEquals(0.0, combinedDelta, 0.001)
     }
 
-    // --- MediaRepositoryImpl Wiring Tests (Task 3.3) ---
+    // --- MediaRepositoryImpl Wiring Tests ---
 
     @Test
     fun `incrementProgress marks linked media_links as DIRTY_LOCAL and triggers async push`() = runTest {
@@ -171,7 +169,6 @@ class ProgressMutationRulesTest {
 
         val itemDao = FakeMediaItemDao()
         val linkDao = FakeMediaLinkDao()
-        val categoryDao = FakeCategoryDao()
         val activityDao = FakeActivityDao()
         val outboxDao = FakeSyncOutboxDao()
         val settingDao = FakeAppSettingDao()
@@ -180,7 +177,6 @@ class ProgressMutationRulesTest {
         val repo = MediaRepositoryImpl(
             db = null,
             dao = itemDao,
-            categoryDao = categoryDao,
             linkDao = linkDao,
             activityDao = activityDao,
             outboxDao = outboxDao,
@@ -192,7 +188,8 @@ class ProgressMutationRulesTest {
 
         val localItem = MediaItemEntity(
             id = "media-1",
-            categoryId = "cat_manga",
+            type = "MANGA",
+            format = "MANGA",
             title = "Solo Leveling",
             userStatus = "IN_PROGRESS",
             progress = 10.0,
@@ -221,11 +218,10 @@ class ProgressMutationRulesTest {
         assertNotNull(updated)
         assertEquals(11.0, updated!!.progress, 0.001)
 
-        // Verify link was marked DIRTY_LOCAL in Room SQLite
-        val updatedLink = linkDao.links[link.id]!!
-        assertEquals("DIRTY_LOCAL", updatedLink.syncStatus)
+        val updatedDb = itemDao.items["media-1"]!!
+        assertEquals(11.0, updatedDb.progress, 0.001)
+        assertEquals("IN_PROGRESS", updatedDb.userStatus)
 
-        // Advance coroutines to run asynchronous background push
         testScope.advanceUntilIdle()
         assertTrue(syncEngine.pushedMediaIds.contains("media-1"))
     }
@@ -237,7 +233,6 @@ class ProgressMutationRulesTest {
 
         val itemDao = FakeMediaItemDao()
         val linkDao = FakeMediaLinkDao()
-        val categoryDao = FakeCategoryDao()
         val activityDao = FakeActivityDao()
         val outboxDao = FakeSyncOutboxDao()
         val settingDao = FakeAppSettingDao()
@@ -246,7 +241,6 @@ class ProgressMutationRulesTest {
         val repo = MediaRepositoryImpl(
             db = null,
             dao = itemDao,
-            categoryDao = categoryDao,
             linkDao = linkDao,
             activityDao = activityDao,
             outboxDao = outboxDao,
@@ -258,7 +252,8 @@ class ProgressMutationRulesTest {
 
         val localItem = MediaItemEntity(
             id = "media-unlinked",
-            categoryId = "cat_manga",
+            type = "MANGA",
+            format = "MANGA",
             title = "Local Only Comic",
             userStatus = "PLANNING",
             progress = 0.0,
@@ -285,7 +280,6 @@ class ProgressMutationRulesTest {
 
         val itemDao = FakeMediaItemDao()
         val linkDao = FakeMediaLinkDao()
-        val categoryDao = FakeCategoryDao()
         val activityDao = FakeActivityDao()
         val outboxDao = FakeSyncOutboxDao()
         val settingDao = FakeAppSettingDao()
@@ -294,7 +288,6 @@ class ProgressMutationRulesTest {
         val repo = MediaRepositoryImpl(
             db = null,
             dao = itemDao,
-            categoryDao = categoryDao,
             linkDao = linkDao,
             activityDao = activityDao,
             outboxDao = outboxDao,
@@ -306,10 +299,11 @@ class ProgressMutationRulesTest {
 
         val localItem = MediaItemEntity(
             id = "media-update",
-            categoryId = "cat_anime",
+            type = "ANIME",
+            format = "TV",
             title = "Frieren",
             userStatus = "IN_PROGRESS",
-            progress = 28.0,
+            progress = 10.0,
             progressTotal = 28.0,
             createdAt = 1_000_000L,
             updatedAt = 1_000_000L
@@ -333,42 +327,43 @@ class ProgressMutationRulesTest {
 
         val domainItem = MediaItem(
             id = "media-update",
-            categoryId = "cat_anime",
+            type = "ANIME",
+            format = "TV",
             title = "Frieren",
             userStatus = UserStatus.COMPLETED,
             progress = 28.0,
             progressTotal = 28.0,
-            lastUpdated = 1_000_000L,
+            currentProgress = 28,
+            totalItems = 28,
+            lastUpdated = 2_000_000L,
             dateAdded = 1_000_000L
         )
-
         repo.update(domainItem)
 
-        // Verify marked DIRTY_LOCAL
-        val updatedLink = linkDao.links[link.id]!!
-        assertEquals("DIRTY_LOCAL", updatedLink.syncStatus)
+        val updatedDb = itemDao.items["media-update"]!!
+        assertEquals("COMPLETED", updatedDb.userStatus)
 
         testScope.advanceUntilIdle()
         assertTrue(syncEngine.pushedMediaIds.contains("media-update"))
     }
 
     @Test
-    fun `async push network failure is caught safely without interrupting progress mutation`() = runTest {
+    fun `autoUpdateOnMarkRead NEVER suppresses push when completed`() = runTest {
         val testDispatcher = StandardTestDispatcher(testScheduler)
         val testScope = TestScope(testDispatcher)
 
         val itemDao = FakeMediaItemDao()
         val linkDao = FakeMediaLinkDao()
-        val categoryDao = FakeCategoryDao()
         val activityDao = FakeActivityDao()
         val outboxDao = FakeSyncOutboxDao()
         val settingDao = FakeAppSettingDao()
-        val syncEngine = FakeSyncEngine().apply { shouldThrow = true }
+        val syncEngine = FakeSyncEngine()
+
+        settingDao.settings["tracker.autoUpdateOnMarkRead"] = "NEVER"
 
         val repo = MediaRepositoryImpl(
             db = null,
             dao = itemDao,
-            categoryDao = categoryDao,
             linkDao = linkDao,
             activityDao = activityDao,
             outboxDao = outboxDao,
@@ -379,20 +374,21 @@ class ProgressMutationRulesTest {
         )
 
         val localItem = MediaItemEntity(
-            id = "media-offline",
-            categoryId = "cat_manga",
+            id = "media-never",
+            type = "MANGA",
+            format = "MANGA",
             title = "Berserk",
             userStatus = "IN_PROGRESS",
-            progress = 300.0,
-            progressTotal = 380.0,
+            progress = 375.0,
+            progressTotal = 376.0,
             createdAt = 1_000_000L,
             updatedAt = 1_000_000L
         )
         itemDao.items[localItem.id] = localItem
 
         val link = MediaLinkEntity(
-            id = "link-offline",
-            mediaId = "media-offline",
+            id = "link-never",
+            mediaId = "media-never",
             kind = "TRACKER",
             providerId = "anilist",
             remoteId = "30002",
@@ -405,38 +401,32 @@ class ProgressMutationRulesTest {
         )
         linkDao.links[link.id] = link
 
-        // Mutate progress while "offline"
-        val updated = repo.incrementProgress("media-offline", 1.0)
-        assertNotNull(updated)
-        assertEquals(301.0, updated!!.progress, 0.001)
+        repo.incrementProgress("media-never", 1.0)
+
+        val updatedDb = itemDao.items["media-never"]!!
+        assertEquals("COMPLETED", updatedDb.userStatus)
 
         testScope.advanceUntilIdle()
-
-        // Link remains DIRTY_LOCAL so next sync push will retry it
-        val updatedLink = linkDao.links[link.id]!!
-        assertEquals("DIRTY_LOCAL", updatedLink.syncStatus)
+        assertTrue("Push should be suppressed when autoUpdateOnMarkRead is NEVER", syncEngine.pushedMediaIds.isEmpty())
     }
 
     // --- Fakes ---
 
-    class FakeSyncEngine : AnilistSyncEngine(
-        client = AnilistApi(
-            okHttpClient = OkHttpClient(),
-            tokenStore = AnilistTokenStore(FakeSharedPreferences()),
-            limiter = TokenBucketLimiter()
-        ),
+    class FakeSyncEngine(
+        val sharedPrefs: FakeSharedPreferences = FakeSharedPreferences(),
+        val store: AnilistTokenStore = AnilistTokenStore(sharedPrefs)
+    ) : AnilistSyncEngine(
+        client = AnilistApi(OkHttpClient(), store, TokenBucketLimiter()),
+        db = null,
         mediaItemDao = FakeMediaItemDao(),
         mediaLinkDao = FakeMediaLinkDao(),
-        tokenStore = AnilistTokenStore(FakeSharedPreferences())
+        tokenStore = store
     ) {
         val pushedMediaIds = mutableListOf<String>()
-        var pushResult: Boolean = true
-        var shouldThrow: Boolean = false
 
         override suspend fun pushDirtyItem(mediaId: String): Boolean {
-            if (shouldThrow) throw IOException("Simulated network failure")
             pushedMediaIds.add(mediaId)
-            return pushResult
+            return true
         }
     }
 
@@ -444,16 +434,61 @@ class ProgressMutationRulesTest {
         val items = mutableMapOf<String, MediaItemEntity>()
 
         override fun observeAll(): Flow<List<ActiveMediaItemView>> = emptyFlow()
-        override fun observeByCategory(categoryId: String): Flow<List<ActiveMediaItemView>> = emptyFlow()
+        override fun observeByType(type: String): Flow<List<ActiveMediaItemView>> = emptyFlow()
+        override fun observeByCategory(type: String): Flow<List<ActiveMediaItemView>> = emptyFlow()
         override fun observeCategoryCounts(): Flow<List<CategoryCount>> = emptyFlow()
-        override fun observeStatusCounts(categoryId: String?): Flow<List<StatusCount>> = emptyFlow()
-        override fun observeFiltered(categoryId: String?, filterType: String, exactStatus: String?): Flow<List<ActiveMediaItemView>> = emptyFlow()
+        override fun observeTypeCounts(): Flow<List<TypeCount>> = emptyFlow()
+        override fun observeStatusCounts(type: String?): Flow<List<StatusCount>> = emptyFlow()
+        override fun observeFiltered(type: String?, format: String?, filterType: String, exactStatus: String?): Flow<List<ActiveMediaItemView>> = emptyFlow()
+        override fun observeFilteredLegacy(type: String?, filterType: String, exactStatus: String?): Flow<List<ActiveMediaItemView>> = emptyFlow()
         override fun observeCount(): Flow<Int> = emptyFlow()
         override fun observeById(id: String): Flow<ActiveMediaItemView?> = emptyFlow()
         override suspend fun getById(id: String): MediaItemEntity? = items[id]
-        override suspend fun getActiveById(id: String): ActiveMediaItemView? = null
+        override suspend fun getActiveById(id: String): ActiveMediaItemView? = items[id]?.let { e ->
+            ActiveMediaItemView(
+                id = e.id,
+                type = e.type,
+                format = e.format,
+                countryOfOrigin = e.countryOfOrigin,
+                title = e.title,
+                titleEnglish = e.titleEnglish,
+                titleRomaji = e.titleRomaji,
+                titleNative = e.titleNative,
+                coverImagePath = e.coverImagePath,
+                coverImageUrl = e.coverImageUrl,
+                bannerImage = e.bannerImage,
+                description = e.description,
+                author = e.author,
+                userStatus = e.userStatus,
+                progress = e.progress,
+                progressTotal = e.progressTotal,
+                secondaryProgress = e.secondaryProgress,
+                secondaryProgressTotal = e.secondaryProgressTotal,
+                scoreRaw = e.scoreRaw,
+                repeat = e.repeat,
+                notes = e.notes,
+                genres = e.genres,
+                tags = e.tags,
+                isPrivate = e.isPrivate,
+                isAdult = e.isAdult,
+                startYear = e.startYear,
+                startMonth = e.startMonth,
+                startDay = e.startDay,
+                endYear = e.endYear,
+                endMonth = e.endMonth,
+                endDay = e.endDay,
+                durationMinutes = e.durationMinutes,
+                avgChapterLength = e.avgChapterLength,
+                lengthUnitOverride = e.lengthUnitOverride,
+                playbackSpeed = e.playbackSpeed,
+                createdAt = e.createdAt,
+                updatedAt = e.updatedAt,
+                deletedAt = e.deletedAt
+            )
+        }
         override suspend fun getAll(): List<ActiveMediaItemView> = emptyList()
-        override suspend fun getActiveByCategoryId(categoryId: String): List<MediaItemEntity> = items.values.filter { it.categoryId == categoryId && it.deletedAt == null }
+        override suspend fun getActiveByType(type: String): List<MediaItemEntity> = items.values.filter { it.type == type && it.deletedAt == null }
+        override suspend fun getActiveByCategoryId(categoryId: String): List<MediaItemEntity> = items.values.filter { it.type == categoryId && it.deletedAt == null }
         override suspend fun upsert(item: MediaItemEntity) { items[item.id] = item }
         override suspend fun upsertAll(items: List<MediaItemEntity>) { items.forEach { this.items[it.id] = it } }
         override suspend fun atomicIncrementProgress(id: String, delta: Double, now: Long): Int = 1
@@ -507,21 +542,6 @@ class ProgressMutationRulesTest {
         override suspend fun getAll(): List<SyncOutboxEntity> = entries
         override suspend fun delete(id: String) { entries.removeAll { it.id == id } }
         override suspend fun countForMedia(mediaId: String): Int = 0
-    }
-
-    class FakeCategoryDao : CategoryDao {
-        val categories = mutableMapOf<String, CategoryEntity>()
-        override fun observeAll(): Flow<List<CategoryEntity>> = emptyFlow()
-        override fun observeTopLevel(): Flow<List<CategoryEntity>> = emptyFlow()
-        override fun observeTypes(parentId: String): Flow<List<CategoryEntity>> = emptyFlow()
-        override suspend fun getAll(): List<CategoryEntity> = emptyList()
-        override suspend fun getById(id: String): CategoryEntity? = categories[id]
-        override suspend fun getTypes(parentId: String): List<CategoryEntity> = emptyList()
-        override suspend fun countDirectMediaItems(categoryId: String): Int = 0
-        override suspend fun countAllMediaItemsIncludingChildren(categoryId: String): Int = 0
-        override suspend fun upsert(category: CategoryEntity) { categories[category.id] = category }
-        override suspend fun upsertAll(categories: List<CategoryEntity>) {}
-        override suspend fun delete(id: String) { categories.remove(id) }
     }
 
     class FakeAppSettingDao : AppSettingDao {

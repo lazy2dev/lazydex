@@ -13,8 +13,8 @@ android {
         applicationId = "app.lazydex"
         minSdk = 26
         targetSdk = 35
-        versionCode = 25
-        versionName = "0.13.0"
+        versionCode = 26
+        versionName = "0.14.0"
     }
 
     buildTypes {
@@ -117,7 +117,8 @@ dependencies {
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-protobuf:1.7.3")
   implementation("org.luaj:luaj-jse:3.0.1")
   implementation("com.dylibso.chicory:runtime:1.0.0-M1")
-  implementation("app.cash.quickjs:quickjs-android:0.9.2")
+  // QuickJS 0.9.2 retired: bundles 4KB unaligned native libquickjs.so incompatible with Android 15+ 16KB devices.
+  // JsRuntimeEngine automatically uses pure-JVM Rhino engine.
   implementation("org.mozilla:rhino:1.7.15")
 
   // DataStore

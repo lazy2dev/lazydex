@@ -3,6 +3,7 @@ package app.lazydex.backup
 import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.UserStatus
+import app.lazydex.domain.model.resolveMediaCategory
 import app.lazydex.util.UrlNormalizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -13,13 +14,16 @@ import java.util.UUID
 
 @Serializable
 data class BackupEnvelopeDto(
-    val schemaVersion: Int = 2,
+    val schemaVersion: Int = 3,
     val items: List<MediaItemBackupDto>? = null
 )
 
 @Serializable
 data class MediaItemBackupDto(
     val id: String? = null,
+    val type: String? = null,
+    val format: String? = null,
+    val countryOfOrigin: String? = null,
     val category: String? = null,
     val categoryId: String? = null,
     val title: String? = null,
@@ -50,7 +54,7 @@ data class DeserializedBackup(
 
 data class MergeResult(
     val mergedItems: List<MediaItem>,
-    val coverIdsToRestore: Set<String> // IDs of items whose cover images should be updated/restored from the ZIP
+    val coverIdsToRestore: Set<String>
 )
 
 object BackupProcessor {
@@ -61,7 +65,7 @@ object BackupProcessor {
     }
 
     suspend fun serialize(items: List<MediaItem>): String = withContext(Dispatchers.Default) {
-        val envelope = BackupEnvelopeDto(schemaVersion = 2, items = items.map { it.toDto() })
+        val envelope = BackupEnvelopeDto(schemaVersion = 3, items = items.map { it.toDto() })
         backupJson.encodeToString(envelope)
     }
 
@@ -69,7 +73,7 @@ object BackupProcessor {
         val sanitized = json.trim().removePrefix("\uFEFF")
         if (sanitized.isBlank()) throw IllegalArgumentException("Backup file is empty")
         val envelope = backupJson.decodeFromString<BackupEnvelopeDto>(sanitized)
-        if (envelope.schemaVersion > 2) {
+        if (envelope.schemaVersion > 3) {
             throw IllegalArgumentException("Unsupported backup schema version: ${envelope.schemaVersion}")
         }
         val items = envelope.items?.mapNotNull { dto -> dto.toDomain() } ?: emptyList()
@@ -79,7 +83,7 @@ object BackupProcessor {
     suspend fun merge(
         local: List<MediaItem>,
         imported: List<MediaItem>,
-        importedSchemaVersion: Int = 2
+        importedSchemaVersion: Int = 3
     ): MergeResult = withContext(Dispatchers.Default) {
         val localById = local.associateBy { it.id }
         val localByUrl = local.filter { it.sourceUrl != null }.associateBy { it.sourceUrl?.let { url -> UrlNormalizer.normalize(url) } }
@@ -120,7 +124,7 @@ object BackupProcessor {
                             extraData = if (importedItem.extraData.isNotBlank() && importedItem.extraData != "{}") importedItem.extraData else existingLocal.extraData
                         ).normalize()
                     } else {
-                        // v2 to v2 merge: take imported as-is (with forward-only progress)
+                        // v2/v3 merge: take imported as-is (with forward-only progress)
                         importedItem.copy(
                             id = existingLocal.id,
                             currentProgress = forwardProgress
@@ -146,6 +150,9 @@ object BackupProcessor {
 
     private fun MediaItem.toDto() = MediaItemBackupDto(
         id = id,
+        type = type,
+        format = format,
+        countryOfOrigin = countryOfOrigin,
         category = category.name,
         categoryId = categoryId,
         title = title,
@@ -171,16 +178,42 @@ object BackupProcessor {
 
     private fun MediaItemBackupDto.toDomain(): MediaItem? {
         val safeTitle = title?.takeIf { it.isNotBlank() } ?: return null
-        val safeCategory = category?.let { MediaCategory.fromString(it) } ?: return null
-        val resolvedCategoryId = categoryId ?: when (safeCategory) {
-            MediaCategory.NOVEL -> "cat_novel"
-            MediaCategory.MANGA -> "cat_manga"
-            MediaCategory.ANIME -> "cat_anime"
-            MediaCategory.GAME -> "cat_game"
-            MediaCategory.MOVIE -> "cat_movie"
-            MediaCategory.TV -> "cat_tv"
+
+        val resolvedType = when {
+            !type.isNullOrBlank() -> type.uppercase()
+            !category.isNullOrBlank() -> when (category.uppercase()) {
+                "NOVEL" -> "NOVEL"
+                "MANGA" -> "MANGA"
+                "ANIME", "MOVIE", "TV" -> "ANIME"
+                "GAME" -> "GAME"
+                else -> "NOVEL"
+            }
+            !categoryId.isNullOrBlank() -> when (resolveMediaCategory(categoryId)) {
+                MediaCategory.NOVEL -> "NOVEL"
+                MediaCategory.MANGA -> "MANGA"
+                MediaCategory.ANIME, MediaCategory.MOVIE, MediaCategory.TV -> "ANIME"
+                MediaCategory.GAME -> "GAME"
+            }
+            else -> "NOVEL"
         }
-        val safeStatus = userStatus?.let { UserStatus.fromString(it) } ?: inProgressStatusFor(safeCategory)
+
+        val resolvedFormat = when {
+            !format.isNullOrBlank() -> format.uppercase()
+            resolvedType == "NOVEL" -> "WEB_NOVEL"
+            resolvedType == "MANGA" -> "MANGA"
+            resolvedType == "ANIME" -> "TV"
+            resolvedType == "GAME" -> "PC"
+            else -> ""
+        }
+
+        val resolvedCountry = countryOfOrigin ?: when {
+            categoryId?.contains("cn", ignoreCase = true) == true -> "CN"
+            categoryId?.contains("kr", ignoreCase = true) == true -> "KR"
+            categoryId?.contains("jp", ignoreCase = true) == true -> "JP"
+            else -> null
+        }
+
+        val safeStatus = userStatus?.let { UserStatus.fromString(it) } ?: inProgressStatusFor(resolvedType)
         val safeProgress = maxOf(currentProgress ?: 0, 0)
         val safeTotal = totalItems?.takeIf { it >= 0 }
         val safeLastUpdated = if (lastUpdated != null && lastUpdated > 0L) lastUpdated else 0L
@@ -188,11 +221,13 @@ object BackupProcessor {
 
         return MediaItem(
             id = id.takeIf { !it.isNullOrBlank() } ?: UUID.randomUUID().toString(),
-            categoryId = resolvedCategoryId,
+            type = resolvedType,
+            format = resolvedFormat,
+            countryOfOrigin = resolvedCountry,
             title = safeTitle,
             alternativeTitles = alternativeTitles ?: emptyList(),
             sourceUrl = sourceUrl?.trim(),
-            coverImagePath = "",  // Will be populated during cover extraction if zip matches
+            coverImagePath = "",  // Populated during cover extraction
             coverImageUrl = coverImageUrl?.trim(),
             currentProgress = safeProgress,
             totalItems = safeTotal,
@@ -212,11 +247,12 @@ object BackupProcessor {
         ).normalize()
     }
 
-    private fun inProgressStatusFor(category: MediaCategory): UserStatus {
-        return when (category) {
-            MediaCategory.NOVEL, MediaCategory.MANGA -> UserStatus.READING
-            MediaCategory.ANIME, MediaCategory.MOVIE, MediaCategory.TV -> UserStatus.WATCHING
-            MediaCategory.GAME -> UserStatus.PLAYING
+    private fun inProgressStatusFor(type: String): UserStatus {
+        return when (type.uppercase()) {
+            "NOVEL", "MANGA" -> UserStatus.READING
+            "ANIME" -> UserStatus.WATCHING
+            "GAME" -> UserStatus.PLAYING
+            else -> UserStatus.READING
         }
     }
 }

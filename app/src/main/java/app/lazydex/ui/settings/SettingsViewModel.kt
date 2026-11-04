@@ -331,7 +331,7 @@ class SettingsViewModel(
         _uiState.value = _uiState.value.copy(importedBackup = null)
     }
 
-    fun executeMerge() {
+    fun restoreBackup() {
         val imported = _uiState.value.importedBackup ?: return
         _uiState.value = _uiState.value.copy(isImporting = true)
         viewModelScope.launch {
@@ -364,13 +364,13 @@ class SettingsViewModel(
                 _uiState.value = _uiState.value.copy(
                     isImporting = false,
                     importedBackup = null,
-                    successMsg = "Backup merged successfully"
+                    successMsg = "Backup restored successfully"
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isImporting = false,
                     importedBackup = null,
-                    errorMsg = "Merge failed: ${e.message}"
+                    errorMsg = "Restore failed: ${e.message}"
                 )
             } finally {
                 withContext(ioDispatcher) {
@@ -379,6 +379,8 @@ class SettingsViewModel(
             }
         }
     }
+
+    fun executeMerge() = restoreBackup()
 
     fun executeOverwrite() {
         val imported = _uiState.value.importedBackup ?: return

@@ -2,29 +2,23 @@ package app.lazydex.data.local.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
-import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "media_items",
-    foreignKeys = [
-        ForeignKey(
-            entity = CategoryEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["categoryId"],
-            onDelete = ForeignKey.RESTRICT
-        )
-    ],
     indices = [
-        Index(value = ["categoryId", "userStatus"]),
+        Index(value = ["type", "userStatus"]),
+        Index(value = ["type", "format"]),
         Index(value = ["updatedAt"]),
         Index(value = ["deletedAt"])
     ]
 )
 data class MediaItemEntity(
     @PrimaryKey val id: String,
-    val categoryId: String,
+    val type: String = "NOVEL",
+    @ColumnInfo(defaultValue = "") val format: String = "",
+    val countryOfOrigin: String? = null,
     val title: String,
     val titleEnglish: String? = null,
     val titleRomaji: String? = null,

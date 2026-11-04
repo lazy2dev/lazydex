@@ -55,7 +55,6 @@ val databaseModule = module {
     }
 
     single { get<LazyDexDatabase>().mediaItemDao() }
-    single { get<LazyDexDatabase>().categoryDao() }
     // mediaPartDao retired in V6
     single { get<LazyDexDatabase>().mediaLinkDao() }
     single { get<LazyDexDatabase>().activityDao() }
@@ -71,7 +70,6 @@ val repositoryModule = module {
             context = androidContext(),
             db = get(),
             dao = get(),
-            categoryDao = get(),
             linkDao = get(),
             activityDao = get(),
             outboxDao = get(),

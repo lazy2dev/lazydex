@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -285,101 +286,41 @@ fun DataAndStorageScreen(
         )
     }
 
-    // Import merge / overwrite dialog
+    // Komikku-style backup restore dialog
     state.importedBackup?.let { backup ->
-        var holdActive by remember { mutableStateOf(false) }
-        var holdProgress by remember { mutableStateOf(0f) }
-
-        // Core press-and-hold trigger coroutine loop
-        LaunchedEffect(holdActive) {
-            if (holdActive) {
-                val startTime = System.currentTimeMillis()
-                val duration = 5000f // 5 seconds
-                while (holdActive && holdProgress < 1f) {
-                    val elapsed = System.currentTimeMillis() - startTime
-                    holdProgress = (elapsed / duration).coerceIn(0f, 1f)
-                    if (holdProgress >= 1f) {
-                        viewModel.executeOverwrite()
-                        holdActive = false
-                    }
-                    delay(30)
-                }
-            } else {
-                holdProgress = 0f
-            }
-        }
-
         AlertDialog(
             onDismissRequest = { viewModel.cancelImport() },
-            title = { Text("Import Options") },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            },
+            title = {
+                Text(
+                    text = "Restore backup?",
+                    fontWeight = FontWeight.Bold
+                )
+            },
             text = {
-                Column {
-                    Text("Found ${backup.items.size} media items in the backup file.")
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "Merge: Adds new items and overwrites conflicts where the import file contains a newer timestamp.",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Overwrite: Wipes all your local database trackers and covers, replacing them completely with this file.",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
-                    if (holdProgress > 0f) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "Restoring... Keep holding down the Overwrite button.",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        LinearProgressIndicator(
-                            progress = { holdProgress },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
+                Text(
+                    text = "Restore ${backup.items.size} media items and covers? Existing items will be merged with latest progress.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
             },
             confirmButton = {
                 TextButton(
-                    onClick = { viewModel.executeMerge() },
-                    enabled = holdProgress == 0f
+                    onClick = { viewModel.restoreBackup() }
                 ) {
-                    Text("Merge")
+                    Text("Restore", fontWeight = FontWeight.SemiBold)
                 }
             },
             dismissButton = {
-                Box(
-                    modifier = Modifier.pointerInput(Unit) {
-                        detectTapGestures(
-                            onPress = {
-                                holdActive = true
-                                try {
-                                    awaitRelease()
-                                } finally {
-                                    holdActive = false
-                                }
-                            }
-                        )
-                    }
+                TextButton(
+                    onClick = { viewModel.cancelImport() }
                 ) {
-                    TextButton(
-                        onClick = {},
-                        colors = ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Text(
-                            text = if (holdActive) {
-                                "Holding Overwrite..."
-                            } else {
-                                "Overwrite (Hold 5s)"
-                            }
-                        )
-                    }
+                    Text("Cancel")
                 }
             }
         )

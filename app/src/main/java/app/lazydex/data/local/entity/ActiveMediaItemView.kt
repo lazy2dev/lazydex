@@ -8,7 +8,9 @@ import androidx.room.DatabaseView
 )
 data class ActiveMediaItemView(
     val id: String,
-    val categoryId: String,
+    val type: String,
+    val format: String,
+    val countryOfOrigin: String?,
     val title: String,
     val titleEnglish: String?,
     val titleRomaji: String?,

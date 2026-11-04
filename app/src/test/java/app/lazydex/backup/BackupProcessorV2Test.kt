@@ -11,11 +11,13 @@ import org.junit.Test
 class BackupProcessorV2Test {
 
     @Test
-    fun serializeAndDeserializeV2_preservesNewFields() = runTest {
+    fun serializeAndDeserialize_preservesTypeAndFormat() = runTest {
         val original = listOf(
             MediaItem(
                 id = "item-1",
-                category = MediaCategory.NOVEL,
+                type = "NOVEL",
+                format = "WEB_NOVEL",
+                countryOfOrigin = "KR",
                 title = "Solo Leveling",
                 currentProgress = 100,
                 totalItems = 270,
@@ -34,9 +36,12 @@ class BackupProcessorV2Test {
         val serialized = BackupProcessor.serialize(original)
         val deserialized = BackupProcessor.deserialize(serialized)
 
-        assertEquals(2, deserialized.schemaVersion)
+        assertEquals(3, deserialized.schemaVersion)
         assertEquals(1, deserialized.items.size)
         val item = deserialized.items[0]
+        assertEquals("NOVEL", item.type)
+        assertEquals("WEB_NOVEL", item.format)
+        assertEquals("KR", item.countryOfOrigin)
         assertEquals("Chugong", item.author)
         assertEquals("Shadow Monarch web novel", item.description)
         assertEquals(listOf("Action", "Fantasy"), item.genres)
@@ -48,7 +53,8 @@ class BackupProcessorV2Test {
     fun mergeV1LegacyBackup_preservesLocalV2Metadata() = runTest {
         val localV2Item = MediaItem(
             id = "item-1",
-            category = MediaCategory.NOVEL,
+            type = "NOVEL",
+            format = "WEB_NOVEL",
             title = "Solo Leveling",
             sourceUrl = "https://example.com/sl",
             coverImagePath = "/covers/item-1",
@@ -68,7 +74,8 @@ class BackupProcessorV2Test {
 
         val importedV1Item = MediaItem(
             id = "item-1",
-            category = MediaCategory.NOVEL,
+            type = "NOVEL",
+            format = "WEB_NOVEL",
             title = "Solo Leveling",
             sourceUrl = "https://example.com/sl",
             coverImagePath = "",
@@ -97,7 +104,7 @@ class BackupProcessorV2Test {
 
         // Newer progress from imported
         assertEquals(60, merged.currentProgress)
-        // Local v2 metadata preserved because imported was v1
+        // Local metadata preserved because imported was v1
         assertEquals("Chugong", merged.author)
         assertEquals("Local Description", merged.description)
         assertEquals(listOf("Action"), merged.genres)
@@ -107,10 +114,10 @@ class BackupProcessorV2Test {
 
     @Test
     fun merge_forwardOnlyProgress_neverRegressesProgress() = runTest {
-        // Device A (Local) read chapter 50 offline
         val localItem = MediaItem(
             id = "item-1",
-            category = MediaCategory.MANGA,
+            type = "MANGA",
+            format = "MANGA",
             title = "One Piece",
             currentProgress = 50,
             totalItems = 1100,
@@ -119,10 +126,10 @@ class BackupProcessorV2Test {
             dateAdded = 1500000000000L
         )
 
-        // Device B (Imported backup) was synced earlier with chapter 40, but has newer timestamp
         val importedItem = MediaItem(
             id = "item-1",
-            category = MediaCategory.MANGA,
+            type = "MANGA",
+            format = "MANGA",
             title = "One Piece",
             currentProgress = 40,
             totalItems = 1100,
@@ -131,7 +138,7 @@ class BackupProcessorV2Test {
             dateAdded = 1500000000000L
         )
 
-        val result = BackupProcessor.merge(listOf(localItem), listOf(importedItem), 2)
+        val result = BackupProcessor.merge(listOf(localItem), listOf(importedItem), 3)
         assertEquals(1, result.mergedItems.size)
         // Progress must stay at 50, never regress to 40!
         assertEquals(50, result.mergedItems[0].currentProgress)
@@ -149,11 +156,10 @@ class BackupProcessorV2Test {
         }
 
         val deserialized = BackupProcessor.deserialize(jsonText)
-        assertEquals(2, deserialized.schemaVersion)
         assertEquals(308, deserialized.items.size)
 
         val first = deserialized.items[0]
-        assertEquals("cat_novel", first.categoryId)
+        assertEquals("NOVEL", first.type)
         assertEquals(MediaCategory.NOVEL, first.category)
         assertEquals(230, first.currentProgress)
         assertEquals(UserStatus.DROPPED, first.userStatus)

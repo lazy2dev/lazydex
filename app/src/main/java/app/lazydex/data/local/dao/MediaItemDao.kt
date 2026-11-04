@@ -10,6 +10,7 @@ import app.lazydex.domain.model.MediaStats
 import kotlinx.coroutines.flow.Flow
 
 data class CategoryCount(val category: String, val count: Int)
+data class TypeCount(val type: String, val count: Int)
 data class StatusCount(val userStatus: String, val count: Int)
 
 @Dao
@@ -17,23 +18,30 @@ interface MediaItemDao {
     @Query("SELECT * FROM active_media_items ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<ActiveMediaItemView>>
 
-    @Query("SELECT * FROM active_media_items WHERE categoryId = :categoryId ORDER BY createdAt DESC")
-    fun observeByCategory(categoryId: String): Flow<List<ActiveMediaItemView>>
+    @Query("SELECT * FROM active_media_items WHERE type = :type ORDER BY createdAt DESC")
+    fun observeByType(type: String): Flow<List<ActiveMediaItemView>>
 
-    @Query("SELECT categoryId as category, COUNT(*) as count FROM active_media_items GROUP BY categoryId")
+    @Query("SELECT * FROM active_media_items WHERE type = :type OR (:type = 'NOVEL' AND type = 'cat_novel') ORDER BY createdAt DESC")
+    fun observeByCategory(type: String): Flow<List<ActiveMediaItemView>>
+
+    @Query("SELECT type as category, COUNT(*) as count FROM active_media_items GROUP BY type")
     fun observeCategoryCounts(): Flow<List<CategoryCount>>
+
+    @Query("SELECT type, COUNT(*) as count FROM active_media_items GROUP BY type")
+    fun observeTypeCounts(): Flow<List<TypeCount>>
 
     @Query("""
         SELECT userStatus, COUNT(*) as count 
         FROM active_media_items 
-        WHERE (:categoryId IS NULL OR categoryId = :categoryId OR categoryId IN (SELECT id FROM categories WHERE parentId = :categoryId))
+        WHERE (:type IS NULL OR type = :type)
         GROUP BY userStatus
     """)
-    fun observeStatusCounts(categoryId: String?): Flow<List<StatusCount>>
+    fun observeStatusCounts(type: String?): Flow<List<StatusCount>>
 
     @Query("""
         SELECT * FROM active_media_items 
-        WHERE (:categoryId IS NULL OR categoryId = :categoryId OR categoryId IN (SELECT id FROM categories WHERE parentId = :categoryId))
+        WHERE (:type IS NULL OR type = :type)
+        AND (:format IS NULL OR format = :format)
         AND (
             :filterType = 'ALL' OR 
             (:filterType = 'IN_PROGRESS' AND userStatus IN ('READING', 'WATCHING', 'PLAYING', 'IN_PROGRESS')) OR
@@ -41,7 +49,19 @@ interface MediaItemDao {
         )
         ORDER BY createdAt DESC
     """)
-    fun observeFiltered(categoryId: String?, filterType: String, exactStatus: String?): Flow<List<ActiveMediaItemView>>
+    fun observeFiltered(type: String?, format: String?, filterType: String, exactStatus: String?): Flow<List<ActiveMediaItemView>>
+
+    @Query("""
+        SELECT * FROM active_media_items 
+        WHERE (:type IS NULL OR type = :type)
+        AND (
+            :filterType = 'ALL' OR 
+            (:filterType = 'IN_PROGRESS' AND userStatus IN ('READING', 'WATCHING', 'PLAYING', 'IN_PROGRESS')) OR
+            (:filterType = 'EXACT' AND userStatus = :exactStatus)
+        )
+        ORDER BY createdAt DESC
+    """)
+    fun observeFilteredLegacy(type: String?, filterType: String, exactStatus: String?): Flow<List<ActiveMediaItemView>>
 
     @Query("SELECT COUNT(*) FROM active_media_items")
     fun observeCount(): Flow<Int>
@@ -58,7 +78,10 @@ interface MediaItemDao {
     @Query("SELECT * FROM active_media_items")
     suspend fun getAll(): List<ActiveMediaItemView>
 
-    @Query("SELECT * FROM media_items WHERE (categoryId = :categoryId OR categoryId IN (SELECT id FROM categories WHERE parentId = :categoryId)) AND deletedAt IS NULL")
+    @Query("SELECT * FROM media_items WHERE type = :type AND deletedAt IS NULL")
+    suspend fun getActiveByType(type: String): List<MediaItemEntity>
+
+    @Query("SELECT * FROM media_items WHERE type = :categoryId AND deletedAt IS NULL")
     suspend fun getActiveByCategoryId(categoryId: String): List<MediaItemEntity>
 
     @Upsert
@@ -100,10 +123,10 @@ interface MediaItemDao {
           (SELECT CAST(COALESCE(SUM(progress), 0) AS INTEGER) FROM active_media_items) as totalProgress,
           (SELECT AVG(scoreRaw) / 20.0 FROM active_media_items WHERE scoreRaw IS NOT NULL) as meanRating,
           (SELECT COUNT(*) FROM active_media_items WHERE userStatus IN ('READING', 'WATCHING', 'PLAYING', 'IN_PROGRESS')) as inProgressCount,
-          (SELECT COUNT(*) FROM active_media_items WHERE categoryId = 'cat_novel' OR categoryId IN (SELECT id FROM categories WHERE parentId = 'cat_novel')) as novelCount,
-          (SELECT COUNT(*) FROM active_media_items WHERE categoryId = 'cat_manga' OR categoryId IN (SELECT id FROM categories WHERE parentId = 'cat_manga')) as mangaCount,
-          (SELECT COUNT(*) FROM active_media_items WHERE categoryId = 'cat_anime' OR categoryId IN (SELECT id FROM categories WHERE parentId = 'cat_anime')) as animeCount,
-          (SELECT COUNT(*) FROM active_media_items WHERE categoryId = 'cat_game' OR categoryId IN (SELECT id FROM categories WHERE parentId = 'cat_game')) as gameCount
+          (SELECT COUNT(*) FROM active_media_items WHERE type = 'NOVEL') as novelCount,
+          (SELECT COUNT(*) FROM active_media_items WHERE type = 'MANGA') as mangaCount,
+          (SELECT COUNT(*) FROM active_media_items WHERE type = 'ANIME') as animeCount,
+          (SELECT COUNT(*) FROM active_media_items WHERE type = 'GAME') as gameCount
     """)
     fun getStats(): Flow<MediaStats>
 }

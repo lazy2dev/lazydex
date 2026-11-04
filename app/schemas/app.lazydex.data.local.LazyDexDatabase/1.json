@@ -2,146 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "c8311d11bce9ec97d1d01075858f6ecc",
+    "identityHash": "0b04c64162e1969acf6dd902b2d0ce9f",
     "entities": [
       {
-        "tableName": "categories",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `parentId` TEXT, `name` TEXT NOT NULL, `icon` TEXT, `unitName` TEXT, `secondaryUnitName` TEXT, `actionVerb` TEXT, `hasSecondaryProgress` INTEGER, `hasCharEstimate` INTEGER, `hasAudioSpeed` INTEGER, `lengthUnit` TEXT, `sortOrder` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, PRIMARY KEY(`id`), FOREIGN KEY(`parentId`) REFERENCES `categories`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
-        "fields": [
-          {
-            "fieldPath": "id",
-            "columnName": "id",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "parentId",
-            "columnName": "parentId",
-            "affinity": "TEXT",
-            "notNull": false
-          },
-          {
-            "fieldPath": "name",
-            "columnName": "name",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "icon",
-            "columnName": "icon",
-            "affinity": "TEXT",
-            "notNull": false
-          },
-          {
-            "fieldPath": "unitName",
-            "columnName": "unitName",
-            "affinity": "TEXT",
-            "notNull": false
-          },
-          {
-            "fieldPath": "secondaryUnitName",
-            "columnName": "secondaryUnitName",
-            "affinity": "TEXT",
-            "notNull": false
-          },
-          {
-            "fieldPath": "actionVerb",
-            "columnName": "actionVerb",
-            "affinity": "TEXT",
-            "notNull": false
-          },
-          {
-            "fieldPath": "hasSecondaryProgress",
-            "columnName": "hasSecondaryProgress",
-            "affinity": "INTEGER",
-            "notNull": false
-          },
-          {
-            "fieldPath": "hasCharEstimate",
-            "columnName": "hasCharEstimate",
-            "affinity": "INTEGER",
-            "notNull": false
-          },
-          {
-            "fieldPath": "hasAudioSpeed",
-            "columnName": "hasAudioSpeed",
-            "affinity": "INTEGER",
-            "notNull": false
-          },
-          {
-            "fieldPath": "lengthUnit",
-            "columnName": "lengthUnit",
-            "affinity": "TEXT",
-            "notNull": false
-          },
-          {
-            "fieldPath": "sortOrder",
-            "columnName": "sortOrder",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "createdAt",
-            "columnName": "createdAt",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "updatedAt",
-            "columnName": "updatedAt",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "deletedAt",
-            "columnName": "deletedAt",
-            "affinity": "INTEGER",
-            "notNull": false
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": false,
-          "columnNames": [
-            "id"
-          ]
-        },
-        "indices": [
-          {
-            "name": "index_categories_parentId",
-            "unique": false,
-            "columnNames": [
-              "parentId"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_categories_parentId` ON `${TABLE_NAME}` (`parentId`)"
-          },
-          {
-            "name": "index_categories_sortOrder",
-            "unique": false,
-            "columnNames": [
-              "sortOrder"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_categories_sortOrder` ON `${TABLE_NAME}` (`sortOrder`)"
-          }
-        ],
-        "foreignKeys": [
-          {
-            "table": "categories",
-            "onDelete": "RESTRICT",
-            "onUpdate": "NO ACTION",
-            "columns": [
-              "parentId"
-            ],
-            "referencedColumns": [
-              "id"
-            ]
-          }
-        ]
-      },
-      {
         "tableName": "media_items",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `categoryId` TEXT NOT NULL, `title` TEXT NOT NULL, `titleEnglish` TEXT, `titleRomaji` TEXT, `titleNative` TEXT, `coverImagePath` TEXT NOT NULL DEFAULT '', `coverImageUrl` TEXT, `bannerImage` TEXT, `description` TEXT NOT NULL DEFAULT '', `author` TEXT NOT NULL DEFAULT '', `userStatus` TEXT NOT NULL, `progress` REAL NOT NULL DEFAULT 0, `progressTotal` REAL, `secondaryProgress` REAL NOT NULL DEFAULT 0, `secondaryProgressTotal` REAL, `scoreRaw` INTEGER, `repeat` INTEGER NOT NULL DEFAULT 0, `notes` TEXT NOT NULL DEFAULT '', `genres` TEXT NOT NULL DEFAULT '[]', `tags` TEXT NOT NULL DEFAULT '[]', `isPrivate` INTEGER NOT NULL DEFAULT 0, `isAdult` INTEGER NOT NULL DEFAULT 0, `startYear` INTEGER, `startMonth` INTEGER, `startDay` INTEGER, `endYear` INTEGER, `endMonth` INTEGER, `endDay` INTEGER, `durationMinutes` INTEGER, `avgChapterLength` INTEGER, `lengthUnitOverride` TEXT, `playbackSpeed` REAL NOT NULL DEFAULT 1.0, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, PRIMARY KEY(`id`), FOREIGN KEY(`categoryId`) REFERENCES `categories`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `type` TEXT NOT NULL, `format` TEXT NOT NULL DEFAULT '', `countryOfOrigin` TEXT, `title` TEXT NOT NULL, `titleEnglish` TEXT, `titleRomaji` TEXT, `titleNative` TEXT, `coverImagePath` TEXT NOT NULL DEFAULT '', `coverImageUrl` TEXT, `bannerImage` TEXT, `description` TEXT NOT NULL DEFAULT '', `author` TEXT NOT NULL DEFAULT '', `userStatus` TEXT NOT NULL, `progress` REAL NOT NULL DEFAULT 0, `progressTotal` REAL, `secondaryProgress` REAL NOT NULL DEFAULT 0, `secondaryProgressTotal` REAL, `scoreRaw` INTEGER, `repeat` INTEGER NOT NULL DEFAULT 0, `notes` TEXT NOT NULL DEFAULT '', `genres` TEXT NOT NULL DEFAULT '[]', `tags` TEXT NOT NULL DEFAULT '[]', `isPrivate` INTEGER NOT NULL DEFAULT 0, `isAdult` INTEGER NOT NULL DEFAULT 0, `startYear` INTEGER, `startMonth` INTEGER, `startDay` INTEGER, `endYear` INTEGER, `endMonth` INTEGER, `endDay` INTEGER, `durationMinutes` INTEGER, `avgChapterLength` INTEGER, `lengthUnitOverride` TEXT, `playbackSpeed` REAL NOT NULL DEFAULT 1.0, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -150,10 +15,23 @@
             "notNull": true
           },
           {
-            "fieldPath": "categoryId",
-            "columnName": "categoryId",
+            "fieldPath": "type",
+            "columnName": "type",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "format",
+            "columnName": "format",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "countryOfOrigin",
+            "columnName": "countryOfOrigin",
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "title",
@@ -380,14 +258,24 @@
         },
         "indices": [
           {
-            "name": "index_media_items_categoryId_userStatus",
+            "name": "index_media_items_type_userStatus",
             "unique": false,
             "columnNames": [
-              "categoryId",
+              "type",
               "userStatus"
             ],
             "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_media_items_categoryId_userStatus` ON `${TABLE_NAME}` (`categoryId`, `userStatus`)"
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_media_items_type_userStatus` ON `${TABLE_NAME}` (`type`, `userStatus`)"
+          },
+          {
+            "name": "index_media_items_type_format",
+            "unique": false,
+            "columnNames": [
+              "type",
+              "format"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_media_items_type_format` ON `${TABLE_NAME}` (`type`, `format`)"
           },
           {
             "name": "index_media_items_updatedAt",
@@ -408,19 +296,7 @@
             "createSql": "CREATE INDEX IF NOT EXISTS `index_media_items_deletedAt` ON `${TABLE_NAME}` (`deletedAt`)"
           }
         ],
-        "foreignKeys": [
-          {
-            "table": "categories",
-            "onDelete": "RESTRICT",
-            "onUpdate": "NO ACTION",
-            "columns": [
-              "categoryId"
-            ],
-            "referencedColumns": [
-              "id"
-            ]
-          }
-        ]
+        "foreignKeys": []
       },
       {
         "tableName": "media_links",
@@ -987,7 +863,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c8311d11bce9ec97d1d01075858f6ecc')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '0b04c64162e1969acf6dd902b2d0ce9f')"
     ]
   }
 }

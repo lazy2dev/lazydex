@@ -15,9 +15,11 @@ import kotlinx.coroutines.flow.emptyFlow
 interface MediaRepository {
     /** Reactive observation — UI bindings */
     fun observeAll(): Flow<List<MediaItem>>
+    fun observeByType(type: String): Flow<List<MediaItem>> = emptyFlow()
     fun observeByCategory(category: MediaCategory): Flow<List<MediaItem>>
     fun observeByCategoryId(categoryId: String): Flow<List<MediaItem>> = emptyFlow()
     fun observeFiltered(category: MediaCategory?, statusFilter: StatusFilter): Flow<List<MediaItem>>
+    fun observeFiltered(type: String?, format: String?, statusFilter: StatusFilter): Flow<List<MediaItem>> = emptyFlow()
     fun observeFilteredByCategoryId(categoryId: String?, statusFilter: StatusFilter): Flow<List<MediaItem>> = emptyFlow()
     fun observeById(id: String): Flow<MediaItem?>
     fun observeCount(): Flow<Int>
