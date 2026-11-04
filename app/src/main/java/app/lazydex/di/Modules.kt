@@ -4,13 +4,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import app.lazydex.data.local.LazyDexDatabase
-import app.lazydex.data.local.MIGRATION_1_2
-import app.lazydex.data.local.MIGRATION_2_3
-import app.lazydex.data.local.MIGRATION_3_4
-import app.lazydex.data.local.MIGRATION_4_5
-import app.lazydex.data.local.MIGRATION_5_6
 import app.lazydex.data.local.ThemePreferences
-import app.lazydex.data.local.setupV5TriggersAndSeeds
+import app.lazydex.data.local.setupInitialTriggersAndSeeds
 import app.lazydex.data.repository.MediaRepositoryImpl
 import app.lazydex.data.tracker.anilist.AnilistApi
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
@@ -44,12 +39,11 @@ val databaseModule = module {
             "lazydex_db"
         )
         .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
         .fallbackToDestructiveMigrationOnDowngrade()
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
-                db.setupV5TriggersAndSeeds()
+                db.setupInitialTriggersAndSeeds()
             }
 
             override fun onDestructiveMigration(db: SupportSQLiteDatabase) {

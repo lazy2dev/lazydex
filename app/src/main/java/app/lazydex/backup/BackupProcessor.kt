@@ -21,6 +21,7 @@ data class BackupEnvelopeDto(
 data class MediaItemBackupDto(
     val id: String? = null,
     val category: String? = null,
+    val categoryId: String? = null,
     val title: String? = null,
     val alternativeTitles: List<String>? = null,
     val sourceUrl: String? = null,
@@ -65,8 +66,9 @@ object BackupProcessor {
     }
 
     suspend fun deserialize(json: String): DeserializedBackup = withContext(Dispatchers.Default) {
-        if (json.isBlank()) throw IllegalArgumentException("Backup file is empty")
-        val envelope = backupJson.decodeFromString<BackupEnvelopeDto>(json)
+        val sanitized = json.trim().removePrefix("\uFEFF")
+        if (sanitized.isBlank()) throw IllegalArgumentException("Backup file is empty")
+        val envelope = backupJson.decodeFromString<BackupEnvelopeDto>(sanitized)
         if (envelope.schemaVersion > 2) {
             throw IllegalArgumentException("Unsupported backup schema version: ${envelope.schemaVersion}")
         }
@@ -145,6 +147,7 @@ object BackupProcessor {
     private fun MediaItem.toDto() = MediaItemBackupDto(
         id = id,
         category = category.name,
+        categoryId = categoryId,
         title = title,
         alternativeTitles = alternativeTitles.ifEmpty { null },
         sourceUrl = sourceUrl,
@@ -169,6 +172,14 @@ object BackupProcessor {
     private fun MediaItemBackupDto.toDomain(): MediaItem? {
         val safeTitle = title?.takeIf { it.isNotBlank() } ?: return null
         val safeCategory = category?.let { MediaCategory.fromString(it) } ?: return null
+        val resolvedCategoryId = categoryId ?: when (safeCategory) {
+            MediaCategory.NOVEL -> "cat_novel"
+            MediaCategory.MANGA -> "cat_manga"
+            MediaCategory.ANIME -> "cat_anime"
+            MediaCategory.GAME -> "cat_game"
+            MediaCategory.MOVIE -> "cat_movie"
+            MediaCategory.TV -> "cat_tv"
+        }
         val safeStatus = userStatus?.let { UserStatus.fromString(it) } ?: inProgressStatusFor(safeCategory)
         val safeProgress = maxOf(currentProgress ?: 0, 0)
         val safeTotal = totalItems?.takeIf { it >= 0 }
@@ -177,7 +188,7 @@ object BackupProcessor {
 
         return MediaItem(
             id = id.takeIf { !it.isNullOrBlank() } ?: UUID.randomUUID().toString(),
-            category = safeCategory,
+            categoryId = resolvedCategoryId,
             title = safeTitle,
             alternativeTitles = alternativeTitles ?: emptyList(),
             sourceUrl = sourceUrl?.trim(),

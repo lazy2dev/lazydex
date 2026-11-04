@@ -136,4 +136,27 @@ class BackupProcessorV2Test {
         // Progress must stay at 50, never regress to 40!
         assertEquals(50, result.mergedItems[0].currentProgress)
     }
+
+    @Test
+    fun deserializeModernizedBackup_parsesAll308ItemsLosslessly() = runTest {
+        val backupFile = java.io.File("C:/Users/lazyman/Downloads/backup_1793768941212.lazydex")
+        if (!backupFile.exists()) return@runTest
+
+        var jsonText = ""
+        java.util.zip.ZipFile(backupFile).use { zip ->
+            val entry = zip.getEntry("backup.json")
+            jsonText = zip.getInputStream(entry).bufferedReader().readText()
+        }
+
+        val deserialized = BackupProcessor.deserialize(jsonText)
+        assertEquals(2, deserialized.schemaVersion)
+        assertEquals(308, deserialized.items.size)
+
+        val first = deserialized.items[0]
+        assertEquals("cat_novel", first.categoryId)
+        assertEquals(MediaCategory.NOVEL, first.category)
+        assertEquals(230, first.currentProgress)
+        assertEquals(UserStatus.DROPPED, first.userStatus)
+        assertEquals(1.0, first.rating ?: 0.0, 0.01)
+    }
 }
