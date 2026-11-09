@@ -57,7 +57,9 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -67,7 +69,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -142,8 +146,24 @@ fun MediaDetailsScreen(
         }
     }
 
+    var headerHeightPx by remember { mutableIntStateOf(0) }
+    var topBarHeightPx by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
+    val fallbackThresholdPx = remember(density) { with(density) { 180.dp.roundToPx() } }
+
+    val isHeaderScrolledOut by remember {
+        derivedStateOf {
+            val threshold = if (headerHeightPx > 0 && topBarHeightPx > 0) {
+                (headerHeightPx - topBarHeightPx).coerceAtLeast(1)
+            } else {
+                fallbackThresholdPx
+            }
+            scrollState.value >= threshold
+        }
+    }
+
     val titleAlpha by animateFloatAsState(
-        targetValue = if (scrollState.value > 140) 1f else 0f,
+        targetValue = if (isHeaderScrolledOut) 1f else 0f,
         label = "TopAppBarTitleAlpha"
     )
     val backgroundAlpha by animateFloatAsState(
@@ -168,6 +188,7 @@ fun MediaDetailsScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
+                    modifier = Modifier.onGloballyPositioned { topBarHeightPx = it.size.height },
                     title = {
                         Text(
                             text = state.title.ifBlank { "Media Details" },
@@ -215,6 +236,7 @@ fun MediaDetailsScreen(
                 ) {
                     // 1. Media Info Header (Backdrop + Cover + Title + Metadata)
                     MediaInfoHeader(
+                        modifier = Modifier.onGloballyPositioned { headerHeightPx = it.size.height },
                         title = state.title,
                         author = state.author,
                         category = state.category,
