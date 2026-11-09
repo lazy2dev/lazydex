@@ -72,7 +72,7 @@ fun MediaInfoHeader(
             Color.Transparent,
             MaterialTheme.colorScheme.background,
         )
-        val backdropPath = if (coverImagePath.isNotBlank() && File(coverImagePath).exists()) coverImagePath else ""
+        val backdropPath = coverImagePath.trim()
         val backdropUrl = bannerUrl?.takeIf { it.isNotBlank() } ?: coverImageUrl?.takeIf { it.isNotBlank() }
 
         if (!isObscured && (backdropPath.isNotBlank() || backdropUrl != null)) {
@@ -81,6 +81,7 @@ fun MediaInfoHeader(
                 title = title,
                 coverImageUrl = backdropUrl,
                 shape = RectangleShape,
+                isBackdrop = true,
                 modifier = Modifier
                     .matchParentSize()
                     .drawWithContent {
@@ -256,6 +257,7 @@ fun DetailCoverImage(
     modifier: Modifier = Modifier,
     shape: androidx.compose.ui.graphics.Shape = MaterialTheme.shapes.extraSmall,
     isObscured: Boolean = false,
+    isBackdrop: Boolean = false,
 ) {
     if (isObscured) {
         Box(
@@ -275,19 +277,26 @@ fun DetailCoverImage(
     }
 
     val model = remember(coverImagePath, coverImageUrl) {
-        when {
-            coverImagePath.isNotBlank() && File(coverImagePath).exists() -> File(coverImagePath)
-            !coverImageUrl.isNullOrBlank() -> coverImageUrl
-            else -> null
+        if (coverImagePath.isNotBlank() || !coverImageUrl.isNullOrBlank()) {
+            app.lazydex.data.coil.CoverModel(
+                url = coverImageUrl?.trim()?.takeIf { it.isNotBlank() },
+                localPath = coverImagePath.trim().takeIf { it.isNotBlank() },
+            )
+        } else {
+            null
         }
     }
 
     if (model != null) {
         val context = LocalContext.current
-        val request = remember(model) {
+        val request = remember(model, isBackdrop) {
             ImageRequest.Builder(context)
                 .data(model)
-                .crossfade(true)
+                .apply {
+                    if (isBackdrop) {
+                        size(180)
+                    }
+                }
                 .build()
         }
         AsyncImage(

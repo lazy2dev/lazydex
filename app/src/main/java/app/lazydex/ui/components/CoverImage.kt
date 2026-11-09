@@ -21,12 +21,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
 import app.lazydex.R
+import app.lazydex.data.coil.CoverModel
 import app.lazydex.ui.theme.CoverPlaceholderColor
 import app.lazydex.ui.theme.CoverPlaceholderOnBgColor
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
-import coil3.request.crossfade
-import java.io.File
 
 @Composable
 fun CoverImage(
@@ -37,11 +36,14 @@ fun CoverImage(
     shape: Shape = RoundedCornerShape(4.dp),
     isObscured: Boolean = false,
 ) {
-    val imageModel: Any? = remember(coverImagePath, coverImageUrl) {
-        when {
-            coverImagePath.isNotBlank() && File(coverImagePath).exists() -> File(coverImagePath)
-            !coverImageUrl.isNullOrBlank() -> coverImageUrl
-            else -> null
+    val imageModel = remember(coverImagePath, coverImageUrl) {
+        if (coverImagePath.isNotBlank() || !coverImageUrl.isNullOrBlank()) {
+            CoverModel(
+                url = coverImageUrl?.trim()?.takeIf { it.isNotBlank() },
+                localPath = coverImagePath.trim().takeIf { it.isNotBlank() },
+            )
+        } else {
+            null
         }
     }
 
@@ -70,7 +72,6 @@ fun CoverImage(
             val request = remember(imageModel) {
                 ImageRequest.Builder(context)
                     .data(imageModel)
-                    .crossfade(true)
                     .build()
             }
             AsyncImage(

@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.lazydex.data.cache.CoverCache
 import app.lazydex.data.local.ThemePreferences
 import app.lazydex.data.local.dao.MediaLinkDao
 import app.lazydex.data.local.entity.MediaLinkEntity
@@ -150,6 +151,7 @@ class MediaDetailsViewModel(
     private val tokenStore: AnilistTokenStore? = null,
     private val client: AnilistApi? = null,
     private val themePreferences: ThemePreferences? = null,
+    private val coverCache: CoverCache? = null,
 ) : ViewModel() {
 
     private val itemId: String? = savedStateHandle["itemId"]
@@ -407,17 +409,26 @@ class MediaDetailsViewModel(
                 if (localColor != null) {
                     localColor
                 } else if (trimmedUrl.isNotBlank()) {
-                    app.lazydex.ui.theme.CoverColorExtractor.extractSeedColorFromUrl(trimmedUrl, okHttpClient)
+                    extractFromUrlOrCache(trimmedUrl)
                 } else {
                     null
                 }
             } else {
-                app.lazydex.ui.theme.CoverColorExtractor.extractSeedColorFromUrl(trimmedUrl, okHttpClient)
+                extractFromUrlOrCache(trimmedUrl)
             }
             if (color != null && _uiState.value.seedColor != color) {
                 _uiState.update { it.copy(seedColor = color) }
             }
         }
+    }
+
+    private suspend fun extractFromUrlOrCache(url: String): androidx.compose.ui.graphics.Color? {
+        val cachedFile = coverCache?.getCoverFile(url)
+        if (cachedFile != null && cachedFile.exists()) {
+            val localColor = app.lazydex.ui.theme.CoverColorExtractor.extractSeedColor(cachedFile.absolutePath)
+            if (localColor != null) return localColor
+        }
+        return app.lazydex.ui.theme.CoverColorExtractor.extractSeedColorFromUrl(url, okHttpClient)
     }
 
     fun updateCoverImageUrl(url: String) {

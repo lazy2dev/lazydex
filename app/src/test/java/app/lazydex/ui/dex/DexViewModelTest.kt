@@ -35,9 +35,19 @@ class DexViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private class FakeThemePreferences : ThemePreferences(null) {
-        override val sortField: Flow<SortField> = flowOf(SortField.DATE_ADDED)
-        override val sortDirection: Flow<SortDirection> = flowOf(SortDirection.DESCENDING)
+        val sortFieldFlow = MutableStateFlow(SortField.DATE_ADDED)
+        val sortDirectionFlow = MutableStateFlow(SortDirection.DESCENDING)
+        override val sortField: Flow<SortField> = sortFieldFlow
+        override val sortDirection: Flow<SortDirection> = sortDirectionFlow
         override val displayPreferences: Flow<DisplayPreferences> = flowOf(DisplayPreferences())
+
+        override suspend fun setSortField(field: SortField) {
+            sortFieldFlow.value = field
+        }
+
+        override suspend fun setSortDirection(direction: SortDirection) {
+            sortDirectionFlow.value = direction
+        }
     }
 
     private class FakeMediaRepository(
@@ -195,6 +205,29 @@ class DexViewModelTest {
         viewModel.selectCategoryId("typ_manhwa")
         advanceUntilIdle()
         assertEquals(MediaCategory.MANGA, viewModel.uiState.value.selectedCategory)
+    }
+
+    @Test
+    fun `alphabetical sorting sorts case-insensitively ascending and descending`() = runTest(testDispatcher) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.selectSortField(SortField.ALPHABETICAL)
+        viewModel.selectSortDirection(SortDirection.ASCENDING)
+        advanceUntilIdle()
+
+        val ascItems = viewModel.uiState.value.items
+        assertEquals("Omniscient Reader", ascItems[0].title)
+        assertEquals("Solo Leveling", ascItems[1].title)
+        assertEquals("The Beginning After The End", ascItems[2].title)
+
+        viewModel.selectSortDirection(SortDirection.DESCENDING)
+        advanceUntilIdle()
+
+        val descItems = viewModel.uiState.value.items
+        assertEquals("The Beginning After The End", descItems[0].title)
+        assertEquals("Solo Leveling", descItems[1].title)
+        assertEquals("Omniscient Reader", descItems[2].title)
     }
 }
 

@@ -140,6 +140,7 @@ val scraperModule = module {
 val storageModule = module {
     single(named("cacheDir")) { androidContext().cacheDir }
     single(named("coversDir")) { File(androidContext().filesDir, "covers") }
+    single { app.lazydex.data.cache.CoverCache(androidContext()) }
 }
 
 val extensionModule = module {
@@ -165,7 +166,7 @@ val extensionModule = module {
 }
 
 val viewModelModule = module {
-    viewModel { DexViewModel(get(), get()) }
+    viewModel { DexViewModel(get(), get(), syncEngine = getOrNull()) }
     viewModel { StatisticsViewModel(get()) }
     viewModel { BrowserViewModel(get(), get(), get()) }
     viewModel {
@@ -180,6 +181,7 @@ val viewModelModule = module {
             tokenStore = get(),
             client = get(),
             themePreferences = get(),
+            coverCache = getOrNull(),
         )
     }
     viewModel {

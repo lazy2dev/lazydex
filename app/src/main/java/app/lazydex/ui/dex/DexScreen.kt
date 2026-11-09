@@ -236,6 +236,12 @@ fun DexScreen(
         containerColor = MaterialTheme.colorScheme.background,
         modifier = modifier
     ) { innerPadding ->
+        val listState = rememberLazyListState()
+        val gridState = rememberLazyGridState()
+        val onCardClick: (String) -> Unit = remember(onNavigateToEditItem) {
+            { id -> onNavigateToEditItem(id) }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -350,7 +356,6 @@ fun DexScreen(
                     }
                     else -> {
                         if (uiState.displayMode == LibraryDisplayMode.LIST) {
-                            val listState = rememberLazyListState()
                             VerticalFastScroller(
                                 listState = listState,
                                 modifier = Modifier.fillMaxSize()
@@ -367,7 +372,7 @@ fun DexScreen(
                                     ) { item ->
                                         MediaCard(
                                             item = item,
-                                            onClick = { onNavigateToEditItem(item.id) },
+                                            onClick = { onCardClick(item.id) },
                                             displayMode = uiState.displayMode,
                                             showProgressBadge = uiState.showProgressBadge,
                                             showStatusBadge = uiState.showStatusBadge,
@@ -383,7 +388,6 @@ fun DexScreen(
                                 uiState.displayMode == LibraryDisplayMode.PANORAMA_COMFORTABLE_GRID -> GridCells.Adaptive(minSize = 160.dp)
                                 else -> GridCells.Adaptive(minSize = 128.dp)
                             }
-                            val gridState = rememberLazyGridState()
                             val horizontalArrangement = Arrangement.spacedBy(4.dp)
                             val gridContentPadding = PaddingValues(8.dp)
 
@@ -409,7 +413,7 @@ fun DexScreen(
                                     ) { item ->
                                         MediaCard(
                                             item = item,
-                                            onClick = { onNavigateToEditItem(item.id) },
+                                            onClick = { onCardClick(item.id) },
                                             displayMode = uiState.displayMode,
                                             showProgressBadge = uiState.showProgressBadge,
                                             showStatusBadge = uiState.showStatusBadge,

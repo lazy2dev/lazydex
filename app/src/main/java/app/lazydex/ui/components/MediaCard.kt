@@ -24,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +47,7 @@ import app.lazydex.ui.theme.StatusOnHold
 import app.lazydex.ui.theme.StatusPlanTo
 import app.lazydex.ui.theme.getRatingColor
 
+@Immutable
 data class MediaCardUiState(
     val id: String,
     val title: String,
@@ -293,7 +295,6 @@ fun MediaCard(
     blurAdultCovers: Boolean = false,
 ) {
     val effectiveMode = displayMode ?: if (isGridView) LibraryDisplayMode.COMPACT_GRID else LibraryDisplayMode.LIST
-    val relativeTime = remember(item.lastUpdated) { getRelativeTime(item.lastUpdated) }
     val isAdultObscured = item.isAdult && blurAdultCovers
 
     val statusColor = when (item.userStatus) {
@@ -304,28 +305,28 @@ fun MediaCard(
         UserStatus.PLAN_TO -> StatusPlanTo
     }
 
-    val resolvedFormat = remember(item.categoryId, item.extraData, item.category, formatName) {
-        resolveFormatName(item.categoryId, item.getExtra("format"), item.category, formatName)
-    }
-    val resolvedHasSecondary = remember(item.categoryId, item.secondaryProgress, item.secondaryProgressTotal, hasSecondaryProgress) {
-        resolveHasSecondaryProgress(
-            categoryId = item.categoryId,
-            secondaryProgress = item.secondaryProgress,
-            secondaryProgressTotal = item.secondaryProgressTotal,
-            hasSecondaryOverride = hasSecondaryProgress,
-        )
-    }
-
-    val displayProgress = if (item.progress > 0.0) item.progress else item.currentProgress.toDouble()
-    val displayProgressTotal = item.progressTotal ?: item.totalItems?.toDouble()
-    val displaySecondaryProgress = item.secondaryProgress
-    val displaySecondaryProgressTotal = item.secondaryProgressTotal
-
-    val primaryUnitPrefix = remember(item.category) { resolveUnitPrefix(item.category, isSecondary = false) }
-    val secondaryUnitPrefix = remember(item.category) { resolveUnitPrefix(item.category, isSecondary = true) }
-
     when (effectiveMode) {
         LibraryDisplayMode.LIST -> {
+            val relativeTime = remember(item.lastUpdated) { getRelativeTime(item.lastUpdated) }
+            val resolvedFormat = remember(item.categoryId, item.extraData, item.category, formatName) {
+                resolveFormatName(item.categoryId, item.getExtra("format"), item.category, formatName)
+            }
+            val resolvedHasSecondary = remember(item.categoryId, item.secondaryProgress, item.secondaryProgressTotal, hasSecondaryProgress) {
+                resolveHasSecondaryProgress(
+                    categoryId = item.categoryId,
+                    secondaryProgress = item.secondaryProgress,
+                    secondaryProgressTotal = item.secondaryProgressTotal,
+                    hasSecondaryOverride = hasSecondaryProgress,
+                )
+            }
+            val displayProgress = if (item.progress > 0.0) item.progress else item.currentProgress.toDouble()
+            val displayProgressTotal = item.progressTotal ?: item.totalItems?.toDouble()
+            val displaySecondaryProgress = item.secondaryProgress
+            val displaySecondaryProgressTotal = item.secondaryProgressTotal
+
+            val primaryUnitPrefix = remember(item.category) { resolveUnitPrefix(item.category, isSecondary = false) }
+            val secondaryUnitPrefix = remember(item.category) { resolveUnitPrefix(item.category, isSecondary = true) }
+
             Row(
                 modifier = modifier
                     .fillMaxWidth()

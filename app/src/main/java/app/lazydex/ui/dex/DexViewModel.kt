@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.lazydex.data.local.LibraryDisplayMode
 import app.lazydex.data.local.ThemePreferences
+import app.lazydex.data.tracker.sync.AnilistSyncEngine
 import app.lazydex.domain.model.Category
 import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.resolveMediaCategory
@@ -103,8 +104,19 @@ private data class MetadataBundle(
 class DexViewModel(
     private val repository: MediaRepository,
     private val themePreferences: ThemePreferences,
-    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val syncEngine: AnilistSyncEngine? = null,
 ) : ViewModel() {
+
+    @OptIn(FlowPreview::class)
+    private fun <T> Flow<T>.throttleDuringSync(): Flow<T> {
+        val engine = syncEngine ?: return this
+        return combine(engine.syncProgress.map { it.isSyncing }.distinctUntilChanged()) { data, isSyncing ->
+            data to isSyncing
+        }.debounce { (_, isSyncing) ->
+            if (isSyncing) 1500L else 0L
+        }.map { (data, _) -> data }
+    }
 
     private val mutableFilterState = MutableStateFlow(MutableFilterState())
     val searchQuery = MutableStateFlow<String?>(null)
@@ -162,7 +174,8 @@ class DexViewModel(
         selectedStatus.flatMapLatest { stat ->
             repository.observeFilteredByCategoryId(targetId, stat)
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.throttleDuringSync()
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val perStatusCounts = selectedCategory.flatMapLatest { cat ->
         repository.observeStatusCounts(cat)
@@ -266,6 +279,7 @@ class DexViewModel(
             blurAdultCovers = dp.blurAdultCovers
         )
     }
+    .throttleDuringSync()
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DexUiState())
 
     fun selectCategoryId(categoryId: String?) {
@@ -440,22 +454,25 @@ class DexViewModel(
         direction: SortDirection,
         randomSeed: Long
     ): List<MediaItem> {
-        val sorted = when (field) {
-            SortField.ALPHABETICAL -> items.sortedBy { it.title.lowercase() }
-            SortField.TOTAL_COUNT -> items.sortedBy { it.totalItems ?: 0 }
-            SortField.LAST_READ -> items.sortedBy { it.lastUpdated }
-            SortField.UNREAD_COUNT -> items.sortedBy { (it.totalItems ?: 0) - it.currentProgress }
-            SortField.CURRENT_PROGRESS -> items.sortedBy { it.currentProgress }
-            SortField.DATE_ADDED -> items.sortedBy { it.dateAdded }
-            SortField.RATING -> items.sortedBy { it.rating ?: 0.0 }
-            SortField.RANDOM -> items.shuffled(kotlin.random.Random(randomSeed))
+        if (field == SortField.RANDOM) {
+            return items.shuffled(kotlin.random.Random(randomSeed))
         }
-        return if (field == SortField.RANDOM) {
-            sorted
-        } else if (direction == SortDirection.ASCENDING) {
-            sorted
+
+        val comparator: Comparator<MediaItem> = when (field) {
+            SortField.ALPHABETICAL -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+            SortField.TOTAL_COUNT -> compareBy { it.totalItems ?: 0 }
+            SortField.LAST_READ -> compareBy { it.lastUpdated }
+            SortField.UNREAD_COUNT -> compareBy { (it.totalItems ?: 0) - it.currentProgress }
+            SortField.CURRENT_PROGRESS -> compareBy { it.currentProgress }
+            SortField.DATE_ADDED -> compareBy { it.dateAdded }
+            SortField.RATING -> compareBy { it.rating ?: 0.0 }
+            SortField.RANDOM -> return items
+        }
+
+        return if (direction == SortDirection.DESCENDING) {
+            items.sortedWith(comparator.reversed())
         } else {
-            sorted.reversed()
+            items.sortedWith(comparator)
         }
     }
 }

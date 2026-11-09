@@ -1,5 +1,6 @@
 package app.lazydex.domain.model
 
+import androidx.compose.runtime.Immutable
 import app.lazydex.util.UrlNormalizer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -10,6 +11,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
+@Immutable
 data class MediaItem(
     val id: String,
     val type: String = "NOVEL",
@@ -244,19 +246,26 @@ data class MediaItem(
         isAdult = isAdult
     )
 
+    val extraMap: Map<String, String> by lazy(LazyThreadSafetyMode.NONE) {
+        if (extraData.isBlank() || extraData == "{}") {
+            emptyMap()
+        } else {
+            try {
+                val root = Json.parseToJsonElement(extraData).jsonObject
+                root.mapNotNull { (k, v) ->
+                    v.jsonPrimitive.contentOrNull?.let { k to it }
+                }.toMap()
+            } catch (e: Exception) {
+                emptyMap()
+            }
+        }
+    }
+
     val anilistId: Long? get() = getExtra("anilist_id")?.toLongOrNull()
     val malId: Long? get() = getExtra("mal_id")?.toLongOrNull()
     val simklId: Long? get() = getExtra("simkl_id")?.toLongOrNull()
 
-    fun getExtra(key: String): String? {
-        if (extraData.isBlank() || extraData == "{}") return null
-        return try {
-            val root = Json.parseToJsonElement(extraData).jsonObject
-            root[key]?.jsonPrimitive?.contentOrNull
-        } catch (e: Exception) {
-            null
-        }
-    }
+    fun getExtra(key: String): String? = extraMap[key]
 
     fun withExtra(key: String, value: String): MediaItem {
         val json = try {
