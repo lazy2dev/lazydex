@@ -13,8 +13,8 @@ android {
         applicationId = "app.lazydex"
         minSdk = 26
         targetSdk = 35
-        versionCode = 26
-        versionName = "0.14.0"
+        versionCode = 27
+        versionName = "0.15.0"
     }
 
     buildTypes {
@@ -63,6 +63,7 @@ dependencies {
 
   // Core Android dependencies
   implementation(libs.androidx.core.ktx)
+  implementation(libs.androidx.palette)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.activity.compose)
 

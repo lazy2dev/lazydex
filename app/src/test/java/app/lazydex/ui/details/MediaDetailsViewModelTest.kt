@@ -775,5 +775,43 @@ class MediaDetailsViewModelTest {
         assertTrue(linkDao.links.none { it.id == "link-sugg-2" })
         assertNull(vm.uiState.value.suggestedTracker)
     }
+
+    @Test
+    fun coverTheming_defaultsToTrue_and_setSeedColorUpdatesState() = runTest {
+        val repo = FakeRepository()
+        val vm = MediaDetailsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+
+        assertTrue(vm.uiState.value.coverTheming)
+        assertNull(vm.uiState.value.seedColor)
+
+        val vibrant = androidx.compose.ui.graphics.Color(0xFF3498DB)
+        vm.setSeedColor(vibrant)
+        assertEquals(vibrant, vm.uiState.value.seedColor)
+    }
+
+    @Test
+    fun initialize_resetsSeedColor() = runTest {
+        val repo = FakeRepository()
+        val vm = MediaDetailsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+
+        val vibrant = androidx.compose.ui.graphics.Color(0xFF3498DB)
+        vm.setSeedColor(vibrant)
+        assertEquals(vibrant, vm.uiState.value.seedColor)
+
+        vm.initialize("new-id", null)
+        assertNull(vm.uiState.value.seedColor)
+    }
 }
 

@@ -53,7 +53,7 @@ data class SettingsUiState(
     val themeMode: String = "DARK",
     val themePreset: ThemePreset = ThemePreset.DEFAULT,
     val amoledMode: Boolean = false,
-    val coverTheming: Boolean = false,
+    val coverTheming: Boolean = true,
     val storageStats: StorageStats = StorageStats(),
     val importedBackup: ImportedBackup? = null,
     val isExporting: Boolean = false,

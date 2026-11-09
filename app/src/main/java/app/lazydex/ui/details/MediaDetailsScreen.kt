@@ -52,6 +52,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -65,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -82,6 +84,7 @@ import app.lazydex.ui.details.components.TrackDateSelector
 import app.lazydex.ui.details.components.TrackProgressSelector
 import app.lazydex.ui.details.components.TrackScoreSelector
 import app.lazydex.ui.details.components.TrackStatusSelector
+import app.lazydex.ui.theme.coverColorScheme
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
@@ -140,80 +143,93 @@ fun MediaDetailsScreen(
     }
 
     val titleAlpha by animateFloatAsState(
-        targetValue = if (scrollState.value > 120) 1f else 0f,
+        targetValue = if (scrollState.value > 140) 1f else 0f,
         label = "TopAppBarTitleAlpha"
     )
+    val backgroundAlpha by animateFloatAsState(
+        targetValue = if (scrollState.value > 0) 1f else 0f,
+        label = "TopAppBarBackgroundAlpha"
+    )
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = state.title.ifBlank { "Media Details" },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.alpha(titleAlpha)
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (viewModel.onBackPress()) onBack()
-                    }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+    val baseColorScheme = MaterialTheme.colorScheme
+    val effectiveColorScheme = remember(state.coverTheming, state.seedColor, baseColorScheme) {
+        if (state.coverTheming && state.seedColor != null) {
+            coverColorScheme(
+                seedColor = state.seedColor!!,
+                isDark = baseColorScheme.background.luminance() < 0.5f,
+                base = baseColorScheme
+            )
+        } else {
+            baseColorScheme
+        }
+    }
+
+    MaterialTheme(colorScheme = effectiveColorScheme) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = state.title.ifBlank { "Media Details" },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.alpha(titleAlpha)
                         )
-                    }
-                },
-                actions = {
-                    if (!state.isNew) {
-                        IconButton(onClick = { viewModel.showDeleteConfirm(true) }) {
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            if (viewModel.onBackPress()) onBack()
+                        }) {
                             Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete entry",
-                                tint = MaterialTheme.colorScheme.error
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back"
                             )
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (scrollState.value > 60) {
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
-                    } else {
-                        Color.Transparent
-                    }
+                    },
+                    actions = {
+                        if (!state.isNew) {
+                            IconButton(onClick = { viewModel.showDeleteConfirm(true) }) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete entry",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp).copy(alpha = backgroundAlpha)
+                    )
                 )
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { innerPadding ->
-        if (state.isLoading) {
-            MediaDetailsSkeleton(modifier = Modifier.padding(innerPadding))
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(scrollState)
-                    .padding(bottom = 88.dp)
-            ) {
-                Spacer(modifier = Modifier.height(innerPadding.calculateTopPadding()))
-
-                // 1. Media Info Header (Backdrop + Cover + Title + Metadata)
-                MediaInfoHeader(
-                    title = state.title,
-                    author = state.author,
-                    category = state.category,
-                    formatName = state.availableFormats.find { it.id == state.formatId }?.name
-                        ?: state.formatId?.takeIf { !it.startsWith("cat_") && !it.equals(state.category.name, ignoreCase = true) },
-                    sourceUrl = state.sourceUrl,
-                    totalItems = state.parsedTotal,
-                    coverImagePath = state.coverImagePath,
-                    coverImageUrl = state.coverImageUrl,
-                    bannerUrl = state.bannerImage,
-                    onCoverClick = { if (!state.isObscured) activeDialog = ActiveDialog.Cover },
-                    isUpdatingCover = state.isUpdatingArtwork,
-                    isObscured = state.isObscured,
-                )
+            },
+            snackbarHost = { SnackbarHost(snackbarHostState) }
+        ) { innerPadding ->
+            if (state.isLoading) {
+                MediaDetailsSkeleton(modifier = Modifier.padding(innerPadding))
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(bottom = 88.dp)
+                ) {
+                    // 1. Media Info Header (Backdrop + Cover + Title + Metadata)
+                    MediaInfoHeader(
+                        title = state.title,
+                        author = state.author,
+                        category = state.category,
+                        formatName = state.availableFormats.find { it.id == state.formatId }?.name
+                            ?: state.formatId?.takeIf { !it.startsWith("cat_") && !it.equals(state.category.name, ignoreCase = true) },
+                        sourceUrl = state.sourceUrl,
+                        totalItems = state.parsedTotal,
+                        coverImagePath = state.coverImagePath,
+                        coverImageUrl = state.coverImageUrl,
+                        bannerUrl = state.bannerImage,
+                        onCoverClick = { if (!state.isObscured) activeDialog = ActiveDialog.Cover },
+                        isUpdatingCover = state.isUpdatingArtwork,
+                        isObscured = state.isObscured,
+                        topPadding = innerPadding.calculateTopPadding(),
+                    )
 
                 // 2. Action Row (In Library, Updated X, Sync, Edit)
                 MediaActionRow(
@@ -527,6 +543,7 @@ fun MediaDetailsScreen(
                 TextButton(onClick = { viewModel.dismissDiscardConfirm() }) { Text("Keep Editing") }
             }
         )
+    }
     }
 }
 

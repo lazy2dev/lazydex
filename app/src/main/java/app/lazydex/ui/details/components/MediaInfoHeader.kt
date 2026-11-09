@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -39,6 +40,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.lazydex.R
 import app.lazydex.domain.model.MediaCategory
@@ -63,6 +65,7 @@ fun MediaInfoHeader(
     modifier: Modifier = Modifier,
     isUpdatingCover: Boolean = false,
     isObscured: Boolean = false,
+    topPadding: Dp = 0.dp,
 ) {
     Box(modifier = modifier) {
         val backdropGradientColors = listOf(
@@ -99,7 +102,7 @@ fun MediaInfoHeader(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, top = 16.dp, end = 16.dp),
+                    .padding(start = 16.dp, top = topPadding + 16.dp, end = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -271,18 +274,24 @@ fun DetailCoverImage(
         return
     }
 
-    val model = when {
-        coverImagePath.isNotBlank() && File(coverImagePath).exists() -> File(coverImagePath)
-        !coverImageUrl.isNullOrBlank() -> coverImageUrl
-        else -> null
+    val model = remember(coverImagePath, coverImageUrl) {
+        when {
+            coverImagePath.isNotBlank() && File(coverImagePath).exists() -> File(coverImagePath)
+            !coverImageUrl.isNullOrBlank() -> coverImageUrl
+            else -> null
+        }
     }
 
     if (model != null) {
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
+        val context = LocalContext.current
+        val request = remember(model) {
+            ImageRequest.Builder(context)
                 .data(model)
                 .crossfade(true)
-                .build(),
+                .build()
+        }
+        AsyncImage(
+            model = request,
             contentDescription = "Cover for $title",
             contentScale = ContentScale.Crop,
             modifier = modifier.clip(shape)

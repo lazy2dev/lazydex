@@ -1,5 +1,6 @@
 package app.lazydex.ui.details
 
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -98,6 +99,8 @@ data class MediaDetailsUiState(
     val lastUpdated: Long = System.currentTimeMillis(),
     val isAdult: Boolean = false,
     val blurAdultCovers: Boolean = false,
+    val seedColor: Color? = null,
+    val coverTheming: Boolean = true,
 ) {
     val isObscured: Boolean get() = isAdult && blurAdultCovers
     val parsedSecondaryProgress: Double? get() = secondaryProgress.trim().toDoubleOrNull()
@@ -169,6 +172,15 @@ class MediaDetailsViewModel(
                     _uiState.update { it.copy(blurAdultCovers = blur) }
                 }
             }
+            viewModelScope.launch {
+                themePreferences.coverTheming.collect { enabled ->
+                    _uiState.update { it.copy(coverTheming = enabled) }
+                    if (enabled) {
+                        lastExtractedSource = null
+                        extractSeedColor(_uiState.value.coverImagePath, _uiState.value.coverImageUrl)
+                    }
+                }
+            }
         }
         viewModelScope.launch {
             @OptIn(FlowPreview::class)
@@ -187,10 +199,12 @@ class MediaDetailsViewModel(
         val effectiveUrl = initialUrl?.takeIf { it.isNotBlank() }
         val effectiveId = id?.takeIf { it.isNotBlank() }
 
+        lastExtractedSource = null
         _uiState.value = _uiState.value.copy(
             isNew = effectiveId == null,
             isLoading = effectiveId != null,
             isAnilistLoggedIn = tokenStore?.isLoggedIn == true,
+            seedColor = null,
         )
 
         effectiveUrl?.let { url ->
@@ -307,6 +321,7 @@ class MediaDetailsViewModel(
                     if (item.category != _uiState.value.category || _uiState.value.availableFormats.isEmpty()) {
                         observeCategoryFormats(topCatId)
                     }
+                    extractSeedColor(item.coverImagePath, item.coverImageUrl ?: "")
                 } else if (item == null) {
                     _uiState.value = _uiState.value.copy(isLoading = false)
                 }
@@ -362,12 +377,53 @@ class MediaDetailsViewModel(
         _uiState.value = _uiState.value.copy(sourceUrl = url, errorMsg = null)
     }
 
+    private var lastExtractedSource: String? = null
+
     fun updateCoverImagePath(path: String) {
         _uiState.value = _uiState.value.copy(coverImagePath = path)
+        lastExtractedSource = null
+        extractSeedColor(path, _uiState.value.coverImageUrl)
+    }
+
+    fun setSeedColor(color: Color) {
+        _uiState.update { it.copy(seedColor = color) }
+    }
+
+    fun extractSeedColorFromPath(path: String) {
+        extractSeedColor(path, "")
+    }
+
+    fun extractSeedColor(path: String, url: String = "") {
+        if (!_uiState.value.coverTheming) return
+        val trimmedPath = path.trim()
+        val trimmedUrl = url.trim()
+        val sourceKey = trimmedPath.ifBlank { trimmedUrl }
+        if (sourceKey.isBlank() || sourceKey == lastExtractedSource) return
+        lastExtractedSource = sourceKey
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val color = if (trimmedPath.isNotBlank()) {
+                val localColor = app.lazydex.ui.theme.CoverColorExtractor.extractSeedColor(trimmedPath)
+                if (localColor != null) {
+                    localColor
+                } else if (trimmedUrl.isNotBlank()) {
+                    app.lazydex.ui.theme.CoverColorExtractor.extractSeedColorFromUrl(trimmedUrl, okHttpClient)
+                } else {
+                    null
+                }
+            } else {
+                app.lazydex.ui.theme.CoverColorExtractor.extractSeedColorFromUrl(trimmedUrl, okHttpClient)
+            }
+            if (color != null && _uiState.value.seedColor != color) {
+                _uiState.update { it.copy(seedColor = color) }
+            }
+        }
     }
 
     fun updateCoverImageUrl(url: String) {
         _uiState.value = _uiState.value.copy(coverImageUrl = url)
+        lastExtractedSource = null
+        extractSeedColor(_uiState.value.coverImagePath, url)
     }
 
     fun updateArtwork(coverUrl: String, bannerUrl: String?) {
@@ -390,6 +446,8 @@ class MediaDetailsViewModel(
                     coverImagePath = newLocalPath,
                     isUpdatingArtwork = false,
                 )
+                lastExtractedSource = null
+                extractSeedColor(newLocalPath, trimmedCover)
                 autoSave()
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(

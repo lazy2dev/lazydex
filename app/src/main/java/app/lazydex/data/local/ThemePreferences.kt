@@ -98,7 +98,7 @@ open class ThemePreferences(private val context: Context? = null) {
 
     open val coverTheming: Flow<Boolean> by lazy {
         dataStore.data.map { preferences ->
-            preferences[COVER_THEMING_KEY] ?: false
+            preferences[COVER_THEMING_KEY] ?: true
         }
     }
 

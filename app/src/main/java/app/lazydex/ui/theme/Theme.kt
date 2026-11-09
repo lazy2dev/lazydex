@@ -8,7 +8,9 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.ColorScheme
 import app.lazydex.data.local.ThemePreset
 
 private val DarkColorScheme = darkColorScheme(
@@ -133,5 +135,50 @@ fun LazyDexTheme(
         colorScheme = colorScheme,
         typography = Typography,
         content = content
+    )
+}
+
+/**
+ * Derives a dynamic ColorScheme for the Media Details screen based on the cover's vibrant seed color.
+ */
+fun coverColorScheme(
+    seedColor: Color,
+    isDark: Boolean,
+    base: ColorScheme
+): ColorScheme {
+    val seedLum = seedColor.luminance()
+    val adjustedPrimary = if (!isDark && seedLum > 0.45f) {
+        // Darken for sufficient contrast on light theme backgrounds
+        Color(
+            red = seedColor.red * 0.65f,
+            green = seedColor.green * 0.65f,
+            blue = seedColor.blue * 0.65f,
+            alpha = 1f
+        )
+    } else if (isDark && seedLum < 0.15f) {
+        // Brighten for sufficient contrast on dark theme backgrounds
+        Color(
+            red = (seedColor.red + 0.35f).coerceAtMost(1f),
+            green = (seedColor.green + 0.35f).coerceAtMost(1f),
+            blue = (seedColor.blue + 0.35f).coerceAtMost(1f),
+            alpha = 1f
+        )
+    } else {
+        seedColor
+    }
+
+    val onPrimaryColor = if (adjustedPrimary.luminance() > 0.5f) Color.Black else Color.White
+    val containerAlpha = if (isDark) 0.22f else 0.14f
+
+    return base.copy(
+        primary = adjustedPrimary,
+        onPrimary = onPrimaryColor,
+        primaryContainer = adjustedPrimary.copy(alpha = containerAlpha),
+        onPrimaryContainer = adjustedPrimary,
+        surfaceTint = adjustedPrimary,
+        secondary = adjustedPrimary.copy(alpha = 0.85f),
+        secondaryContainer = adjustedPrimary.copy(alpha = containerAlpha * 0.8f),
+        onSecondaryContainer = adjustedPrimary,
+        outlineVariant = adjustedPrimary.copy(alpha = 0.35f),
     )
 }
