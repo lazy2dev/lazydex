@@ -49,6 +49,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -595,6 +596,7 @@ private fun EditMetadataModalSheet(
     var author by remember { mutableStateOf(state.author) }
     var totalItems by remember { mutableStateOf(state.totalItems) }
     var description by remember { mutableStateOf(state.description) }
+    var isAdult by remember { mutableStateOf(state.isAdult) }
     var localError by remember { mutableStateOf<String?>(null) }
     var handledScrapeVersion by remember { mutableIntStateOf(state.scrapeVersion) }
     var committed by remember { mutableStateOf(false) }
@@ -607,6 +609,7 @@ private fun EditMetadataModalSheet(
             title = state.title
             author = state.author
             description = state.description
+            isAdult = state.isAdult
             localError = null
         }
     }
@@ -650,6 +653,7 @@ private fun EditMetadataModalSheet(
             author = author,
             totalItems = totalItems,
             description = description,
+            isAdult = isAdult,
         )
         if (!ok) {
             localError = viewModel.uiState.value.errorMsg ?: "Unable to save changes"
@@ -879,6 +883,32 @@ private fun EditMetadataModalSheet(
                         }
                     }
                 }
+            }
+
+            // 18+ Adult Content Classification
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "18+ Adult Content",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Obscures cover with blur when blur 18+ setting is enabled",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = isAdult,
+                    onCheckedChange = { isAdult = it }
+                )
             }
 
             OutlinedTextField(

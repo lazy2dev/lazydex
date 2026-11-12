@@ -10,7 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,10 +26,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -37,41 +33,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.lazydex.domain.repository.MediaRepository
 import app.lazydex.ui.components.EmptyState
 import app.lazydex.ui.components.MediaCard
-import org.koin.compose.koinInject
+import org.koin.androidx.compose.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
     onNavigateToEditItem: (String) -> Unit,
     modifier: Modifier = Modifier,
-    repository: MediaRepository = koinInject()
+    viewModel: HistoryViewModel = koinViewModel()
 ) {
-    val items by repository.observeHistory().collectAsState(initial = emptyList())
-    var isSearching by rememberSaveable { mutableStateOf(false) }
-    var searchQuery by rememberSaveable { mutableStateOf("") }
-
-    val filteredItems = remember(items, searchQuery) {
-        val query = searchQuery.trim()
-        items.asSequence()
-            .filter { item ->
-                if (query.isEmpty()) true
-                else item.title.contains(query, ignoreCase = true) ||
-                        (item.author?.contains(query, ignoreCase = true) == true)
-            }
-            .toList()
-    }
+    val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    if (isSearching) {
+                    if (uiState.isSearching) {
                         TextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
+                            value = uiState.searchQuery,
+                            onValueChange = { viewModel.onSearchQueryChange(it) },
                             placeholder = { Text("Search history...") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -94,24 +76,21 @@ fun HistoryScreen(
                     }
                 },
                 navigationIcon = {
-                    if (isSearching) {
-                        IconButton(onClick = {
-                            isSearching = false
-                            searchQuery = ""
-                        }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Close search")
+                    if (uiState.isSearching) {
+                        IconButton(onClick = { viewModel.onSearchingToggle(false) }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search")
                         }
                     }
                 },
                 actions = {
-                    if (isSearching) {
-                        if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { searchQuery = "" }) {
+                    if (uiState.isSearching) {
+                        if (uiState.searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.clearSearchQuery() }) {
                                 Icon(Icons.Default.Clear, contentDescription = "Clear search")
                             }
                         }
                     } else {
-                        IconButton(onClick = { isSearching = true }) {
+                        IconButton(onClick = { viewModel.onSearchingToggle(true) }) {
                             Icon(Icons.Default.Search, contentDescription = "Search history")
                         }
                     }
@@ -129,9 +108,9 @@ fun HistoryScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            if (filteredItems.isEmpty()) {
-                val message = if (searchQuery.isNotBlank()) {
-                    "No history matching '$searchQuery'"
+            if (uiState.items.isEmpty()) {
+                val message = if (uiState.searchQuery.isNotBlank()) {
+                    "No history matching '${uiState.searchQuery}'"
                 } else {
                     "No media activity yet"
                 }
@@ -144,11 +123,12 @@ fun HistoryScreen(
                     contentPadding = PaddingValues(bottom = 16.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(filteredItems, key = { it.id }) { item ->
+                    items(uiState.items, key = { it.id }) { item ->
                         MediaCard(
                             item = item,
                             onClick = { onNavigateToEditItem(item.id) },
-                            isGridView = false
+                            isGridView = false,
+                            blurAdultCovers = uiState.blurAdultCovers
                         )
                     }
                 }

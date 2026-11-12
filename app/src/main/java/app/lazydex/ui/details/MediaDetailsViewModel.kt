@@ -591,6 +591,7 @@ class MediaDetailsViewModel(
         author: String,
         totalItems: String,
         description: String,
+        isAdult: Boolean = _uiState.value.isAdult,
     ): Boolean {
         val current = _uiState.value
         if (current.isScraping || current.isSaving) return false
@@ -601,7 +602,8 @@ class MediaDetailsViewModel(
             current.title.trim() == title.trim() &&
             current.author.trim() == author.trim() &&
             current.totalItems.trim() == totalItems.trim() &&
-            current.description.trim() == description.trim()
+            current.description.trim() == description.trim() &&
+            current.isAdult == isAdult
         if (unchanged) return true
 
         val candidate = current.copy(
@@ -612,6 +614,7 @@ class MediaDetailsViewModel(
             author = author,
             totalItems = totalItems,
             description = description,
+            isAdult = isAdult,
             errorMsg = null,
         )
         val validationError = validateMetadata(candidate)

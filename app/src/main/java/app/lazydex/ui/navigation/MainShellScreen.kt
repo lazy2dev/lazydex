@@ -31,6 +31,7 @@ import app.lazydex.ui.browser.BrowserViewModel
 import app.lazydex.ui.dex.DexScreen
 import app.lazydex.ui.dex.DexViewModel
 import app.lazydex.ui.history.HistoryScreen
+import app.lazydex.ui.history.HistoryViewModel
 import app.lazydex.ui.statistics.StatisticsScreen
 import org.koin.androidx.compose.koinViewModel
 
@@ -49,7 +50,8 @@ fun MainShellScreen(
     onNavigateToEditItem: (String) -> Unit,
     modifier: Modifier = Modifier,
     dexViewModel: DexViewModel = koinViewModel(),
-    browserViewModel: BrowserViewModel = koinViewModel()
+    browserViewModel: BrowserViewModel = koinViewModel(),
+    historyViewModel: HistoryViewModel = koinViewModel()
 ) {
     var currentTab by rememberSaveable { mutableStateOf(ShellTab.DEX) }
 
@@ -138,6 +140,7 @@ fun MainShellScreen(
                 ShellTab.HISTORY -> {
                     HistoryScreen(
                         onNavigateToEditItem = onNavigateToEditItem,
+                        viewModel = historyViewModel,
                         modifier = Modifier.fillMaxSize()
                     )
                 }

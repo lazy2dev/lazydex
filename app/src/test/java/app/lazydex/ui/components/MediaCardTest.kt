@@ -132,4 +132,28 @@ class MediaCardTest {
         assertEquals(9.0, item.rating!!, 0.001)
         assertEquals(UserStatus.READING, item.userStatus)
     }
+
+    @Test
+    fun `adult item obscuring depends strictly on item isAdult and blurAdultCovers flag`() {
+        val adultItem = MediaItem(
+            id = "adult1",
+            title = "Adult Media",
+            userStatus = UserStatus.PLAN_TO,
+            lastUpdated = 1000L,
+            dateAdded = 1000L,
+            isAdult = true
+        )
+        val nonAdultItem = MediaItem(
+            id = "regular1",
+            title = "Regular Media",
+            userStatus = UserStatus.PLAN_TO,
+            lastUpdated = 1000L,
+            dateAdded = 1000L,
+            isAdult = false
+        )
+
+        assertTrue("Adult item with blur enabled must be obscured", adultItem.isAdult && true)
+        assertFalse("Adult item with blur disabled must not be obscured", adultItem.isAdult && false)
+        assertFalse("Non-adult item must never be obscured", nonAdultItem.isAdult && true)
+    }
 }

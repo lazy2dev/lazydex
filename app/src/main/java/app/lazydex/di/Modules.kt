@@ -18,9 +18,10 @@ import app.lazydex.scraper.MetadataScraper
 import app.lazydex.scraper.SafeDns
 import app.lazydex.scraper.source.GenericSource
 import app.lazydex.scraper.source.SourceRegistry
-import app.lazydex.ui.details.MediaDetailsViewModel
 import app.lazydex.ui.browser.BrowserViewModel
+import app.lazydex.ui.details.MediaDetailsViewModel
 import app.lazydex.ui.dex.DexViewModel
+import app.lazydex.ui.history.HistoryViewModel
 import app.lazydex.ui.settings.SettingsViewModel
 import app.lazydex.ui.statistics.StatisticsViewModel
 import okhttp3.OkHttpClient
@@ -168,6 +169,7 @@ val extensionModule = module {
 
 val viewModelModule = module {
     viewModel { DexViewModel(get(), get(), syncEngine = getOrNull()) }
+    viewModel { HistoryViewModel(get(), get()) }
     viewModel { StatisticsViewModel(get(), getOrNull()) }
     viewModel { BrowserViewModel(get(), get(), get()) }
     viewModel {

@@ -947,6 +947,46 @@ class MediaDetailsViewModelTest {
     }
 
     @Test
+    fun commitMetadataEdits_updatesIsAdultSuccessfully() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "item-adult-1",
+            type = "MANGA",
+            format = "MANGA",
+            title = "Berserk",
+            currentProgress = 10,
+            totalItems = 40,
+            userStatus = UserStatus.READING,
+            lastUpdated = 1000L,
+            dateAdded = 500L,
+            isAdult = false
+        )
+        repo.items.add(existing)
+
+        val vm = createViewModel(
+            repository = repo,
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+        vm.initialize("item-adult-1", null)
+
+        val ok = vm.commitMetadataEdits(
+            sourceUrl = "",
+            mediaType = MediaType.MANGA,
+            formatId = "MANGA",
+            title = "Berserk",
+            author = "Kentaro Miura",
+            totalItems = "40",
+            description = "Dark fantasy",
+            isAdult = true
+        )
+
+        assertTrue(ok)
+        val saved = repo.items.single()
+        assertTrue(saved.isAdult)
+    }
+
+    @Test
     fun commitMetadataEdits_invalidUrlOrProgressExceedsTotal_returnsFalseWithoutSaving() = runTest {
         val repo = FakeRepository()
         val existing = MediaItem(
