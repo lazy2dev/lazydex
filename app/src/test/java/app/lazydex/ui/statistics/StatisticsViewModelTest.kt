@@ -1,6 +1,9 @@
 package app.lazydex.ui.statistics
 
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.data.local.DisplayPreferences
+import app.lazydex.data.local.ThemePreferences
+import app.lazydex.domain.model.ActivityDatePoint
+import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.MediaStats
 import app.lazydex.domain.model.StatusFilter
@@ -17,10 +20,13 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.time.LocalDate
+import java.time.ZoneOffset
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class StatisticsViewModelTest {
@@ -28,22 +34,29 @@ class StatisticsViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
 
     private class FakeRepository(
-        val items: List<MediaItem>
+        val items: List<MediaItem>,
+        val activityPoints: List<ActivityDatePoint> = emptyList()
     ) : MediaRepository {
         override fun observeAll(): Flow<List<MediaItem>> = flowOf(items)
-        override fun observeByCategory(category: MediaCategory): Flow<List<MediaItem>> =
-            flowOf(items.filter { it.category == category })
-        override fun observeFiltered(category: MediaCategory?, statusFilter: StatusFilter): Flow<List<MediaItem>> =
+        override fun observeByType(mediaType: MediaType): Flow<List<MediaItem>> =
+            flowOf(items.filter { it.mediaType == mediaType })
+        override fun observeFiltered(mediaType: MediaType?, statusFilter: StatusFilter): Flow<List<MediaItem>> =
             flowOf(items)
         override fun observeById(id: String): Flow<MediaItem?> = flowOf(items.find { it.id == id })
         override fun observeCount(): Flow<Int> = flowOf(items.size)
         override fun observeStats(): Flow<MediaStats> = flowOf(MediaStats(0, 0, 0, null, 0, 0, 0, 0, 0))
-        override fun observeCategoryCounts(): Flow<Map<MediaCategory, Int>> = flowOf(
-            MediaCategory.entries.associateWith { cat -> items.count { it.category == cat } }
+        override fun observeTypeCounts(): Flow<Map<MediaType, Int>> = flowOf(
+            MediaType.entries.associateWith { type -> items.count { it.mediaType == type } }
         )
-        override fun observeStatusCounts(category: MediaCategory?): Flow<Map<StatusFilter, Int>> = flowOf(emptyMap())
-        override fun observeDistinctGenres(category: MediaCategory?): Flow<List<String>> = flowOf(emptyList())
-        override fun observeDistinctTags(category: MediaCategory?): Flow<List<String>> = flowOf(emptyList())
+        override fun observeStatusCounts(mediaType: MediaType?): Flow<Map<StatusFilter, Int>> = flowOf(emptyMap())
+        override fun observeDistinctGenres(mediaType: MediaType?): Flow<List<String>> = flowOf(emptyList())
+        override fun observeDistinctTags(mediaType: MediaType?): Flow<List<String>> = flowOf(emptyList())
+        override fun observeActivityPoints(startMs: Long?, endMs: Long?): Flow<List<ActivityDatePoint>> = flowOf(
+            activityPoints.filter { p ->
+                (startMs == null || p.timestamp >= startMs) &&
+                    (endMs == null || p.timestamp <= endMs)
+            }
+        )
 
         override suspend fun getById(id: String): MediaItem? = items.find { it.id == id }
         override suspend fun getAll(): List<MediaItem> = items
@@ -67,7 +80,7 @@ class StatisticsViewModelTest {
         return listOf(
             MediaItem(
                 id = "1",
-                category = MediaCategory.NOVEL,
+                mediaType = MediaType.NOVEL,
                 title = "Lord of the Mysteries",
                 currentProgress = 100,
                 totalItems = 1432,
@@ -82,7 +95,7 @@ class StatisticsViewModelTest {
             ),
             MediaItem(
                 id = "2",
-                category = MediaCategory.NOVEL,
+                mediaType = MediaType.NOVEL,
                 title = "Shadow Slave",
                 currentProgress = 50,
                 totalItems = 1000,
@@ -95,7 +108,7 @@ class StatisticsViewModelTest {
             ),
             MediaItem(
                 id = "3",
-                category = MediaCategory.MANGA,
+                mediaType = MediaType.MANGA,
                 title = "Solo Leveling",
                 currentProgress = 20,
                 totalItems = 200,
@@ -108,7 +121,7 @@ class StatisticsViewModelTest {
             ),
             MediaItem(
                 id = "4",
-                category = MediaCategory.ANIME,
+                mediaType = MediaType.ANIME,
                 title = "Steins;Gate",
                 currentProgress = 5,
                 totalItems = 24,
@@ -125,7 +138,7 @@ class StatisticsViewModelTest {
     @Test
     fun testInitialStateAggregatesAllItems() = runTest {
         val repo = FakeRepository(sampleMediaItems())
-        val viewModel = StatisticsViewModel(repo)
+        val viewModel = StatisticsViewModel(repo, computeDispatcher = testDispatcher)
 
         val collectJob = launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect {}
@@ -136,15 +149,15 @@ class StatisticsViewModelTest {
         assertEquals(2, state.overview.completedCount)
         assertEquals(1, state.overview.inProgressCount)
         assertEquals(175, state.overview.totalProgressUnits)
-        assertEquals("2d 5h", state.overview.durationText)
+        assertEquals("8h", state.overview.durationText)
         assertEquals("Duration", state.overview.durationLabel)
         assertEquals(4.0, state.overview.meanRating!!, 0.001)
 
         // Tab counts
-        assertEquals(4, state.categoryCounts[null])
-        assertEquals(2, state.categoryCounts[MediaCategory.NOVEL])
-        assertEquals(1, state.categoryCounts[MediaCategory.MANGA])
-        assertEquals(1, state.categoryCounts[MediaCategory.ANIME])
+        assertEquals(4, state.typeCounts[null])
+        assertEquals(2, state.typeCounts[MediaType.NOVEL])
+        assertEquals(1, state.typeCounts[MediaType.MANGA])
+        assertEquals(1, state.typeCounts[MediaType.ANIME])
 
         // Genres
         val fantasyGenre = state.genreBars.find { it.name == "Fantasy" }
@@ -160,18 +173,18 @@ class StatisticsViewModelTest {
     }
 
     @Test
-    fun testCategorySelectionFiltersToSpecificCategory() = runTest {
+    fun testTypeSelectionFiltersToSpecificType() = runTest {
         val repo = FakeRepository(sampleMediaItems())
-        val viewModel = StatisticsViewModel(repo)
+        val viewModel = StatisticsViewModel(repo, computeDispatcher = testDispatcher)
 
         val collectJob = launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect {}
         }
 
-        viewModel.selectCategory(MediaCategory.NOVEL)
+        viewModel.selectType(MediaType.NOVEL)
 
         val state = viewModel.uiState.value
-        assertEquals(MediaCategory.NOVEL, state.selectedCategory)
+        assertEquals(MediaType.NOVEL, state.selectedType)
         assertEquals(2, state.overview.totalCount)
         assertEquals(1, state.overview.completedCount)
         assertEquals(1, state.overview.inProgressCount)
@@ -193,7 +206,7 @@ class StatisticsViewModelTest {
     @Test
     fun testRatingsAndStatusMetricsCalculatedCorrectly() = runTest {
         val repo = FakeRepository(sampleMediaItems())
-        val viewModel = StatisticsViewModel(repo)
+        val viewModel = StatisticsViewModel(repo, computeDispatcher = testDispatcher)
 
         val collectJob = launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect {}
@@ -227,7 +240,7 @@ class StatisticsViewModelTest {
     @Test
     fun testEmptyLibrarySafeZeroDivision() = runTest {
         val repo = FakeRepository(emptyList())
-        val viewModel = StatisticsViewModel(repo)
+        val viewModel = StatisticsViewModel(repo, computeDispatcher = testDispatcher)
 
         val collectJob = launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect {}
@@ -247,42 +260,143 @@ class StatisticsViewModelTest {
     }
 
     @Test
-    fun testDurationComputationYearsMonthsDays() = runTest {
-        val yearItem = MediaItem(
-            id = "year1",
-            category = MediaCategory.NOVEL,
+    fun testDurationComputationFollowsAniListAndNovelMangaFormula() = runTest {
+        val novelItem = MediaItem(
+            id = "novel1",
+            mediaType = MediaType.NOVEL,
             title = "Long Novel",
-            currentProgress = 10,
+            currentProgress = 100,
             totalItems = 100,
             userStatus = UserStatus.COMPLETED,
-            startDate = 1000L,
-            endDate = 1000L + (86400000L * 400L),
-            lastUpdated = 1000L,
-            dateAdded = 1000L
+            repeat = 1 // 100 + 100 = 200 ch * 2m = 400m -> 6h 40m
         )
-        val monthItem = MediaItem(
-            id = "month1",
-            category = MediaCategory.MANGA,
-            title = "Medium Manga",
-            currentProgress = 5,
+        val animeItem = MediaItem(
+            id = "anime1",
+            type = "ANIME",
+            format = "TV",
+            title = "Long Anime",
+            currentProgress = 50,
             totalItems = 50,
             userStatus = UserStatus.COMPLETED,
-            startDate = 1000L,
-            endDate = 1000L + (86400000L * 45L),
             lastUpdated = 1000L,
-            dateAdded = 1000L
+            dateAdded = 1000L,
+            durationMinutes = 30 // 50 * 30m = 1500m -> 1d 1h
         )
 
-        val yearRepo = FakeRepository(listOf(yearItem))
-        val yearVm = StatisticsViewModel(yearRepo)
-        val job1 = launch(UnconfinedTestDispatcher(testScheduler)) { yearVm.uiState.collect {} }
-        assertEquals("1y 1mo", yearVm.uiState.value.overview.durationText)
+        val novelRepo = FakeRepository(listOf(novelItem))
+        val novelVm = StatisticsViewModel(novelRepo, computeDispatcher = testDispatcher)
+        val job1 = launch(UnconfinedTestDispatcher(testScheduler)) { novelVm.uiState.collect {} }
+        assertEquals("6h 40m", novelVm.uiState.value.overview.durationText)
         job1.cancel()
 
-        val monthRepo = FakeRepository(listOf(monthItem))
-        val monthVm = StatisticsViewModel(monthRepo)
-        val job2 = launch(UnconfinedTestDispatcher(testScheduler)) { monthVm.uiState.collect {} }
-        assertEquals("1mo 15d", monthVm.uiState.value.overview.durationText)
+        val animeRepo = FakeRepository(listOf(animeItem))
+        val animeVm = StatisticsViewModel(animeRepo, computeDispatcher = testDispatcher)
+        val job2 = launch(UnconfinedTestDispatcher(testScheduler)) { animeVm.uiState.collect {} }
+        assertEquals("1d 1h", animeVm.uiState.value.overview.durationText)
         job2.cancel()
+    }
+
+    @Test
+    fun testDateRangeFilteringAndActivityHeatmapIntegration() = runTest {
+        val fixedToday = LocalDate.of(2026, 5, 10)
+        val ts = { d: LocalDate -> d.atStartOfDay(ZoneOffset.UTC).plusHours(12).toInstant().toEpochMilli() }
+
+        val datedRecent = MediaItem(
+            id = "recent",
+            mediaType = MediaType.NOVEL,
+            title = "Recent Novel",
+            currentProgress = 80,
+            userStatus = UserStatus.READING,
+            rating = 4.8,
+            startDate = ts(fixedToday.minusDays(2)),
+            endDate = ts(fixedToday)
+        )
+        val datedOld = MediaItem(
+            id = "old",
+            mediaType = MediaType.MANGA,
+            title = "Old Manga",
+            currentProgress = 40,
+            userStatus = UserStatus.COMPLETED,
+            rating = 3.5,
+            startDate = ts(fixedToday.minusDays(40)),
+            endDate = ts(fixedToday.minusDays(20))
+        )
+        val undated = MediaItem(
+            id = "undated",
+            mediaType = MediaType.GAME,
+            title = "Undated Game",
+            currentProgress = 12,
+            userStatus = UserStatus.PLAYING,
+            rating = 4.0
+        )
+
+        val points = listOf(
+            ActivityDatePoint("recent", "NOVEL", "NOVEL", "PROGRESS_UPDATE", 2.0, ts(fixedToday)),
+            ActivityDatePoint("recent", "NOVEL", "NOVEL", "PROGRESS_UPDATE", 1.0, ts(fixedToday.minusDays(1))),
+            ActivityDatePoint("old", "MANGA", "MANGA", "PROGRESS_UPDATE", 5.0, ts(fixedToday.minusDays(25)))
+        )
+
+        val repo = FakeRepository(listOf(datedRecent, datedOld, undated), points)
+        val vm = StatisticsViewModel(
+            repository = repo,
+            computeDispatcher = testDispatcher,
+            todayProvider = { fixedToday },
+            zoneId = ZoneOffset.UTC
+        )
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+
+        // Default: All Time includes all 3 entries + 3 activities + 2d streak
+        val allState = vm.uiState.value
+        assertEquals(StatsDateRangePreset.ALL_TIME, allState.dateRange.preset)
+        assertEquals(3, allState.overview.totalCount)
+        assertEquals(3, allState.consumptionStats.size)
+        assertEquals(3, allState.activityHeatmap.totalActivities)
+        assertEquals(2, allState.activityHeatmap.currentStreak)
+        assertTrue(allState.typeStatusStacks.size >= 2)
+
+        // Bounded preset: Last 7d excludes undated and old items
+        vm.selectDateRangePreset(StatsDateRangePreset.LAST_7_DAYS)
+        val weekState = vm.uiState.value
+        assertEquals(StatsDateRangePreset.LAST_7_DAYS, weekState.dateRange.preset)
+        assertEquals(1, weekState.overview.totalCount)
+        assertEquals(1, weekState.typeCounts[MediaType.NOVEL])
+        assertEquals(0, weekState.typeCounts[MediaType.MANGA])
+        assertEquals(2, weekState.activityHeatmap.totalActivities)
+        assertEquals(2, weekState.activityHeatmap.currentStreak)
+
+        job.cancel()
+    }
+
+    @Test
+    fun testTopRatedRespectsLimitAndBlurAdultCovers() = runTest {
+        val fakeThemePrefs = object : ThemePreferences(null) {
+            override val displayPreferences: Flow<DisplayPreferences> = flowOf(
+                DisplayPreferences(blurAdultCovers = true)
+            )
+        }
+        val items = (1..15).map { idx: Int ->
+            MediaItem(
+                id = "id-$idx",
+                mediaType = MediaType.MANGA,
+                title = "Title $idx",
+                userStatus = UserStatus.COMPLETED,
+                rating = 3.0 + (idx * 0.1),
+                isAdult = idx == 15
+            )
+        }
+        val vm = StatisticsViewModel(
+            repository = FakeRepository(items),
+            themePreferences = fakeThemePrefs,
+            computeDispatcher = testDispatcher
+        )
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+
+        val topRated = vm.uiState.value.topRatedItems
+        assertEquals(12, topRated.size)
+        assertEquals("id-15", topRated.first().id)
+        assertTrue(topRated.first().isObscured)
+        assertFalse(topRated[1].isObscured)
+
+        job.cancel()
     }
 }

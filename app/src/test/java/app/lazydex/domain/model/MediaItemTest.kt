@@ -21,7 +21,7 @@ class MediaItemTest {
     fun normalize_trimsAndClampsFields() {
         val item = MediaItem(
             id = "test-id",
-            category = MediaCategory.NOVEL,
+            mediaType = MediaType.NOVEL,
             title = "   ",
             currentProgress = 15,
             totalItems = 10,
@@ -46,7 +46,7 @@ class MediaItemTest {
     fun extraData_storesArbitraryMetadataAndParsesTrackerIds() {
         val baseItem = MediaItem(
             id = "test-123",
-            category = MediaCategory.ANIME,
+            mediaType = MediaType.ANIME,
             title = "Frieren",
             currentProgress = 28,
             totalItems = 28,
@@ -74,7 +74,7 @@ class MediaItemTest {
     fun mediaItem_supportsAdultFlag() {
         val item = MediaItem(
             id = "adult-1",
-            category = MediaCategory.MANGA,
+            mediaType = MediaType.MANGA,
             title = "Adult Title",
             currentProgress = 0,
             totalItems = 10,

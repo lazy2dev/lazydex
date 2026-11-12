@@ -32,6 +32,6 @@ interface InstalledExtensionDao {
     @Query("DELETE FROM installed_extensions WHERE pkgName = :pkgName")
     suspend fun deleteExtensionByPkg(pkgName: String)
 
-    @Query("UPDATE installed_extensions SET categoryOverride = :categoryOverride WHERE pkgName = :pkgName")
-    suspend fun updateCategoryOverride(pkgName: String, categoryOverride: String?)
+    @Query("UPDATE installed_extensions SET typeOverride = :typeOverride WHERE pkgName = :pkgName")
+    suspend fun updateTypeOverride(pkgName: String, typeOverride: String?)
 }

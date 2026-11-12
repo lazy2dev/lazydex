@@ -123,6 +123,7 @@ fun MainShellScreen(
                 }
                 ShellTab.STATISTICS -> {
                     StatisticsScreen(
+                        onNavigateToItem = onNavigateToEditItem,
                         modifier = Modifier.fillMaxSize()
                     )
                 }

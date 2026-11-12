@@ -26,11 +26,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -63,9 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.lazydex.data.local.LibraryDisplayMode
-import app.lazydex.domain.model.Category
 import app.lazydex.domain.model.StatusFilter
-import app.lazydex.ui.components.CategoryCreatorSheet
 import app.lazydex.ui.components.DexSettingsSheet
 import app.lazydex.ui.components.EmptyState
 import app.lazydex.ui.components.MediaCard
@@ -91,14 +86,10 @@ fun DexScreen(
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     val filterSheetState = rememberModalBottomSheetState()
 
-    var showCategoryCreatorSheet by rememberSaveable { mutableStateOf(false) }
-    var categoryToCreateTypeUnder by remember { mutableStateOf<Category?>(null) }
-    var showOverflowMenu by rememberSaveable { mutableStateOf(false) }
-
     val searchFocusRequester = remember { FocusRequester() }
 
-    val activeParent = remember(uiState.topLevelCategories, uiState.selectedCategoryId) {
-        uiState.topLevelCategories.firstOrNull { it.id == uiState.selectedCategoryId }
+    val activeParent = remember(uiState.topLevelTypes, uiState.selectedTypeId) {
+        uiState.topLevelTypes.firstOrNull { it.id == uiState.selectedTypeId }
     }
 
     LaunchedEffect(searchQuery != null) {
@@ -107,8 +98,8 @@ fun DexScreen(
         }
     }
 
-    val isFilterActive = uiState.selectedCategoryId != null ||
-            uiState.selectedSubtypeId != null ||
+    val isFilterActive = uiState.selectedTypeId != null ||
+            uiState.selectedFormatId != null ||
             uiState.selectedStatus != StatusFilter.ALL ||
             uiState.selectedGenres.isNotEmpty() ||
             uiState.selectedTags.isNotEmpty() ||
@@ -189,36 +180,6 @@ fun DexScreen(
                                 tint = if (isFilterActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                             )
                         }
-                        Box {
-                            IconButton(onClick = { showOverflowMenu = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.MoreVert,
-                                    contentDescription = "More options",
-                                    tint = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = showOverflowMenu,
-                                onDismissRequest = { showOverflowMenu = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("New Type") },
-                                    onClick = {
-                                        showOverflowMenu = false
-                                        categoryToCreateTypeUnder = null
-                                        showCategoryCreatorSheet = true
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("New Format") },
-                                    onClick = {
-                                        showOverflowMenu = false
-                                        categoryToCreateTypeUnder = activeParent
-                                        showCategoryCreatorSheet = true
-                                    }
-                                )
-                            }
-                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -247,9 +208,9 @@ fun DexScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Adaptive Two-Tier Category Rail
-            if (uiState.showCategoryTabs) {
-                // Tier 1: Top-level category pills
+            // Adaptive Two-Tier Type & Format Rail
+            if (uiState.showTypeTabs) {
+                // Tier 1: Top-level type pills
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -259,8 +220,8 @@ fun DexScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     FilterChip(
-                        selected = uiState.selectedCategoryId == null,
-                        onClick = { viewModel.selectCategoryId(null) },
+                        selected = uiState.selectedTypeId == null,
+                        onClick = { viewModel.selectTypeId(null) },
                         label = { Text("All (${uiState.totalCount})") },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -268,11 +229,11 @@ fun DexScreen(
                         )
                     )
 
-                    uiState.topLevelCategories.forEach { cat ->
+                    uiState.topLevelTypes.forEach { typeConfig ->
                         FilterChip(
-                            selected = uiState.selectedCategoryId == cat.id,
-                            onClick = { viewModel.selectCategoryId(cat.id) },
-                            label = { Text(cat.name) },
+                            selected = uiState.selectedTypeId == typeConfig.id,
+                            onClick = { viewModel.selectTypeId(typeConfig.id) },
+                            label = { Text(typeConfig.name) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -281,9 +242,9 @@ fun DexScreen(
                     }
                 }
 
-                // Tier 2: Subtypes Rail with smooth animation
+                // Tier 2: Formats Rail with smooth animation
                 AnimatedVisibility(
-                    visible = uiState.selectedCategoryId != null && uiState.subtypesForSelectedCategory.isNotEmpty(),
+                    visible = uiState.selectedTypeId != null && uiState.formatsForSelectedType.isNotEmpty(),
                     enter = expandVertically(tween(200)),
                     exit = shrinkVertically(tween(200))
                 ) {
@@ -301,16 +262,16 @@ fun DexScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             FilterChip(
-                                selected = uiState.selectedSubtypeId == null,
-                                onClick = { viewModel.selectSubtypeId(null) },
+                                selected = uiState.selectedFormatId == null,
+                                onClick = { viewModel.selectFormatId(null) },
                                 label = { Text("All ${activeParent?.name ?: ""}") }
                             )
 
-                            uiState.subtypesForSelectedCategory.forEach { sub ->
+                            uiState.formatsForSelectedType.forEach { formatConfig ->
                                 FilterChip(
-                                    selected = uiState.selectedSubtypeId == sub.id,
-                                    onClick = { viewModel.selectSubtypeId(sub.id) },
-                                    label = { Text(sub.name) }
+                                    selected = uiState.selectedFormatId == formatConfig.id,
+                                    onClick = { viewModel.selectFormatId(formatConfig.id) },
+                                    label = { Text(formatConfig.name) }
                                 )
                             }
                         }
@@ -440,7 +401,7 @@ fun DexScreen(
                     }
                 }
             },
-            selectedCategory = uiState.selectedCategory,
+            selectedType = uiState.selectedType,
             selectedStatus = uiState.selectedStatus,
             selectedGenres = uiState.selectedGenres,
             availableGenres = uiState.availableGenres,
@@ -451,7 +412,7 @@ fun DexScreen(
             maxRating = uiState.maxRating,
             sortField = uiState.sortField,
             sortDirection = uiState.sortDirection,
-            onSelectCategory = { viewModel.selectCategory(it) },
+            onSelectType = { viewModel.selectType(it) },
             onSelectStatus = { viewModel.selectStatus(it) },
             onToggleGenre = { viewModel.toggleGenre(it) },
             onToggleTag = { viewModel.toggleTag(it) },
@@ -463,8 +424,8 @@ fun DexScreen(
             onSelectDisplayMode = { viewModel.setDisplayMode(it) },
             gridColumns = uiState.gridColumns,
             onSelectGridColumns = { viewModel.setGridColumns(it) },
-            showCategoryTabs = uiState.showCategoryTabs,
-            onToggleCategoryTabs = { viewModel.setShowCategoryTabs(it) },
+            showTypeTabs = uiState.showTypeTabs,
+            onToggleTypeTabs = { viewModel.setShowTypeTabs(it) },
             showProgressBadge = uiState.showProgressBadge,
             onToggleProgressBadge = { viewModel.setShowProgressBadge(it) },
             showStatusBadge = uiState.showStatusBadge,
@@ -474,19 +435,6 @@ fun DexScreen(
             showItemCount = uiState.showItemCount,
             onToggleShowItemCount = { viewModel.setShowItemCount(it) },
             onClearAll = { viewModel.clearFilters() }
-        )
-    }
-
-    if (showCategoryCreatorSheet) {
-        CategoryCreatorSheet(
-            parentCategory = categoryToCreateTypeUnder,
-            onDismiss = {
-                showCategoryCreatorSheet = false
-                categoryToCreateTypeUnder = null
-            },
-            onSaveCategory = { cat ->
-                viewModel.createCategory(cat)
-            }
         )
     }
 }

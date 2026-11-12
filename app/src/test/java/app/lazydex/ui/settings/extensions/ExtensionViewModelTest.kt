@@ -5,7 +5,7 @@ import app.lazydex.domain.model.ExtensionPackage
 import app.lazydex.domain.model.ExtensionRepo
 import app.lazydex.domain.model.ExtensionRuntimeType
 import app.lazydex.domain.model.InstalledExtension
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.extension.repository.ExtensionRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi

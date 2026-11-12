@@ -1,6 +1,6 @@
 package app.lazydex.backup
 
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.UserStatus
 import kotlinx.coroutines.test.runTest
@@ -160,7 +160,7 @@ class BackupProcessorV2Test {
 
         val first = deserialized.items[0]
         assertEquals("NOVEL", first.type)
-        assertEquals(MediaCategory.NOVEL, first.category)
+        assertEquals(MediaType.NOVEL, first.mediaType)
         assertEquals(230, first.currentProgress)
         assertEquals(UserStatus.DROPPED, first.userStatus)
         assertEquals(1.0, first.rating ?: 0.0, 0.01)

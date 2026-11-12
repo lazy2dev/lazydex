@@ -1,9 +1,7 @@
 package app.lazydex.backup
 
-import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.UserStatus
-import app.lazydex.domain.model.resolveMediaCategory
 import app.lazydex.util.UrlNormalizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -24,8 +22,6 @@ data class MediaItemBackupDto(
     val type: String? = null,
     val format: String? = null,
     val countryOfOrigin: String? = null,
-    val category: String? = null,
-    val categoryId: String? = null,
     val title: String? = null,
     val alternativeTitles: List<String>? = null,
     val sourceUrl: String? = null,
@@ -153,8 +149,6 @@ object BackupProcessor {
         type = type,
         format = format,
         countryOfOrigin = countryOfOrigin,
-        category = category.name,
-        categoryId = categoryId,
         title = title,
         alternativeTitles = alternativeTitles.ifEmpty { null },
         sourceUrl = sourceUrl,
@@ -179,23 +173,7 @@ object BackupProcessor {
     private fun MediaItemBackupDto.toDomain(): MediaItem? {
         val safeTitle = title?.takeIf { it.isNotBlank() } ?: return null
 
-        val resolvedType = when {
-            !type.isNullOrBlank() -> type.uppercase()
-            !category.isNullOrBlank() -> when (category.uppercase()) {
-                "NOVEL" -> "NOVEL"
-                "MANGA" -> "MANGA"
-                "ANIME", "MOVIE", "TV" -> "ANIME"
-                "GAME" -> "GAME"
-                else -> "NOVEL"
-            }
-            !categoryId.isNullOrBlank() -> when (resolveMediaCategory(categoryId)) {
-                MediaCategory.NOVEL -> "NOVEL"
-                MediaCategory.MANGA -> "MANGA"
-                MediaCategory.ANIME, MediaCategory.MOVIE, MediaCategory.TV -> "ANIME"
-                MediaCategory.GAME -> "GAME"
-            }
-            else -> "NOVEL"
-        }
+        val resolvedType = type?.takeIf { it.isNotBlank() }?.uppercase() ?: "NOVEL"
 
         val resolvedFormat = when {
             !format.isNullOrBlank() -> format.uppercase()
@@ -206,12 +184,7 @@ object BackupProcessor {
             else -> ""
         }
 
-        val resolvedCountry = countryOfOrigin ?: when {
-            categoryId?.contains("cn", ignoreCase = true) == true -> "CN"
-            categoryId?.contains("kr", ignoreCase = true) == true -> "KR"
-            categoryId?.contains("jp", ignoreCase = true) == true -> "JP"
-            else -> null
-        }
+        val resolvedCountry = countryOfOrigin
 
         val safeStatus = userStatus?.let { UserStatus.fromString(it) } ?: inProgressStatusFor(resolvedType)
         val safeProgress = maxOf(currentProgress ?: 0, 0)

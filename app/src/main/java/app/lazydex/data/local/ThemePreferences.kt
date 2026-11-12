@@ -36,7 +36,7 @@ enum class LibraryDisplayMode {
 data class DisplayPreferences(
     val displayMode: LibraryDisplayMode = LibraryDisplayMode.LIST,
     val gridColumns: Int = 0,
-    val showCategoryTabs: Boolean = true,
+    val showTypeTabs: Boolean = true,
     val showProgressBadge: Boolean = true,
     val showStatusBadge: Boolean = true,
     val showScoreBadge: Boolean = true,
@@ -55,7 +55,7 @@ open class ThemePreferences(private val context: Context? = null) {
 
         val DISPLAY_MODE_KEY = stringPreferencesKey("display_mode")
         val GRID_COLUMNS_KEY = intPreferencesKey("grid_columns")
-        val SHOW_CATEGORY_TABS_KEY = booleanPreferencesKey("show_category_tabs")
+        val SHOW_TYPE_TABS_KEY = booleanPreferencesKey("show_type_tabs")
         val SHOW_PROGRESS_BADGE_KEY = booleanPreferencesKey("show_progress_badge")
         val SHOW_STATUS_BADGE_KEY = booleanPreferencesKey("show_status_badge")
         val SHOW_SCORE_BADGE_KEY = booleanPreferencesKey("show_score_badge")
@@ -131,7 +131,7 @@ open class ThemePreferences(private val context: Context? = null) {
             DisplayPreferences(
                 displayMode = mode,
                 gridColumns = preferences[GRID_COLUMNS_KEY] ?: 0,
-                showCategoryTabs = preferences[SHOW_CATEGORY_TABS_KEY] ?: true,
+                showTypeTabs = preferences[SHOW_TYPE_TABS_KEY] ?: true,
                 showProgressBadge = preferences[SHOW_PROGRESS_BADGE_KEY] ?: true,
                 showStatusBadge = preferences[SHOW_STATUS_BADGE_KEY] ?: true,
                 showScoreBadge = preferences[SHOW_SCORE_BADGE_KEY] ?: true,
@@ -193,9 +193,9 @@ open class ThemePreferences(private val context: Context? = null) {
         }
     }
 
-    open suspend fun setShowCategoryTabs(enabled: Boolean) {
+    open suspend fun setShowTypeTabs(enabled: Boolean) {
         dataStore.edit { preferences ->
-            preferences[SHOW_CATEGORY_TABS_KEY] = enabled
+            preferences[SHOW_TYPE_TABS_KEY] = enabled
         }
     }
 

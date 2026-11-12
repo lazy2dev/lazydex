@@ -76,7 +76,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.UserStatus
 import app.lazydex.ui.details.components.MediaActionRow
 import app.lazydex.ui.details.components.MediaDescriptionSection
@@ -239,9 +239,9 @@ fun MediaDetailsScreen(
                         modifier = Modifier.onGloballyPositioned { headerHeightPx = it.size.height },
                         title = state.title,
                         author = state.author,
-                        category = state.category,
+                        mediaType = state.mediaType,
                         formatName = state.availableFormats.find { it.id == state.formatId }?.name
-                            ?: state.formatId?.takeIf { !it.startsWith("cat_") && !it.equals(state.category.name, ignoreCase = true) },
+                            ?: state.formatId?.takeIf { !it.startsWith("typ_") && !it.equals(state.mediaType.name, ignoreCase = true) },
                         sourceUrl = state.sourceUrl,
                         totalItems = state.parsedTotal,
                         coverImagePath = state.coverImagePath,
@@ -340,7 +340,7 @@ fun MediaDetailsScreen(
 
                 // 4. Tracking Matrix
                 MediaTrackingSection(
-                    category = state.category,
+                    mediaType = state.mediaType,
                     userStatus = state.userStatus,
                     currentProgress = state.parsedProgress ?: 0,
                     totalItems = state.parsedTotal,
@@ -378,7 +378,7 @@ fun MediaDetailsScreen(
         ActiveDialog.Status -> {
             TrackStatusSelector(
                 currentStatus = state.userStatus,
-                category = state.category,
+                mediaType = state.mediaType,
                 onStatusSelected = { status ->
                     viewModel.updateUserStatus(status)
                     viewModel.autoSave()
@@ -388,11 +388,11 @@ fun MediaDetailsScreen(
         }
         ActiveDialog.Progress -> {
             TrackProgressSelector(
-                title = when (state.category) {
-                    MediaCategory.MANGA, MediaCategory.NOVEL -> "Chapters Read"
-                    MediaCategory.ANIME, MediaCategory.TV -> "Episodes Watched"
-                    MediaCategory.GAME -> "Hours Played"
-                    MediaCategory.MOVIE -> "Progress"
+                title = when (state.mediaType) {
+                    MediaType.MANGA, MediaType.NOVEL -> "Chapters Read"
+                    MediaType.ANIME, MediaType.TV -> "Episodes Watched"
+                    MediaType.GAME -> "Hours Played"
+                    MediaType.MOVIE -> "Progress"
                 },
                 currentProgress = state.parsedProgress ?: 0,
                 total = state.parsedTotal,
@@ -498,7 +498,7 @@ fun MediaDetailsScreen(
                 anilistSyncStatus = state.anilistSyncStatus,
                 anilistLastSynced = state.anilistLastSynced,
                 isSyncing = state.isSyncing,
-                category = state.category,
+                mediaType = state.mediaType,
                 title = state.title,
                 currentProgress = state.currentProgress,
                 totalItems = state.totalItems,
@@ -638,37 +638,37 @@ private fun EditMetadataSheetContent(
             }
         }
 
-        // Category & Format Picker
+        // Type & Format Picker
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            var categoryExpanded by remember { mutableStateOf(false) }
+            var typeExpanded by remember { mutableStateOf(false) }
             Box(modifier = Modifier.weight(1f)) {
                 OutlinedTextField(
-                    value = state.category.displayName,
+                    value = state.mediaType.displayName,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Category") },
+                    label = { Text("Type") },
                     trailingIcon = {
-                        IconButton(onClick = { categoryExpanded = true }) {
+                        IconButton(onClick = { typeExpanded = true }) {
                             Icon(Icons.Default.ArrowDropDown, contentDescription = null)
                         }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { categoryExpanded = true }
+                        .clickable { typeExpanded = true }
                 )
                 DropdownMenu(
-                    expanded = categoryExpanded,
-                    onDismissRequest = { categoryExpanded = false },
+                    expanded = typeExpanded,
+                    onDismissRequest = { typeExpanded = false },
                 ) {
-                    MediaCategory.entries.forEach { cat ->
+                    MediaType.entries.forEach { mediaType ->
                         DropdownMenuItem(
-                            text = { Text(cat.displayName) },
+                            text = { Text(mediaType.displayName) },
                             onClick = {
-                                viewModel.updateCategory(cat)
-                                categoryExpanded = false
+                                viewModel.updateMediaType(mediaType)
+                                typeExpanded = false
                             }
                         )
                     }

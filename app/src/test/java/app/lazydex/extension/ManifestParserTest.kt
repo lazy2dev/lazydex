@@ -177,7 +177,7 @@ class ManifestParserTest {
         assertEquals(ExtensionEcosystem.MANGAYOMI, ecosystem)
         assertEquals(1, packages.size)
         assertEquals(ExtensionRuntimeType.JS_MANGAYOMI, packages[0].runtimeType)
-        assertEquals(app.lazydex.domain.model.MediaCategory.ANIME, packages[0].categoryOverride)
+        assertEquals(app.lazydex.domain.model.MediaType.ANIME, packages[0].typeOverride)
     }
 
     @Test

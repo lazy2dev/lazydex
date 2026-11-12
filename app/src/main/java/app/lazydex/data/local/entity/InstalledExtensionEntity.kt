@@ -22,7 +22,7 @@ data class InstalledExtensionEntity(
     val apkOrArtifactPath: String,
     val iconUrl: String? = null,
     val entryClassOrFile: String? = null,
-    val categoryOverride: String? = null,
+    val typeOverride: String? = null,
     val installedAt: Long = 0L,
     val hasUpdate: Boolean = false,
     val latestVersionName: String? = null,

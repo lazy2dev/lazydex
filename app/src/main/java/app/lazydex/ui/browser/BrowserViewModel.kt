@@ -3,7 +3,7 @@ package app.lazydex.ui.browser
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.lazydex.data.local.ThemePreferences
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.repository.MediaRepository
 import app.lazydex.scraper.source.GenericSource
 import app.lazydex.scraper.source.SearchResult
@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
 data class BrowserUiState(
     val sources: List<Source> = emptyList(),
     val pinnedSourceIds: Set<String> = emptySet(),
-    val selectedCategory: MediaCategory? = null,
+    val selectedType: MediaType? = null,
     val selectedSource: Source? = null,
     val searchQuery: String = "",
     val detectedSourceForUrl: Source? = null,
@@ -87,10 +87,10 @@ class BrowserViewModel(
         }
     }
 
-    fun setCategory(category: MediaCategory?) {
+    fun setType(mediaType: MediaType?) {
         _uiState.update {
             it.copy(
-                selectedCategory = category,
+                selectedType = mediaType,
                 searchResults = emptyList(),
                 searchError = null,
                 hasSearched = false
@@ -163,11 +163,11 @@ class BrowserViewModel(
             return
         }
 
-        // Global search across sources matching category
-        val category = _uiState.value.selectedCategory
-        val candidateSources = if (category != null) {
+        // Global search across sources matching media type
+        val selectedType = _uiState.value.selectedType
+        val candidateSources = if (selectedType != null) {
             sourceRegistry.getSearchableSources().filter {
-                it.categoryHint == category || it.categoryHint == null
+                it.typeHint == selectedType || it.typeHint == null
             }
         } else {
             sourceRegistry.getSearchableSources()

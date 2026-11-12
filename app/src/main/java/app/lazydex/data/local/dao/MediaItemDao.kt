@@ -9,7 +9,6 @@ import app.lazydex.data.local.entity.MediaItemEntity
 import app.lazydex.domain.model.MediaStats
 import kotlinx.coroutines.flow.Flow
 
-data class CategoryCount(val category: String, val count: Int)
 data class TypeCount(val type: String, val count: Int)
 data class StatusCount(val userStatus: String, val count: Int)
 
@@ -20,12 +19,6 @@ interface MediaItemDao {
 
     @Query("SELECT * FROM active_media_items WHERE type = :type ORDER BY createdAt DESC")
     fun observeByType(type: String): Flow<List<ActiveMediaItemView>>
-
-    @Query("SELECT * FROM active_media_items WHERE type = :type OR (:type = 'NOVEL' AND type = 'cat_novel') ORDER BY createdAt DESC")
-    fun observeByCategory(type: String): Flow<List<ActiveMediaItemView>>
-
-    @Query("SELECT type as category, COUNT(*) as count FROM active_media_items GROUP BY type")
-    fun observeCategoryCounts(): Flow<List<CategoryCount>>
 
     @Query("SELECT type, COUNT(*) as count FROM active_media_items GROUP BY type")
     fun observeTypeCounts(): Flow<List<TypeCount>>
@@ -80,9 +73,6 @@ interface MediaItemDao {
 
     @Query("SELECT * FROM media_items WHERE type = :type AND deletedAt IS NULL")
     suspend fun getActiveByType(type: String): List<MediaItemEntity>
-
-    @Query("SELECT * FROM media_items WHERE type = :categoryId AND deletedAt IS NULL")
-    suspend fun getActiveByCategoryId(categoryId: String): List<MediaItemEntity>
 
     @Upsert
     suspend fun upsert(item: MediaItemEntity)

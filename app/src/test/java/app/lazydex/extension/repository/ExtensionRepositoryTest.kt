@@ -9,7 +9,7 @@ import app.lazydex.data.local.entity.InstalledExtensionEntity
 import app.lazydex.domain.model.ExtensionEcosystem
 import app.lazydex.domain.model.ExtensionPackage
 import app.lazydex.domain.model.ExtensionRuntimeType
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.extension.manifest.ManifestParser
 import app.lazydex.extension.runtime.DexRuntimeEngine
 import app.lazydex.extension.runtime.JsRuntimeEngine
@@ -131,9 +131,9 @@ class ExtensionRepositoryTest {
             _installedFlow.value = installedMap.values.toList()
         }
 
-        override suspend fun updateCategoryOverride(pkgName: String, categoryOverride: String?) {
+        override suspend fun updateTypeOverride(pkgName: String, typeOverride: String?) {
             installedMap[pkgName]?.let {
-                installedMap[pkgName] = it.copy(categoryOverride = categoryOverride)
+                installedMap[pkgName] = it.copy(typeOverride = typeOverride)
                 _installedFlow.value = installedMap.values.toList()
             }
         }
@@ -256,7 +256,7 @@ class ExtensionRepositoryTest {
             ecosystem = ExtensionEcosystem.MIHON,
             runtimeType = ExtensionRuntimeType.DEX_MIHON,
             apkOrArtifactUrl = "https://example.com/repo/testmanga.apk",
-            categoryOverride = MediaCategory.MANGA
+            typeOverride = MediaType.MANGA
         )
 
         val installRes = repository.installExtension(pkg)
@@ -264,23 +264,23 @@ class ExtensionRepositoryTest {
 
         val installedEntity = fakeInstalledDao.getExtension(pkg.pkgName)
         assertNotNull(installedEntity)
-        assertEquals("MANGA", installedEntity?.categoryOverride)
+        assertEquals("MANGA", installedEntity?.typeOverride)
 
         val artifactFile = File(installedEntity!!.apkOrArtifactPath)
         assertTrue(artifactFile.exists())
 
-        // Test Category Override persistence
-        repository.setCategoryOverride(pkg.pkgName, MediaCategory.NOVEL)
+        // Test Type Override persistence
+        repository.setTypeOverride(pkg.pkgName, MediaType.NOVEL)
         val updated = fakeInstalledDao.getExtension(pkg.pkgName)
-        assertEquals("NOVEL", updated?.categoryOverride)
+        assertEquals("NOVEL", updated?.typeOverride)
 
-        // Updating the extension must preserve user's category override
-        val updatePkg = pkg.copy(versionName = "1.1.0", versionCode = 11L, categoryOverride = null)
+        // Updating the extension must preserve user's type override
+        val updatePkg = pkg.copy(versionName = "1.1.0", versionCode = 11L, typeOverride = null)
         val updateRes = repository.installExtension(updatePkg)
         assertTrue(updateRes.isSuccess)
 
         val afterUpdate = fakeInstalledDao.getExtension(pkg.pkgName)
-        assertEquals("NOVEL", afterUpdate?.categoryOverride)
+        assertEquals("NOVEL", afterUpdate?.typeOverride)
 
         // Test Uninstall
         val uninstallRes = repository.uninstallExtension(pkg.pkgName)

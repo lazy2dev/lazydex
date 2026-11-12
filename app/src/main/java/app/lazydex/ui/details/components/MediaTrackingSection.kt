@@ -35,7 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.UserStatus
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -43,7 +43,7 @@ import java.util.Locale
 
 @Composable
 fun MediaTrackingSection(
-    category: MediaCategory,
+    mediaType: MediaType,
     userStatus: UserStatus,
     currentProgress: Int,
     totalItems: Int?,
@@ -63,11 +63,11 @@ fun MediaTrackingSection(
     onNotesChange: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val unitLabel = when (category) {
-        MediaCategory.MANGA, MediaCategory.NOVEL -> "Ch."
-        MediaCategory.ANIME, MediaCategory.TV -> "Ep."
-        MediaCategory.GAME -> "Hrs"
-        MediaCategory.MOVIE -> "Part"
+    val unitLabel = when (mediaType) {
+        MediaType.MANGA, MediaType.NOVEL -> "Ch."
+        MediaType.ANIME, MediaType.TV -> "Ep."
+        MediaType.GAME -> "Hrs"
+        MediaType.MOVIE -> "Part"
     }
 
     val progressDisplay = if (totalItems != null && totalItems > 0) {

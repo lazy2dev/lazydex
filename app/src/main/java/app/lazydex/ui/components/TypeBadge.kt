@@ -23,36 +23,36 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.lazydex.domain.model.MediaCategory
-import app.lazydex.ui.theme.CategoryAnimeColor
-import app.lazydex.ui.theme.CategoryGameColor
-import app.lazydex.ui.theme.CategoryMangaColor
-import app.lazydex.ui.theme.CategoryMovieColor
-import app.lazydex.ui.theme.CategoryNovelColor
-import app.lazydex.ui.theme.CategoryTvColor
+import app.lazydex.domain.model.MediaType
+import app.lazydex.ui.theme.TypeAnimeColor
+import app.lazydex.ui.theme.TypeGameColor
+import app.lazydex.ui.theme.TypeMangaColor
+import app.lazydex.ui.theme.TypeMovieColor
+import app.lazydex.ui.theme.TypeNovelColor
+import app.lazydex.ui.theme.TypeTvColor
 
-fun MediaCategory.icon(): ImageVector = when (this) {
-    MediaCategory.NOVEL -> Icons.Default.AutoStories
-    MediaCategory.MANGA -> Icons.AutoMirrored.Filled.MenuBook
-    MediaCategory.ANIME -> Icons.Default.SmartDisplay
-    MediaCategory.GAME -> Icons.Default.SportsEsports
-    MediaCategory.MOVIE -> Icons.Default.Movie
-    MediaCategory.TV -> Icons.Default.Tv
+fun MediaType.icon(): ImageVector = when (this) {
+    MediaType.NOVEL -> Icons.Default.AutoStories
+    MediaType.MANGA -> Icons.AutoMirrored.Filled.MenuBook
+    MediaType.ANIME -> Icons.Default.SmartDisplay
+    MediaType.GAME -> Icons.Default.SportsEsports
+    MediaType.MOVIE -> Icons.Default.Movie
+    MediaType.TV -> Icons.Default.Tv
 }
 
-fun MediaCategory.color(): Color = when (this) {
-    MediaCategory.NOVEL -> CategoryNovelColor
-    MediaCategory.MANGA -> CategoryMangaColor
-    MediaCategory.ANIME -> CategoryAnimeColor
-    MediaCategory.GAME -> CategoryGameColor
-    MediaCategory.MOVIE -> CategoryMovieColor
-    MediaCategory.TV -> CategoryTvColor
+fun MediaType.color(): Color = when (this) {
+    MediaType.NOVEL -> TypeNovelColor
+    MediaType.MANGA -> TypeMangaColor
+    MediaType.ANIME -> TypeAnimeColor
+    MediaType.GAME -> TypeGameColor
+    MediaType.MOVIE -> TypeMovieColor
+    MediaType.TV -> TypeTvColor
 }
 
 @Composable
-fun CategoryBadge(category: MediaCategory, modifier: Modifier = Modifier) {
-    val icon = category.icon()
-    val color = category.color()
+fun TypeBadge(mediaType: MediaType, modifier: Modifier = Modifier) {
+    val icon = mediaType.icon()
+    val color = mediaType.color()
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -68,7 +68,7 @@ fun CategoryBadge(category: MediaCategory, modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
-            text = category.displayName,
+            text = mediaType.displayName,
             color = color,
             fontSize = 10.sp
         )

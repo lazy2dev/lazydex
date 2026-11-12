@@ -66,7 +66,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.scraper.source.Source
 import app.lazydex.ui.browser.components.BaseSourceItem
 import app.lazydex.ui.browser.components.SourceCoverGridItem
@@ -139,7 +139,7 @@ fun BrowserScreen(
             // Main Unified Add & Browse Directory View
             MainBrowseView(
                 uiState = uiState,
-                onCategorySelected = { viewModel.setCategory(it) },
+                onTypeSelected = { viewModel.setType(it) },
                 onSearchQueryChanged = { viewModel.updateSearchQuery(it) },
                 onSearch = { viewModel.performSearch() },
                 onClearSearch = { viewModel.clearSearch() },
@@ -164,7 +164,7 @@ fun BrowserScreen(
 @Composable
 private fun MainBrowseView(
     uiState: BrowserUiState,
-    onCategorySelected: (MediaCategory?) -> Unit,
+    onTypeSelected: (MediaType?) -> Unit,
     onSearchQueryChanged: (String) -> Unit,
     onSearch: () -> Unit,
     onClearSearch: () -> Unit,
@@ -175,25 +175,25 @@ private fun MainBrowseView(
     onNavigateToManualAdd: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val categories = listOf(
+    val mediaTypes = listOf(
         null to "All",
-        MediaCategory.NOVEL to "Novels",
-        MediaCategory.MANGA to "Manga",
-        MediaCategory.ANIME to "Anime",
-        MediaCategory.GAME to "Games",
-        MediaCategory.MOVIE to "Movies",
-        MediaCategory.TV to "TV"
+        MediaType.NOVEL to "Novels",
+        MediaType.MANGA to "Manga",
+        MediaType.ANIME to "Anime",
+        MediaType.GAME to "Games",
+        MediaType.MOVIE to "Movies",
+        MediaType.TV to "TV"
     )
 
-    val selectedCategory = uiState.selectedCategory
-    val categoryHasNoScrapers = selectedCategory in listOf(MediaCategory.GAME, MediaCategory.MOVIE, MediaCategory.TV)
+    val selectedType = uiState.selectedType
+    val typeHasNoScrapers = selectedType in listOf(MediaType.GAME, MediaType.MOVIE, MediaType.TV)
     val detectedSource = uiState.detectedSourceForUrl
 
     LazyColumn(
         contentPadding = PaddingValues(bottom = 24.dp),
         modifier = modifier.fillMaxSize()
     ) {
-        // 1. Type / Category Filter Row
+        // 1. Media Type Filter Row
         item {
             Row(
                 modifier = Modifier
@@ -202,18 +202,18 @@ private fun MainBrowseView(
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                categories.forEach { (cat, label) ->
-                    val isSelected = selectedCategory == cat
+                mediaTypes.forEach { (type, label) ->
+                    val isSelected = selectedType == type
                     FilterChip(
                         selected = isSelected,
-                        onClick = { onCategorySelected(if (isSelected && cat != null) null else cat) },
+                        onClick = { onTypeSelected(if (isSelected && type != null) null else type) },
                         label = { Text(label) },
-                        leadingIcon = if (cat != null) {
+                        leadingIcon = if (type != null) {
                             {
                                 Icon(
-                                    imageVector = cat.icon(),
+                                    imageVector = type.icon(),
                                     contentDescription = null,
-                                    tint = if (isSelected) MaterialTheme.colorScheme.primary else cat.color(),
+                                    tint = if (isSelected) MaterialTheme.colorScheme.primary else type.color(),
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -234,7 +234,7 @@ private fun MainBrowseView(
                 onValueChange = onSearchQueryChanged,
                 placeholder = {
                     Text(
-                        if (categoryHasNoScrapers) "Enter title to add manually..."
+                        if (typeHasNoScrapers) "Enter title to add manually..."
                         else "Search title or paste URL..."
                     )
                 },
@@ -269,7 +269,7 @@ private fun MainBrowseView(
         }
 
         // 3. Contextual Quick Actions (URL detected or No Scrapers)
-        if (categoryHasNoScrapers) {
+        if (typeHasNoScrapers) {
             item {
                 Card(
                     shape = RoundedCornerShape(12.dp),
@@ -285,25 +285,25 @@ private fun MainBrowseView(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(14.dp)
                     ) {
-                        val cat = selectedCategory!!
+                        val mediaType = selectedType!!
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(cat.color().copy(alpha = 0.2f))
+                                .background(mediaType.color().copy(alpha = 0.2f))
                         ) {
                             Icon(
-                                imageVector = cat.icon(),
+                                imageVector = mediaType.icon(),
                                 contentDescription = null,
-                                tint = cat.color(),
+                                tint = mediaType.color(),
                                 modifier = Modifier.size(22.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Create ${cat.name.lowercase().replaceFirstChar { it.uppercase() }} Manually",
+                                text = "Create ${mediaType.name.lowercase().replaceFirstChar { it.uppercase() }} Manually",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -338,8 +338,8 @@ private fun MainBrowseView(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(14.dp)
                     ) {
-                        val iconVector = detectedSource.categoryHint?.icon() ?: Icons.Default.Search
-                        val iconColor = detectedSource.categoryHint?.color() ?: MaterialTheme.colorScheme.primary
+                        val iconVector = detectedSource.typeHint?.icon() ?: Icons.Default.Search
+                        val iconColor = detectedSource.typeHint?.color() ?: MaterialTheme.colorScheme.primary
 
                         Box(
                             contentAlignment = Alignment.Center,
@@ -482,8 +482,8 @@ private fun MainBrowseView(
 
         // 6. Komikku Source Directory (visible when not viewing search results)
         if (!uiState.hasSearched) {
-            val allSources = if (selectedCategory != null) {
-                uiState.sources.filter { it.categoryHint == selectedCategory || it.categoryHint == null }
+            val allSources = if (selectedType != null) {
+                uiState.sources.filter { it.typeHint == selectedType || it.typeHint == null }
             } else {
                 uiState.sources
             }
@@ -512,7 +512,7 @@ private fun MainBrowseView(
                 }
             }
 
-            // Other Sources Grouped by Category
+            // Other Sources Grouped by Type
             if (otherSources.isNotEmpty()) {
                 if (pinnedSources.isNotEmpty()) {
                     item {

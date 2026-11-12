@@ -13,11 +13,12 @@ import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.anilist.dto.AniListMedia
 import app.lazydex.data.tracker.sync.AnilistSyncEngine
 import app.lazydex.data.tracker.sync.SyncSnapshot
-import app.lazydex.domain.model.Category
-import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.MediaItem
-import app.lazydex.domain.model.ResolvedCategoryConfig
+import app.lazydex.domain.model.MediaType
+import app.lazydex.domain.model.ResolvedTypeConfig
+import app.lazydex.domain.model.TypeConfig
 import app.lazydex.domain.model.UserStatus
+import app.lazydex.domain.model.toTopLevelId
 import app.lazydex.domain.repository.DuplicateUrlException
 import app.lazydex.domain.repository.MediaRepository
 import app.lazydex.scraper.MetadataScraper
@@ -50,9 +51,9 @@ data class SuggestedTracker(
 
 data class MediaDetailsUiState(
     val id: String = "",
-    val category: MediaCategory = MediaCategory.NOVEL,
+    val mediaType: MediaType = MediaType.NOVEL,
     val formatId: String? = null,
-    val availableFormats: List<Category> = emptyList(),
+    val availableFormats: List<TypeConfig> = emptyList(),
     val title: String = "",
     val titleRomaji: String = "",
     val titleNative: String = "",
@@ -68,7 +69,7 @@ data class MediaDetailsUiState(
     val actionOverride: String? = null,
     val playbackSpeed: Double = 1.0,
     val avgChapterLength: String = "",
-    val resolvedConfig: ResolvedCategoryConfig? = null,
+    val resolvedConfig: ResolvedTypeConfig? = null,
     val timeStats: Pair<Double, Double> = Pair(0.0, 0.0),
     val userStatus: UserStatus = UserStatus.READING,
     val rating: Double? = null,
@@ -110,7 +111,7 @@ data class MediaDetailsUiState(
     val hasSecondaryProgress: Boolean get() = (resolvedConfig?.hasSecondaryProgress == true) ||
             ((parsedSecondaryProgress ?: 0.0) > 0.0) ||
             ((parsedSecondaryTotal ?: 0.0) > 0.0) ||
-            formatId in setOf("typ_novel_ln", "typ_manga_jp", "cat_tv", "typ_anime_series")
+            formatId in setOf("typ_novel_ln", "typ_manga_jp", "typ_tv", "typ_anime_series")
 
     val isTitleBlank: Boolean get() = title.trim().isBlank()
     val parsedProgress: Int? get() = currentProgress.trim().toIntOrNull()
@@ -214,28 +215,20 @@ class MediaDetailsViewModel(
             scrapeUrl(url)
         }
 
-        val initialCatId = when (_uiState.value.category) {
-            MediaCategory.NOVEL -> "cat_novel"
-            MediaCategory.MANGA -> "cat_manga"
-            MediaCategory.ANIME -> "cat_anime"
-            MediaCategory.GAME -> "cat_game"
-            MediaCategory.MOVIE -> "cat_movie"
-            MediaCategory.TV -> "cat_tv"
-        }
-        observeCategoryFormats(initialCatId)
+        observeTypeFormats(_uiState.value.mediaType.toTopLevelId())
 
         effectiveId?.let { targetId ->
             observeItem(targetId)
         }
     }
 
-    private fun observeCategoryFormats(catId: String) {
+    private fun observeTypeFormats(typeId: String) {
         formatObservationJob?.cancel()
         formatObservationJob = viewModelScope.launch {
-            val config = repository.getResolvedConfig(catId)
+            val config = repository.getResolvedConfig(typeId)
             _uiState.value = _uiState.value.copy(resolvedConfig = config)
-            repository.observeTypes(catId).collect { types ->
-                _uiState.value = _uiState.value.copy(availableFormats = types)
+            repository.observeFormats(typeId).collect { formats ->
+                _uiState.value = _uiState.value.copy(availableFormats = formats)
             }
         }
     }
@@ -272,23 +265,16 @@ class MediaDetailsViewModel(
             repository.observeById(targetId).collect { item ->
                 if (item != null && !_uiState.value.isSaving && !_uiState.value.isScraping) {
                     originalItem = item
-                    val config = repository.getResolvedConfig(item.categoryId)
+                    val config = repository.getResolvedConfig(item.typeId)
                     val timeSpent = repository.getTimeSpentMinutes(item.id)
-                    val topCatId = when (item.category) {
-                        MediaCategory.NOVEL -> "cat_novel"
-                        MediaCategory.MANGA -> "cat_manga"
-                        MediaCategory.ANIME -> "cat_anime"
-                        MediaCategory.GAME -> "cat_game"
-                        MediaCategory.MOVIE -> "cat_movie"
-                        MediaCategory.TV -> "cat_tv"
-                    }
+                    val topTypeId = item.mediaType.toTopLevelId()
                     val romaji = item.alternativeTitles.getOrNull(0) ?: ""
                     val native = item.alternativeTitles.getOrNull(2) ?: ""
                     val banner = item.getExtra("banner_image")
                     _uiState.value = _uiState.value.copy(
                         id = item.id,
-                        category = item.category,
-                        formatId = item.categoryId,
+                        mediaType = item.mediaType,
+                        formatId = item.typeId,
                         title = item.title,
                         titleRomaji = romaji,
                         titleNative = native,
@@ -320,8 +306,8 @@ class MediaDetailsViewModel(
                         isNew = false,
                         isLoading = false,
                     )
-                    if (item.category != _uiState.value.category || _uiState.value.availableFormats.isEmpty()) {
-                        observeCategoryFormats(topCatId)
+                    if (item.mediaType != _uiState.value.mediaType || _uiState.value.availableFormats.isEmpty()) {
+                        observeTypeFormats(topTypeId)
                     }
                     extractSeedColor(item.coverImagePath, item.coverImageUrl ?: "")
                 } else if (item == null) {
@@ -335,30 +321,15 @@ class MediaDetailsViewModel(
         _uiState.value = _uiState.value.copy(title = title, errorMsg = null)
     }
 
-    fun updateCategory(category: MediaCategory) {
-        val catId = when (category) {
-            MediaCategory.NOVEL -> "cat_novel"
-            MediaCategory.MANGA -> "cat_manga"
-            MediaCategory.ANIME -> "cat_anime"
-            MediaCategory.GAME -> "cat_game"
-            MediaCategory.MOVIE -> "cat_movie"
-            MediaCategory.TV -> "cat_tv"
-        }
-        _uiState.value = _uiState.value.copy(category = category, formatId = null)
-        observeCategoryFormats(catId)
+    fun updateMediaType(mediaType: MediaType) {
+        _uiState.value = _uiState.value.copy(mediaType = mediaType, formatId = null)
+        observeTypeFormats(mediaType.toTopLevelId())
     }
 
     fun updateFormatId(formatId: String?) {
         viewModelScope.launch {
-            val catId = formatId ?: when (_uiState.value.category) {
-                MediaCategory.NOVEL -> "cat_novel"
-                MediaCategory.MANGA -> "cat_manga"
-                MediaCategory.ANIME -> "cat_anime"
-                MediaCategory.GAME -> "cat_game"
-                MediaCategory.MOVIE -> "cat_movie"
-                MediaCategory.TV -> "cat_tv"
-            }
-            val config = repository.getResolvedConfig(catId)
+            val typeId = formatId ?: _uiState.value.mediaType.toTopLevelId()
+            val config = repository.getResolvedConfig(typeId)
             _uiState.value = _uiState.value.copy(formatId = formatId, resolvedConfig = config)
         }
     }
@@ -587,11 +558,11 @@ class MediaDetailsViewModel(
                         isScraping = false,
                     )
 
-                    metadata.category?.let { cat ->
-                        updateCategory(cat)
+                    metadata.type?.let { type ->
+                        updateMediaType(type)
                     } ?: run {
-                        guessCategoryFromUrl(trimmed)?.let { guessed ->
-                            updateCategory(guessed)
+                        guessTypeFromUrl(trimmed)?.let { guessed ->
+                            updateMediaType(guessed)
                         }
                     }
                 }.onFailure { exception ->
@@ -640,14 +611,7 @@ class MediaDetailsViewModel(
             val totalVal = state.parsedTotal
             val progressVal = state.parsedProgress ?: 0
 
-            val catId = state.formatId ?: when (state.category) {
-                MediaCategory.NOVEL -> "cat_novel"
-                MediaCategory.MANGA -> "cat_manga"
-                MediaCategory.ANIME -> "cat_anime"
-                MediaCategory.GAME -> "cat_game"
-                MediaCategory.MOVIE -> "cat_movie"
-                MediaCategory.TV -> "cat_tv"
-            }
+            val resolvedTypeId = state.formatId ?: state.mediaType.toTopLevelId()
 
             val romaji = state.titleRomaji.trim().ifEmpty { state.alternativeTitles.getOrNull(0) ?: "" }
             val english = state.alternativeTitles.getOrNull(1) ?: ""
@@ -662,8 +626,8 @@ class MediaDetailsViewModel(
 
             var item = MediaItem(
                 id = state.id.ifBlank { UUID.randomUUID().toString() },
-                categoryId = catId,
-                category = state.category,
+                typeId = resolvedTypeId,
+                mediaType = state.mediaType,
                 title = state.title.trim(),
                 alternativeTitles = altTitles,
                 sourceUrl = state.sourceUrl.trim().ifEmpty { null },
@@ -714,7 +678,7 @@ class MediaDetailsViewModel(
                     }
                 }
                 if (wasNew && tokenStore?.isLoggedIn == true && tokenStore.trackOnAdd && savedItem.title.isNotBlank()) {
-                    autoTrackMedia(savedItem.id, savedItem.title, savedItem.category)
+                    autoTrackMedia(savedItem.id, savedItem.title, savedItem.mediaType)
                 }
             } catch (e: DuplicateUrlException) {
                 _uiState.value = _uiState.value.copy(
@@ -801,7 +765,7 @@ class MediaDetailsViewModel(
             return
         }
         val anilistClient = client ?: return
-        val mediaType = if (_uiState.value.category == MediaCategory.ANIME || _uiState.value.category == MediaCategory.TV || _uiState.value.category == MediaCategory.MOVIE) "ANIME" else "MANGA"
+        val mediaType = if (_uiState.value.mediaType == MediaType.ANIME || _uiState.value.mediaType == MediaType.TV || _uiState.value.mediaType == MediaType.MOVIE) "ANIME" else "MANGA"
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSearchingTracker = true)
@@ -833,7 +797,7 @@ class MediaDetailsViewModel(
         val linkDao = mediaLinkDao ?: return
         viewModelScope.launch {
             val now = System.currentTimeMillis()
-            val type = if (_uiState.value.category == MediaCategory.ANIME || _uiState.value.category == MediaCategory.TV || _uiState.value.category == MediaCategory.MOVIE) "anime" else "manga"
+            val type = if (_uiState.value.mediaType == MediaType.ANIME || _uiState.value.mediaType == MediaType.TV || _uiState.value.mediaType == MediaType.MOVIE) "anime" else "manga"
 
             // Remove any pending suggestion or old links for anilist on this item
             val existingLinks = linkDao.getByMediaId(targetId)
@@ -860,18 +824,18 @@ class MediaDetailsViewModel(
         }
     }
 
-    private fun autoTrackMedia(mediaId: String, title: String, category: MediaCategory) {
+    private fun autoTrackMedia(mediaId: String, title: String, mediaType: MediaType) {
         val anilistClient = client ?: return
         val linkDao = mediaLinkDao ?: return
         viewModelScope.launch {
             try {
-                val mediaType = if (category == MediaCategory.ANIME || category == MediaCategory.TV || category == MediaCategory.MOVIE) "ANIME" else "MANGA"
+                val anilistType = if (mediaType == MediaType.ANIME || mediaType == MediaType.TV || mediaType == MediaType.MOVIE) "ANIME" else "MANGA"
                 val results = withContext(Dispatchers.IO) {
-                    anilistClient.searchMedia(title.trim(), mediaType, perPage = 1)
+                    anilistClient.searchMedia(title.trim(), anilistType, perPage = 1)
                 }
                 val match = results.firstOrNull() ?: return@launch
                 val now = System.currentTimeMillis()
-                val type = if (mediaType == "ANIME") "anime" else "manga"
+                val type = if (anilistType == "ANIME") "anime" else "manga"
 
                 val existing = linkDao.getByMediaId(mediaId)
                 if (existing.none { it.providerId == "anilist" }) {
@@ -944,11 +908,11 @@ class MediaDetailsViewModel(
         } else {
             val orig = originalItem ?: return true
             state.title != orig.title ||
-            state.category != orig.category ||
+            state.mediaType != orig.mediaType ||
             state.alternativeTitles != orig.alternativeTitles ||
             state.titleRomaji != (orig.alternativeTitles.getOrNull(0) ?: "") ||
             state.titleNative != (orig.alternativeTitles.getOrNull(2) ?: "") ||
-            state.formatId != orig.categoryId ||
+            state.formatId != orig.typeId ||
             state.bannerImage != orig.getExtra("banner_image") ||
             state.secondaryProgress != formatProgress(orig.secondaryProgress) ||
             state.secondaryProgressTotal != (orig.secondaryProgressTotal?.let { formatProgress(it) } ?: "") ||
@@ -1004,14 +968,14 @@ class MediaDetailsViewModel(
         }
     }
 
-    private fun guessCategoryFromUrl(url: String): MediaCategory? {
+    private fun guessTypeFromUrl(url: String): MediaType? {
         val lower = url.lowercase()
         return when {
-            lower.contains("novelupdates.com") || lower.contains("royalroad.com") || lower.contains("wtr-lab.com") -> MediaCategory.NOVEL
-            lower.contains("mangadex.org") || lower.contains("manganato.com") -> MediaCategory.MANGA
-            lower.contains("myanimelist.net/anime") || lower.contains("anilist.co/anime") -> MediaCategory.ANIME
-            lower.contains("myanimelist.net/manga") || lower.contains("anilist.co/manga") -> MediaCategory.MANGA
-            lower.contains("steamcharts.com") || lower.contains("steampowered.com") || lower.contains("gog.com") -> MediaCategory.GAME
+            lower.contains("novelupdates.com") || lower.contains("royalroad.com") || lower.contains("wtr-lab.com") -> MediaType.NOVEL
+            lower.contains("mangadex.org") || lower.contains("manganato.com") -> MediaType.MANGA
+            lower.contains("myanimelist.net/anime") || lower.contains("anilist.co/anime") -> MediaType.ANIME
+            lower.contains("myanimelist.net/manga") || lower.contains("anilist.co/manga") -> MediaType.MANGA
+            lower.contains("steamcharts.com") || lower.contains("steampowered.com") || lower.contains("gog.com") -> MediaType.GAME
             else -> null
         }
     }

@@ -1,15 +1,15 @@
 package app.lazydex.domain.model
 
-enum class ExtensionEcosystem(val displayName: String, val defaultCategory: MediaCategory) {
-    MIHON("Mihon", MediaCategory.MANGA),
-    ANIYOMI("Aniyomi", MediaCategory.ANIME),
-    IREADER("IReader", MediaCategory.NOVEL),
-    LNREADER("LNReader", MediaCategory.NOVEL),
-    SHOSETSU("Shosetsu", MediaCategory.NOVEL),
-    MANGAYOMI("Mangayomi", MediaCategory.MANGA),
-    TSUNDOKU("Tsundoku", MediaCategory.NOVEL),
-    AIDOKU("Aidoku", MediaCategory.MANGA),
-    UNKNOWN("Community", MediaCategory.MANGA)
+enum class ExtensionEcosystem(val displayName: String, val defaultType: MediaType) {
+    MIHON("Mihon", MediaType.MANGA),
+    ANIYOMI("Aniyomi", MediaType.ANIME),
+    IREADER("IReader", MediaType.NOVEL),
+    LNREADER("LNReader", MediaType.NOVEL),
+    SHOSETSU("Shosetsu", MediaType.NOVEL),
+    MANGAYOMI("Mangayomi", MediaType.MANGA),
+    TSUNDOKU("Tsundoku", MediaType.NOVEL),
+    AIDOKU("Aidoku", MediaType.MANGA),
+    UNKNOWN("Community", MediaType.MANGA)
 }
 
 enum class ExtensionRuntimeType {
@@ -59,7 +59,7 @@ data class ExtensionPackage(
     val isInstalled: Boolean = false,
     val hasUpdate: Boolean = false,
     val installedVersionName: String? = null,
-    val categoryOverride: MediaCategory? = null
+    val typeOverride: MediaType? = null
 )
 
 data class InstalledExtension(
@@ -74,7 +74,7 @@ data class InstalledExtension(
     val apkOrArtifactPath: String,
     val iconUrl: String? = null,
     val entryClassOrFile: String? = null,
-    val categoryOverride: MediaCategory? = null,
+    val typeOverride: MediaType? = null,
     val installedAt: Long = 0L,
     val hasUpdate: Boolean = false,
     val latestVersionName: String? = null,

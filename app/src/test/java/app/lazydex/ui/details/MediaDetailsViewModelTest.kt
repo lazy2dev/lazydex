@@ -9,7 +9,7 @@ import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.anilist.TokenBucketLimiter
 import app.lazydex.data.tracker.sync.AnilistSyncEngine
 import app.lazydex.data.tracker.sync.AnilistSyncEngineTest
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.MediaStats
 import app.lazydex.domain.model.StatusFilter
@@ -41,8 +41,8 @@ class MediaDetailsViewModelTest {
         val itemFlows = mutableMapOf<String, kotlinx.coroutines.flow.MutableSharedFlow<MediaItem?>>()
 
         override fun observeAll(): Flow<List<MediaItem>> = flowOf(items)
-        override fun observeByCategory(category: MediaCategory): Flow<List<MediaItem>> = flowOf(items.filter { it.category == category })
-        override fun observeFiltered(category: MediaCategory?, statusFilter: StatusFilter): Flow<List<MediaItem>> = flowOf(items)
+        override fun observeByType(mediaType: MediaType): Flow<List<MediaItem>> = flowOf(items.filter { it.mediaType == mediaType })
+        override fun observeFiltered(mediaType: MediaType?, statusFilter: StatusFilter): Flow<List<MediaItem>> = flowOf(items)
         override fun observeById(id: String): Flow<MediaItem?> {
             return itemFlows.getOrPut(id) {
                 kotlinx.coroutines.flow.MutableSharedFlow<MediaItem?>(replay = 1).apply {
@@ -52,10 +52,10 @@ class MediaDetailsViewModelTest {
         }
         override fun observeCount(): Flow<Int> = flowOf(items.size)
         override fun observeStats(): Flow<MediaStats> = flowOf(MediaStats(0, 0, 0, null, 0, 0, 0, 0, 0))
-        override fun observeCategoryCounts(): Flow<Map<MediaCategory, Int>> = flowOf(emptyMap())
-        override fun observeStatusCounts(category: MediaCategory?): Flow<Map<StatusFilter, Int>> = flowOf(emptyMap())
-        override fun observeDistinctGenres(category: MediaCategory?): Flow<List<String>> = flowOf(emptyList())
-        override fun observeDistinctTags(category: MediaCategory?): Flow<List<String>> = flowOf(emptyList())
+        override fun observeTypeCounts(): Flow<Map<MediaType, Int>> = flowOf(emptyMap())
+        override fun observeStatusCounts(mediaType: MediaType?): Flow<Map<StatusFilter, Int>> = flowOf(emptyMap())
+        override fun observeDistinctGenres(mediaType: MediaType?): Flow<List<String>> = flowOf(emptyList())
+        override fun observeDistinctTags(mediaType: MediaType?): Flow<List<String>> = flowOf(emptyList())
 
         override suspend fun getById(id: String): MediaItem? = items.find { it.id == id }
         override suspend fun getAll(): List<MediaItem> = items
@@ -175,7 +175,7 @@ class MediaDetailsViewModelTest {
         val repo = FakeRepository()
         val existing = MediaItem(
             id = "existing-1",
-            category = MediaCategory.NOVEL,
+            mediaType = MediaType.NOVEL,
             title = "Omniscient Reader",
             currentProgress = 100,
             totalItems = 551,
@@ -234,7 +234,7 @@ class MediaDetailsViewModelTest {
         vm.updateTitle("The Beginning After the End")
         vm.updateTitleRomaji("The Beginning After the End")
         vm.updateTitleNative("끝이 아닌 시작")
-        vm.updateCategory(MediaCategory.MANGA)
+        vm.updateMediaType(MediaType.MANGA)
         vm.updateFormatId("typ_manhwa")
         vm.updateCurrentProgress("175")
         vm.updateTotalItems("200")
@@ -252,7 +252,7 @@ class MediaDetailsViewModelTest {
         assertEquals(1, repo.items.size)
         val saved = repo.items[0]
         assertEquals("The Beginning After the End", saved.title)
-        assertEquals("typ_manhwa", saved.categoryId)
+        assertEquals("typ_manhwa", saved.typeId)
         assertEquals("The Beginning After the End", saved.alternativeTitles.getOrNull(0))
         assertEquals("끝이 아닌 시작", saved.alternativeTitles.getOrNull(2))
         assertEquals(175.0, saved.progress, 0.001)
@@ -269,7 +269,7 @@ class MediaDetailsViewModelTest {
         val repo = FakeRepository()
         val existing = MediaItem(
             id = "existing-2",
-            category = MediaCategory.MANGA,
+            mediaType = MediaType.MANGA,
             title = "Solo Leveling",
             currentProgress = 50,
             totalItems = 200,
@@ -304,7 +304,7 @@ class MediaDetailsViewModelTest {
         val repo = FakeRepository()
         val existing = MediaItem(
             id = "existing-3",
-            category = MediaCategory.ANIME,
+            mediaType = MediaType.ANIME,
             title = "Frieren",
             currentProgress = 28,
             totalItems = 28,
@@ -353,7 +353,7 @@ class MediaDetailsViewModelTest {
         val repo = FakeRepository()
         val existing = MediaItem(
             id = "existing-back",
-            category = MediaCategory.NOVEL,
+            mediaType = MediaType.NOVEL,
             title = "Original Title",
             currentProgress = 0,
             userStatus = UserStatus.PLAN_TO,
@@ -383,7 +383,7 @@ class MediaDetailsViewModelTest {
         val repo = FakeRepository()
         val existing = MediaItem(
             id = "existing-notes",
-            category = MediaCategory.NOVEL,
+            mediaType = MediaType.NOVEL,
             title = "Notes Test",
             currentProgress = 10,
             userStatus = UserStatus.READING,
@@ -418,7 +418,7 @@ class MediaDetailsViewModelTest {
         val repo = FakeRepository()
         val existing = MediaItem(
             id = "existing-flush",
-            category = MediaCategory.NOVEL,
+            mediaType = MediaType.NOVEL,
             title = "Flush Test",
             currentProgress = 10,
             userStatus = UserStatus.READING,
@@ -469,7 +469,7 @@ class MediaDetailsViewModelTest {
         val repo = FakeRepository()
         val existing = MediaItem(
             id = "item-sync-1",
-            category = MediaCategory.NOVEL,
+            mediaType = MediaType.NOVEL,
             title = "Sync Test",
             currentProgress = 10,
             userStatus = UserStatus.READING,
@@ -522,7 +522,7 @@ class MediaDetailsViewModelTest {
         val repo = FakeRepository()
         val existing = MediaItem(
             id = "item-sync-2",
-            category = MediaCategory.NOVEL,
+            mediaType = MediaType.NOVEL,
             title = "Push Test",
             currentProgress = 10,
             userStatus = UserStatus.READING,
@@ -554,7 +554,7 @@ class MediaDetailsViewModelTest {
         val repo = FakeRepository()
         val existing = MediaItem(
             id = "item-sync-3",
-            category = MediaCategory.NOVEL,
+            mediaType = MediaType.NOVEL,
             title = "Push Fail Test",
             currentProgress = 10,
             userStatus = UserStatus.READING,
@@ -588,7 +588,7 @@ class MediaDetailsViewModelTest {
         val repo = FakeRepository()
         val existing = MediaItem(
             id = "live-item-1",
-            category = MediaCategory.NOVEL,
+            mediaType = MediaType.NOVEL,
             title = "Live Test",
             currentProgress = 10,
             userStatus = UserStatus.READING,
@@ -637,7 +637,7 @@ class MediaDetailsViewModelTest {
         val repo = FakeRepository()
         val existing = MediaItem(
             id = "art-item-1",
-            category = MediaCategory.MANGA,
+            mediaType = MediaType.MANGA,
             title = "Artwork Test",
             currentProgress = 1,
             userStatus = UserStatus.READING,
@@ -667,7 +667,7 @@ class MediaDetailsViewModelTest {
         val existing = MediaItem(
             id = "item-sugg-1",
             title = "Frieren",
-            category = MediaCategory.MANGA,
+            mediaType = MediaType.MANGA,
             currentProgress = 10,
             totalItems = 100,
             lastUpdated = 1000L,
@@ -731,7 +731,7 @@ class MediaDetailsViewModelTest {
         val existing = MediaItem(
             id = "item-sugg-2",
             title = "Sousou no Frieren",
-            category = MediaCategory.MANGA,
+            mediaType = MediaType.MANGA,
             currentProgress = 5,
             totalItems = 100,
             lastUpdated = 1000L,

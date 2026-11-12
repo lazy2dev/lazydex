@@ -37,8 +37,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.lazydex.data.local.LibraryDisplayMode
-import app.lazydex.domain.model.MediaCategory
 import app.lazydex.domain.model.MediaItem
+import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.UserStatus
 import app.lazydex.ui.theme.StatusCompleted
 import app.lazydex.ui.theme.StatusDropped
@@ -63,7 +63,7 @@ data class MediaCardUiState(
     val scoreRaw: Int? = null,
     val userStatus: UserStatus = UserStatus.PLAN_TO,
     val lastUpdated: Long = 0L,
-    val category: MediaCategory = MediaCategory.NOVEL,
+    val mediaType: MediaType = MediaType.NOVEL,
 )
 
 fun MediaItem.toMediaCardUiState(
@@ -71,9 +71,9 @@ fun MediaItem.toMediaCardUiState(
     hasSecondaryProgress: Boolean? = null,
     isDirtyLocal: Boolean = false,
 ): MediaCardUiState {
-    val resolvedFormat = resolveFormatName(categoryId, getExtra("format"), category, formatName)
+    val resolvedFormat = resolveFormatName(typeId, getExtra("format"), mediaType, formatName)
     val resolvedSecondary = resolveHasSecondaryProgress(
-        categoryId = categoryId,
+        typeId = typeId,
         secondaryProgress = secondaryProgress,
         secondaryProgressTotal = secondaryProgressTotal,
         hasSecondaryOverride = hasSecondaryProgress,
@@ -96,7 +96,7 @@ fun MediaItem.toMediaCardUiState(
         scoreRaw = calcScoreRaw,
         userStatus = userStatus,
         lastUpdated = lastUpdated,
-        category = category,
+        mediaType = mediaType,
     )
 }
 
@@ -104,18 +104,18 @@ fun MediaCardUiState.toMediaItem(): MediaItem {
     val calcRating = scoreRaw?.let { it / 20.0 }
     return MediaItem(
         id = id,
-        type = when (category) {
-            MediaCategory.NOVEL -> "NOVEL"
-            MediaCategory.MANGA -> "MANGA"
-            MediaCategory.ANIME, MediaCategory.MOVIE, MediaCategory.TV -> "ANIME"
-            MediaCategory.GAME -> "GAME"
+        type = when (mediaType) {
+            MediaType.NOVEL -> "NOVEL"
+            MediaType.MANGA -> "MANGA"
+            MediaType.ANIME, MediaType.MOVIE, MediaType.TV -> "ANIME"
+            MediaType.GAME -> "GAME"
         },
-        format = when (category) {
-            MediaCategory.NOVEL -> "NOVEL"
-            MediaCategory.MANGA -> "MANGA"
-            MediaCategory.MOVIE -> "MOVIE"
-            MediaCategory.TV, MediaCategory.ANIME -> "TV"
-            MediaCategory.GAME -> "PC"
+        format = when (mediaType) {
+            MediaType.NOVEL -> "NOVEL"
+            MediaType.MANGA -> "MANGA"
+            MediaType.MOVIE -> "MOVIE"
+            MediaType.TV, MediaType.ANIME -> "TV"
+            MediaType.GAME -> "PC"
         },
         countryOfOrigin = null,
         title = title,
@@ -135,9 +135,9 @@ fun MediaCardUiState.toMediaItem(): MediaItem {
 }
 
 fun resolveFormatName(
-    categoryId: String,
+    typeId: String,
     extraFormat: String? = null,
-    category: MediaCategory? = null,
+    mediaType: MediaType? = null,
     customFormat: String? = null,
 ): String {
     if (!customFormat.isNullOrBlank()) return customFormat
@@ -166,26 +166,26 @@ fun resolveFormatName(
             }
         }
     }
-    return when (categoryId.uppercase()) {
+    return when (typeId.uppercase()) {
         "TYP_NOVEL_LN", "LIGHT_NOVEL" -> "Light Novel"
         "TYP_NOVEL_CN", "TYP_NOVEL_KR", "WEB_NOVEL" -> "Web Novel"
-        "CAT_NOVEL", "NOVEL" -> "Novel"
+        "TYP_NOVEL", "NOVEL" -> "Novel"
         "TYP_MANHWA", "MANHWA" -> "Manhwa"
         "TYP_MANHUA", "MANHUA" -> "Manhua"
-        "TYP_MANGA_JP", "CAT_MANGA", "MANGA" -> "Manga"
+        "TYP_MANGA_JP", "TYP_MANGA", "MANGA" -> "Manga"
         "TYP_ANIME_SERIES", "TV" -> "TV Series"
         "TYP_ANIME_MOVIE", "MOVIE" -> "Movie"
         "TYP_ANIME_OVA", "OVA" -> "OVA"
-        "CAT_ANIME", "ANIME" -> "Anime"
-        "CAT_MOVIE" -> "Movie"
-        "CAT_TV" -> "TV"
-        "CAT_GAME", "GAME", "PC" -> "Game"
-        else -> category?.displayName ?: ""
+        "TYP_ANIME", "ANIME" -> "Anime"
+        "TYP_MOVIE" -> "Movie"
+        "TYP_TV" -> "TV"
+        "TYP_GAME", "GAME", "PC" -> "Game"
+        else -> mediaType?.displayName ?: ""
     }
 }
 
 fun resolveHasSecondaryProgress(
-    categoryId: String,
+    typeId: String,
     secondaryProgress: Double = 0.0,
     secondaryProgressTotal: Double? = null,
     hasSecondaryOverride: Boolean? = null,
@@ -194,24 +194,24 @@ fun resolveHasSecondaryProgress(
     if (secondaryProgress > 0.0 || (secondaryProgressTotal != null && secondaryProgressTotal > 0.0)) {
         return true
     }
-    return when (categoryId) {
-        "typ_novel_ln", "typ_manga_jp", "cat_tv", "typ_anime_series" -> true
+    return when (typeId) {
+        "typ_novel_ln", "typ_manga_jp", "typ_tv", "typ_anime_series" -> true
         else -> false
     }
 }
 
-fun resolveUnitPrefix(category: MediaCategory, isSecondary: Boolean = false): String {
+fun resolveUnitPrefix(mediaType: MediaType, isSecondary: Boolean = false): String {
     return if (isSecondary) {
-        when (category) {
-            MediaCategory.TV, MediaCategory.ANIME -> "Season"
-            MediaCategory.GAME -> "Part"
+        when (mediaType) {
+            MediaType.TV, MediaType.ANIME -> "Season"
+            MediaType.GAME -> "Part"
             else -> "Vol."
         }
     } else {
-        when (category) {
-            MediaCategory.ANIME, MediaCategory.TV -> "Ep."
-            MediaCategory.MOVIE -> "Min."
-            MediaCategory.GAME -> "Hr."
+        when (mediaType) {
+            MediaType.ANIME, MediaType.TV -> "Ep."
+            MediaType.MOVIE -> "Min."
+            MediaType.GAME -> "Hr."
             else -> "Ch."
         }
     }
@@ -308,12 +308,12 @@ fun MediaCard(
     when (effectiveMode) {
         LibraryDisplayMode.LIST -> {
             val relativeTime = remember(item.lastUpdated) { getRelativeTime(item.lastUpdated) }
-            val resolvedFormat = remember(item.categoryId, item.extraData, item.category, formatName) {
-                resolveFormatName(item.categoryId, item.getExtra("format"), item.category, formatName)
+            val resolvedFormat = remember(item.typeId, item.extraData, item.mediaType, formatName) {
+                resolveFormatName(item.typeId, item.getExtra("format"), item.mediaType, formatName)
             }
-            val resolvedHasSecondary = remember(item.categoryId, item.secondaryProgress, item.secondaryProgressTotal, hasSecondaryProgress) {
+            val resolvedHasSecondary = remember(item.typeId, item.secondaryProgress, item.secondaryProgressTotal, hasSecondaryProgress) {
                 resolveHasSecondaryProgress(
-                    categoryId = item.categoryId,
+                    typeId = item.typeId,
                     secondaryProgress = item.secondaryProgress,
                     secondaryProgressTotal = item.secondaryProgressTotal,
                     hasSecondaryOverride = hasSecondaryProgress,
@@ -324,8 +324,8 @@ fun MediaCard(
             val displaySecondaryProgress = item.secondaryProgress
             val displaySecondaryProgressTotal = item.secondaryProgressTotal
 
-            val primaryUnitPrefix = remember(item.category) { resolveUnitPrefix(item.category, isSecondary = false) }
-            val secondaryUnitPrefix = remember(item.category) { resolveUnitPrefix(item.category, isSecondary = true) }
+            val primaryUnitPrefix = remember(item.mediaType) { resolveUnitPrefix(item.mediaType, isSecondary = false) }
+            val secondaryUnitPrefix = remember(item.mediaType) { resolveUnitPrefix(item.mediaType, isSecondary = true) }
 
             Row(
                 modifier = modifier

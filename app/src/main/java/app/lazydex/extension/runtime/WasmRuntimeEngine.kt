@@ -1,6 +1,6 @@
 package app.lazydex.extension.runtime
 
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.scraper.source.ScrapedMetadata
 import app.lazydex.scraper.source.SearchResult
 import app.lazydex.scraper.source.Source
@@ -86,7 +86,7 @@ class WasmRuntimeEngine(
         pkgName: String,
         wasmFile: File,
         name: String,
-        categoryHint: MediaCategory? = null
+        typeHint: MediaType? = null
     ): Source? {
         if (!wasmFile.exists()) return null
         val bytes = wasmFile.readBytes()
@@ -98,7 +98,7 @@ class WasmRuntimeEngine(
                 pkgName = pkgName,
                 name = name,
                 instance = instance,
-                categoryHint = categoryHint
+                typeHint = typeHint
             )
         } catch (_: Throwable) {
             null
@@ -110,7 +110,7 @@ class WasmSourceAdapter(
     val pkgName: String,
     override val name: String,
     private val instance: Instance,
-    override val categoryHint: MediaCategory? = null
+    override val typeHint: MediaType? = null
 ) : Source {
 
     override val id: String = "wasm_${pkgName.replace('.', '_')}"
@@ -129,7 +129,7 @@ class WasmSourceAdapter(
                     ScrapedMetadata(
                         title = name,
                         imageUrl = "",
-                        category = categoryHint ?: MediaCategory.MANGA
+                        type = typeHint ?: MediaType.MANGA
                     )
                 } else null
             }

@@ -3,7 +3,6 @@ package app.lazydex.data.repository
 import android.content.SharedPreferences
 import app.lazydex.data.local.dao.ActivityDao
 import app.lazydex.data.local.dao.AppSettingDao
-import app.lazydex.data.local.dao.CategoryCount
 import app.lazydex.data.local.dao.MediaItemDao
 import app.lazydex.data.local.dao.MediaLinkDao
 import app.lazydex.data.local.dao.StatusCount
@@ -19,6 +18,7 @@ import app.lazydex.data.tracker.anilist.AnilistApi
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.anilist.TokenBucketLimiter
 import app.lazydex.data.tracker.sync.AnilistSyncEngine
+import app.lazydex.domain.model.ActivityDatePoint
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.MediaStats
 import app.lazydex.domain.model.UserStatus
@@ -410,6 +410,120 @@ class ProgressMutationRulesTest {
         assertTrue("Push should be suppressed when autoUpdateOnMarkRead is NEVER", syncEngine.pushedMediaIds.isEmpty())
     }
 
+    @Test
+    fun `manual progress change in update records coalesced PROGRESS_UPDATE and unchanged skips it`() = runTest {
+        val testDispatcher = StandardTestDispatcher(testScheduler)
+        val testScope = TestScope(testDispatcher)
+
+        val itemDao = FakeMediaItemDao()
+        val linkDao = FakeMediaLinkDao()
+        val activityDao = FakeActivityDao()
+        val outboxDao = FakeSyncOutboxDao()
+        val settingDao = FakeAppSettingDao()
+
+        val repo = MediaRepositoryImpl(
+            db = null,
+            dao = itemDao,
+            linkDao = linkDao,
+            activityDao = activityDao,
+            outboxDao = outboxDao,
+            settingDao = settingDao,
+            localCoversDir = File(""),
+            syncEngine = null,
+            syncScope = testScope
+        )
+
+        val localItem = MediaItemEntity(
+            id = "media-manual",
+            type = "NOVEL",
+            format = "NOVEL",
+            title = "Lord of the Mysteries",
+            userStatus = "READING",
+            progress = 10.0,
+            progressTotal = 1400.0,
+            createdAt = 1_000_000L,
+            updatedAt = 1_000_000L
+        )
+        itemDao.items[localItem.id] = localItem
+
+        val unchangedDomain = MediaItem(
+            id = "media-manual",
+            type = "NOVEL",
+            format = "NOVEL",
+            title = "Lord of the Mysteries",
+            userStatus = UserStatus.READING,
+            progress = 10.0,
+            progressTotal = 1400.0,
+            currentProgress = 10,
+            totalItems = 1400,
+            lastUpdated = 2_000_000L,
+            dateAdded = 1_000_000L
+        )
+        repo.update(unchangedDomain)
+        assertTrue("Unchanged progress must not record PROGRESS_UPDATE", activityDao.activities.none { it.type == "PROGRESS_UPDATE" })
+
+        repo.update(unchangedDomain.copy(progress = 14.0, currentProgress = 14))
+        val firstUpdates = activityDao.activities.filter { it.type == "PROGRESS_UPDATE" }
+        assertEquals(1, firstUpdates.size)
+        assertEquals(4.0, firstUpdates.first().delta ?: 0.0, 0.001)
+        assertEquals("14.0", firstUpdates.first().newValue)
+
+        // Second rapid manual edit should coalesce with the previous PROGRESS_UPDATE
+        repo.update(unchangedDomain.copy(progress = 17.0, currentProgress = 17))
+        val coalescedUpdates = activityDao.activities.filter { it.type == "PROGRESS_UPDATE" }
+        assertEquals(1, coalescedUpdates.size)
+        assertEquals(7.0, coalescedUpdates.first().delta ?: 0.0, 0.001)
+        assertEquals("17.0", coalescedUpdates.first().newValue)
+    }
+
+    @Test
+    fun `update preserves repeat and durationMinutes without overwriting with defaults`() = runTest {
+        val testDispatcher = StandardTestDispatcher(testScheduler)
+        val testScope = TestScope(testDispatcher)
+
+        val itemDao = FakeMediaItemDao()
+        val linkDao = FakeMediaLinkDao()
+        val activityDao = FakeActivityDao()
+        val outboxDao = FakeSyncOutboxDao()
+        val settingDao = FakeAppSettingDao()
+
+        val repo = MediaRepositoryImpl(
+            db = null,
+            dao = itemDao,
+            linkDao = linkDao,
+            activityDao = activityDao,
+            outboxDao = outboxDao,
+            settingDao = settingDao,
+            localCoversDir = File(""),
+            syncEngine = null,
+            syncScope = testScope
+        )
+
+        val syncedEntity = MediaItemEntity(
+            id = "anime-synced",
+            type = "ANIME",
+            format = "TV",
+            title = "Frieren",
+            userStatus = "COMPLETED",
+            progress = 28.0,
+            progressTotal = 28.0,
+            repeat = 2,
+            durationMinutes = 24,
+            createdAt = 1_000_000L,
+            updatedAt = 1_000_000L
+        )
+        itemDao.items[syncedEntity.id] = syncedEntity
+
+        val loaded = repo.getById("anime-synced")!!
+        assertEquals(2, loaded.repeat)
+        assertEquals(24, loaded.durationMinutes)
+
+        repo.update(loaded.copy(notes = "Edited notes locally"))
+        val persisted = itemDao.items["anime-synced"]!!
+        assertEquals(2, persisted.repeat)
+        assertEquals(24, persisted.durationMinutes)
+    }
+
     // --- Fakes ---
 
     class FakeSyncEngine(
@@ -435,8 +549,6 @@ class ProgressMutationRulesTest {
 
         override fun observeAll(): Flow<List<ActiveMediaItemView>> = emptyFlow()
         override fun observeByType(type: String): Flow<List<ActiveMediaItemView>> = emptyFlow()
-        override fun observeByCategory(type: String): Flow<List<ActiveMediaItemView>> = emptyFlow()
-        override fun observeCategoryCounts(): Flow<List<CategoryCount>> = emptyFlow()
         override fun observeTypeCounts(): Flow<List<TypeCount>> = emptyFlow()
         override fun observeStatusCounts(type: String?): Flow<List<StatusCount>> = emptyFlow()
         override fun observeFiltered(type: String?, format: String?, filterType: String, exactStatus: String?): Flow<List<ActiveMediaItemView>> = emptyFlow()
@@ -488,7 +600,6 @@ class ProgressMutationRulesTest {
         }
         override suspend fun getAll(): List<ActiveMediaItemView> = emptyList()
         override suspend fun getActiveByType(type: String): List<MediaItemEntity> = items.values.filter { it.type == type && it.deletedAt == null }
-        override suspend fun getActiveByCategoryId(categoryId: String): List<MediaItemEntity> = items.values.filter { it.type == categoryId && it.deletedAt == null }
         override suspend fun upsert(item: MediaItemEntity) { items[item.id] = item }
         override suspend fun upsertAll(items: List<MediaItemEntity>) { items.forEach { this.items[it.id] = it } }
         override suspend fun atomicIncrementProgress(id: String, delta: Double, now: Long): Int = 1
@@ -529,10 +640,23 @@ class ProgressMutationRulesTest {
     class FakeActivityDao : ActivityDao {
         val activities = mutableListOf<ActivityEntity>()
         override fun observeByMediaId(mediaId: String): Flow<List<ActivityEntity>> = emptyFlow()
-        override suspend fun getByMediaId(mediaId: String): List<ActivityEntity> = emptyList()
-        override suspend fun getCountedProgressUpdates(mediaId: String): List<ActivityEntity> = emptyList()
-        override suspend fun findCoalescableProgress(mediaId: String, mode: String?, minTimestamp: Long): ActivityEntity? = null
-        override suspend fun upsert(activity: ActivityEntity) { activities.add(activity) }
+        override fun observeActivityPoints(startMs: Long?, endMs: Long?): Flow<List<ActivityDatePoint>> = emptyFlow()
+        override suspend fun getByMediaId(mediaId: String): List<ActivityEntity> =
+            activities.filter { it.mediaId == mediaId }
+        override suspend fun getCountedProgressUpdates(mediaId: String): List<ActivityEntity> =
+            activities.filter { it.mediaId == mediaId && it.type == "PROGRESS_UPDATE" && it.counted == 1 }
+        override suspend fun findCoalescableProgress(mediaId: String, mode: String?, minTimestamp: Long): ActivityEntity? =
+            activities.lastOrNull {
+                it.mediaId == mediaId &&
+                    it.type == "PROGRESS_UPDATE" &&
+                    it.counted == 1 &&
+                    it.timestamp >= minTimestamp &&
+                    (mode == null || it.mode == mode)
+            }
+        override suspend fun upsert(activity: ActivityEntity) {
+            activities.removeAll { it.id == activity.id }
+            activities.add(activity)
+        }
         override suspend fun delete(id: String) { activities.removeAll { it.id == id } }
     }
 

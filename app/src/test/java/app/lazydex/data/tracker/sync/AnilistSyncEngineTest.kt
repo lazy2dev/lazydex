@@ -1,7 +1,6 @@
 package app.lazydex.data.tracker.sync
 
 import android.content.SharedPreferences
-import app.lazydex.data.local.dao.CategoryCount
 import app.lazydex.data.local.dao.TypeCount
 import app.lazydex.data.local.dao.MediaItemDao
 import app.lazydex.data.local.dao.MediaLinkDao
@@ -133,7 +132,7 @@ class AnilistSyncEngineTest {
     }
 
     @Test
-    fun `inbound sync inserts new entries with proper category and ongoing metadata`() = runTest(testDispatcher) {
+    fun `inbound sync inserts new entries with proper type and ongoing metadata`() = runTest(testDispatcher) {
         val mangaJson = """
         {
           "data": {
@@ -483,7 +482,7 @@ class AnilistSyncEngineTest {
     }
 
     @Test
-    fun `novel format maps to cat_novel and anime maps to cat_anime`() = runTest(testDispatcher) {
+    fun `novel format maps to typ_novel and anime maps to typ_anime`() = runTest(testDispatcher) {
         val mixedJson = """
         {
           "data": {
@@ -566,30 +565,30 @@ class AnilistSyncEngineTest {
     }
 
     @Test
-    fun `mapToCategoryId maps countries and formats to specific subtypes correctly`() {
+    fun `mapToTypeId maps countries and formats to specific subtypes correctly`() {
         // Manga country mapping
-        assertEquals("typ_manhwa", engine.mapToCategoryId("MANGA", "MANGA", countryOfOrigin = "KR"))
-        assertEquals("typ_manhua", engine.mapToCategoryId("MANGA", "MANGA", countryOfOrigin = "CN"))
-        assertEquals("typ_manhua", engine.mapToCategoryId("MANGA", "MANGA", countryOfOrigin = "TW"))
-        assertEquals("typ_manga_jp", engine.mapToCategoryId("MANGA", "MANGA", countryOfOrigin = "JP"))
+        assertEquals("typ_manhwa", engine.mapToTypeId("MANGA", "MANGA", countryOfOrigin = "KR"))
+        assertEquals("typ_manhua", engine.mapToTypeId("MANGA", "MANGA", countryOfOrigin = "CN"))
+        assertEquals("typ_manhua", engine.mapToTypeId("MANGA", "MANGA", countryOfOrigin = "TW"))
+        assertEquals("typ_manga_jp", engine.mapToTypeId("MANGA", "MANGA", countryOfOrigin = "JP"))
 
         // Fallback to tags when country is missing
-        assertEquals("typ_manhwa", engine.mapToCategoryId("MANGA", "MANGA", countryOfOrigin = null, tags = listOf("Action", "Manhwa")))
-        assertEquals("typ_manhwa", engine.mapToCategoryId("MANGA", "MANGA", countryOfOrigin = null, tags = listOf("Webtoon", "Romance")))
-        assertEquals("typ_manhua", engine.mapToCategoryId("MANGA", "MANGA", countryOfOrigin = null, tags = listOf("Cultivation", "Manhua")))
-        assertEquals("typ_manga_jp", engine.mapToCategoryId("MANGA", "MANGA", countryOfOrigin = null, tags = listOf("Action")))
+        assertEquals("typ_manhwa", engine.mapToTypeId("MANGA", "MANGA", countryOfOrigin = null, tags = listOf("Action", "Manhwa")))
+        assertEquals("typ_manhwa", engine.mapToTypeId("MANGA", "MANGA", countryOfOrigin = null, tags = listOf("Webtoon", "Romance")))
+        assertEquals("typ_manhua", engine.mapToTypeId("MANGA", "MANGA", countryOfOrigin = null, tags = listOf("Cultivation", "Manhua")))
+        assertEquals("typ_manga_jp", engine.mapToTypeId("MANGA", "MANGA", countryOfOrigin = null, tags = listOf("Action")))
 
         // Novel country mapping
-        assertEquals("typ_novel_cn", engine.mapToCategoryId("NOVEL", "MANGA", countryOfOrigin = "CN"))
-        assertEquals("typ_novel_kr", engine.mapToCategoryId("NOVEL", "MANGA", countryOfOrigin = "KR"))
-        assertEquals("typ_novel_ln", engine.mapToCategoryId("NOVEL", "MANGA", countryOfOrigin = "JP"))
-        assertEquals("typ_novel_ln", engine.mapToCategoryId("NOVEL", "MANGA", countryOfOrigin = null))
+        assertEquals("typ_novel_cn", engine.mapToTypeId("NOVEL", "MANGA", countryOfOrigin = "CN"))
+        assertEquals("typ_novel_kr", engine.mapToTypeId("NOVEL", "MANGA", countryOfOrigin = "KR"))
+        assertEquals("typ_novel_ln", engine.mapToTypeId("NOVEL", "MANGA", countryOfOrigin = "JP"))
+        assertEquals("typ_novel_ln", engine.mapToTypeId("NOVEL", "MANGA", countryOfOrigin = null))
 
         // Anime format mapping
-        assertEquals("typ_anime_movie", engine.mapToCategoryId("MOVIE", "ANIME"))
-        assertEquals("typ_anime_ova", engine.mapToCategoryId("OVA", "ANIME"))
-        assertEquals("typ_anime_ova", engine.mapToCategoryId("SPECIAL", "ANIME"))
-        assertEquals("typ_anime_series", engine.mapToCategoryId("TV", "ANIME"))
+        assertEquals("typ_anime_movie", engine.mapToTypeId("MOVIE", "ANIME"))
+        assertEquals("typ_anime_ova", engine.mapToTypeId("OVA", "ANIME"))
+        assertEquals("typ_anime_ova", engine.mapToTypeId("SPECIAL", "ANIME"))
+        assertEquals("typ_anime_series", engine.mapToTypeId("TV", "ANIME"))
     }
 
     @Test
@@ -1161,8 +1160,6 @@ class AnilistSyncEngineTest {
 
         override fun observeAll(): Flow<List<ActiveMediaItemView>> = emptyFlow()
         override fun observeByType(type: String): Flow<List<ActiveMediaItemView>> = emptyFlow()
-        override fun observeByCategory(type: String): Flow<List<ActiveMediaItemView>> = emptyFlow()
-        override fun observeCategoryCounts(): Flow<List<CategoryCount>> = emptyFlow()
         override fun observeTypeCounts(): Flow<List<TypeCount>> = emptyFlow()
         override fun observeStatusCounts(type: String?): Flow<List<StatusCount>> = emptyFlow()
         override fun observeFiltered(type: String?, format: String?, filterType: String, exactStatus: String?): Flow<List<ActiveMediaItemView>> = emptyFlow()
@@ -1173,7 +1170,6 @@ class AnilistSyncEngineTest {
         override suspend fun getActiveById(id: String): ActiveMediaItemView? = null
         override suspend fun getAll(): List<ActiveMediaItemView> = emptyList()
         override suspend fun getActiveByType(type: String): List<MediaItemEntity> = items.values.filter { it.type == type && it.deletedAt == null }
-        override suspend fun getActiveByCategoryId(categoryId: String): List<MediaItemEntity> = items.values.filter { it.type == categoryId && it.deletedAt == null }
         override suspend fun upsert(item: MediaItemEntity) { items[item.id] = item }
         override suspend fun upsertAll(items: List<MediaItemEntity>) { items.forEach { this.items[it.id] = it } }
         override suspend fun atomicIncrementProgress(id: String, delta: Double, now: Long): Int = 1

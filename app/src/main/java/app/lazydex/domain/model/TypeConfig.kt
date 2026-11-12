@@ -5,7 +5,7 @@ enum class LengthUnit {
     WORDS
 }
 
-data class Category(
+data class TypeConfig(
     val id: String,
     val parentId: String? = null,
     val name: String,
@@ -25,8 +25,8 @@ data class Category(
     val hasParts: Boolean? get() = hasSecondaryProgress
 }
 
-data class ResolvedCategoryConfig(
-    val categoryId: String,
+data class ResolvedTypeConfig(
+    val typeId: String,
     val topLevelId: String,
     val displayName: String,
     val icon: String,
@@ -41,7 +41,7 @@ data class ResolvedCategoryConfig(
     val hasParts: Boolean get() = hasSecondaryProgress
 
     constructor(
-        categoryId: String,
+        typeId: String,
         topLevelId: String,
         displayName: String,
         icon: String,
@@ -54,7 +54,7 @@ data class ResolvedCategoryConfig(
         lengthUnit: LengthUnit,
         marker: Unit = Unit
     ) : this(
-        categoryId, topLevelId, displayName, icon, unitName, secondaryUnitName,
+        typeId, topLevelId, displayName, icon, unitName, secondaryUnitName,
         actionVerb, hasParts, hasCharEstimate, hasAudioSpeed, lengthUnit
     )
 }

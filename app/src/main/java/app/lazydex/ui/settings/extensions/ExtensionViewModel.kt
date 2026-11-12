@@ -6,7 +6,7 @@ import app.lazydex.domain.model.ExtensionEcosystem
 import app.lazydex.domain.model.ExtensionPackage
 import app.lazydex.domain.model.ExtensionRepo
 import app.lazydex.domain.model.InstalledExtension
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.extension.repository.ExtensionRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,7 +36,7 @@ data class ExtensionUiState(
     val addRepoInputUrl: String = "",
     val addRepoError: String? = null,
     val isAddingRepo: Boolean = false,
-    val categoryPickerExtension: InstalledExtension? = null,
+    val typePickerExtension: InstalledExtension? = null,
     val showRepoSheet: Boolean = false,
     val userMessage: String? = null
 )
@@ -195,19 +195,19 @@ class ExtensionViewModel(
         }
     }
 
-    fun openCategoryPicker(ext: InstalledExtension) {
-        _uiState.update { it.copy(categoryPickerExtension = ext) }
+    fun openTypePicker(ext: InstalledExtension) {
+        _uiState.update { it.copy(typePickerExtension = ext) }
     }
 
-    fun dismissCategoryPicker() {
-        _uiState.update { it.copy(categoryPickerExtension = null) }
+    fun dismissTypePicker() {
+        _uiState.update { it.copy(typePickerExtension = null) }
     }
 
-    fun setCategoryOverride(category: MediaCategory?) {
-        val ext = _uiState.value.categoryPickerExtension ?: return
+    fun setTypeOverride(mediaType: MediaType?) {
+        val ext = _uiState.value.typePickerExtension ?: return
         viewModelScope.launch {
-            extensionRepository.setCategoryOverride(ext.pkgName, category)
-            _uiState.update { it.copy(categoryPickerExtension = null, userMessage = "Updated category override") }
+            extensionRepository.setTypeOverride(ext.pkgName, mediaType)
+            _uiState.update { it.copy(typePickerExtension = null, userMessage = "Updated type override") }
         }
     }
 

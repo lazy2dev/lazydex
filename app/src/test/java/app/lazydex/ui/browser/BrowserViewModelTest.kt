@@ -1,7 +1,7 @@
 package app.lazydex.ui.browser
 
 import app.lazydex.data.local.ThemePreferences
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.MediaStats
 import app.lazydex.domain.model.StatusFilter
@@ -41,7 +41,7 @@ class BrowserViewModelTest {
         override val baseUrl: String,
         override val urlPattern: Regex,
         override val isSearchable: Boolean,
-        override val categoryHint: MediaCategory?,
+        override val typeHint: MediaType?,
         var resultsToReturn: List<SearchResult> = emptyList()
     ) : Source {
         override suspend fun scrape(url: String): ScrapedMetadata? = null
@@ -61,15 +61,15 @@ class BrowserViewModelTest {
     private class FakeMediaRepository : MediaRepository {
         val itemsFlow = MutableStateFlow<List<MediaItem>>(emptyList())
         override fun observeAll(): Flow<List<MediaItem>> = itemsFlow
-        override fun observeByCategory(category: MediaCategory): Flow<List<MediaItem>> = flowOf(emptyList())
-        override fun observeFiltered(category: MediaCategory?, statusFilter: StatusFilter): Flow<List<MediaItem>> = flowOf(emptyList())
+        override fun observeByType(mediaType: MediaType): Flow<List<MediaItem>> = flowOf(emptyList())
+        override fun observeFiltered(mediaType: MediaType?, statusFilter: StatusFilter): Flow<List<MediaItem>> = flowOf(emptyList())
         override fun observeById(id: String): Flow<MediaItem?> = flowOf(null)
         override fun observeCount(): Flow<Int> = flowOf(0)
         override fun observeStats(): Flow<MediaStats> = flowOf(MediaStats(0, 0, 0, null, 0, 0, 0, 0, 0))
-        override fun observeCategoryCounts(): Flow<Map<MediaCategory, Int>> = flowOf(emptyMap())
-        override fun observeStatusCounts(category: MediaCategory?): Flow<Map<StatusFilter, Int>> = flowOf(emptyMap())
-        override fun observeDistinctGenres(category: MediaCategory?): Flow<List<String>> = flowOf(emptyList())
-        override fun observeDistinctTags(category: MediaCategory?): Flow<List<String>> = flowOf(emptyList())
+        override fun observeTypeCounts(): Flow<Map<MediaType, Int>> = flowOf(emptyMap())
+        override fun observeStatusCounts(mediaType: MediaType?): Flow<Map<StatusFilter, Int>> = flowOf(emptyMap())
+        override fun observeDistinctGenres(mediaType: MediaType?): Flow<List<String>> = flowOf(emptyList())
+        override fun observeDistinctTags(mediaType: MediaType?): Flow<List<String>> = flowOf(emptyList())
         override suspend fun getById(id: String): MediaItem? = null
         override suspend fun getAll(): List<MediaItem> = emptyList()
         override suspend fun add(item: MediaItem): MediaItem = item
@@ -93,7 +93,7 @@ class BrowserViewModelTest {
             baseUrl = "https://manga.example.com",
             urlPattern = Regex("""https://manga\.example\.com/title/\d+"""),
             isSearchable = true,
-            categoryHint = MediaCategory.MANGA,
+            typeHint = MediaType.MANGA,
             resultsToReturn = listOf(
                 SearchResult("One Piece", "https://manga.example.com/title/123", "https://img.example.com/1.jpg")
             )
@@ -104,7 +104,7 @@ class BrowserViewModelTest {
             baseUrl = "https://novel.example.com",
             urlPattern = Regex("""https://novel\.example\.com/novel/\d+"""),
             isSearchable = true,
-            categoryHint = MediaCategory.NOVEL,
+            typeHint = MediaType.NOVEL,
             resultsToReturn = listOf(
                 SearchResult("Shadow Slave", "https://novel.example.com/novel/456", "https://img.example.com/2.jpg")
             )
@@ -168,8 +168,8 @@ class BrowserViewModelTest {
     }
 
     @Test
-    fun testPerformSearchGlobalFilteredByCategory() = runTest {
-        viewModel.setCategory(MediaCategory.NOVEL)
+    fun testPerformSearchGlobalFilteredByType() = runTest {
+        viewModel.setType(MediaType.NOVEL)
         viewModel.updateSearchQuery("Shadow")
         viewModel.performSearch()
         advanceUntilIdle()
@@ -186,7 +186,7 @@ class BrowserViewModelTest {
         fakeMediaRepository.itemsFlow.value = listOf(
             MediaItem(
                 id = "id-1",
-                category = MediaCategory.MANGA,
+                mediaType = MediaType.MANGA,
                 title = "One Piece",
                 sourceUrl = "https://manga.example.com/title/123",
                 currentProgress = 100,

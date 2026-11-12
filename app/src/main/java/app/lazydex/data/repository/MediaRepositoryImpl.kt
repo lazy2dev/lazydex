@@ -18,17 +18,19 @@ import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.service.DelayedTrackingUpdateJob
 import app.lazydex.data.tracker.sync.AnilistSyncEngine
 import app.lazydex.data.tracker.sync.TrackChapter
+import app.lazydex.domain.model.ActivityDatePoint
 import app.lazydex.domain.model.ActivityLog
-import app.lazydex.domain.model.Category
+import kotlin.math.abs
 import app.lazydex.domain.model.LengthUnit
-import app.lazydex.domain.model.MediaCategory
-import app.lazydex.domain.model.resolveMediaCategory
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.MediaPart
 import app.lazydex.domain.model.MediaStats
-import app.lazydex.domain.model.ResolvedCategoryConfig
+import app.lazydex.domain.model.MediaType
+import app.lazydex.domain.model.ResolvedTypeConfig
 import app.lazydex.domain.model.StatusFilter
+import app.lazydex.domain.model.TypeConfig
 import app.lazydex.domain.model.UserStatus
+import app.lazydex.domain.model.resolveMediaType
 import app.lazydex.domain.repository.MediaRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -87,20 +89,20 @@ class MediaRepositoryImpl(
         .map { list -> list.map { it.toDomain() } }
         .distinctUntilChanged()
 
-    override fun observeByCategory(category: MediaCategory): Flow<List<MediaItem>> {
-        val type = categoryToType(category)
+    override fun observeByType(mediaType: MediaType): Flow<List<MediaItem>> {
+        val type = mediaTypeToDbType(mediaType)
         return dao.observeByType(type)
             .map { list -> list.map { it.toDomain() } }
             .distinctUntilChanged()
     }
 
-    override fun observeByCategoryId(categoryId: String): Flow<List<MediaItem>> {
-        val (type, format) = resolveTypeAndFormat(categoryId)
+    override fun observeByTypeId(typeId: String): Flow<List<MediaItem>> {
+        val (type, format) = resolveTypeAndFormat(typeId)
         return observeFiltered(type, format, StatusFilter.ALL)
     }
 
-    override fun observeFiltered(category: MediaCategory?, statusFilter: StatusFilter): Flow<List<MediaItem>> {
-        val type = category?.let { categoryToType(it) }
+    override fun observeFiltered(mediaType: MediaType?, statusFilter: StatusFilter): Flow<List<MediaItem>> {
+        val type = mediaType?.let { mediaTypeToDbType(it) }
         return observeFiltered(type, null, statusFilter)
     }
 
@@ -118,8 +120,8 @@ class MediaRepositoryImpl(
             .distinctUntilChanged()
     }
 
-    override fun observeFilteredByCategoryId(categoryId: String?, statusFilter: StatusFilter): Flow<List<MediaItem>> {
-        val (type, format) = resolveTypeAndFormat(categoryId)
+    override fun observeFilteredByTypeId(typeId: String?, statusFilter: StatusFilter): Flow<List<MediaItem>> {
+        val (type, format) = resolveTypeAndFormat(typeId)
         return observeFiltered(type, format, statusFilter)
     }
 
@@ -131,24 +133,24 @@ class MediaRepositoryImpl(
 
     override fun observeStats(): Flow<MediaStats> = dao.getStats().distinctUntilChanged()
 
-    override fun observeCategoryCounts(): Flow<Map<MediaCategory, Int>> = dao.observeTypeCounts()
+    override fun observeTypeCounts(): Flow<Map<MediaType, Int>> = dao.observeTypeCounts()
         .map { list ->
             val counts = list.associate { count ->
-                val cat = when (count.type.uppercase()) {
-                    "MANGA" -> MediaCategory.MANGA
-                    "ANIME" -> MediaCategory.ANIME
-                    "GAME" -> MediaCategory.GAME
-                    else -> MediaCategory.NOVEL
+                val mediaType = when (count.type.uppercase()) {
+                    "MANGA" -> MediaType.MANGA
+                    "ANIME" -> MediaType.ANIME
+                    "GAME" -> MediaType.GAME
+                    else -> MediaType.NOVEL
                 }
-                cat to count.count
+                mediaType to count.count
             }
-            MediaCategory.entries.associateWith { counts[it] ?: 0 }
+            MediaType.entries.associateWith { counts[it] ?: 0 }
         }
         .flowOn(Dispatchers.IO)
         .distinctUntilChanged()
 
-    override fun observeStatusCounts(category: MediaCategory?): Flow<Map<StatusFilter, Int>> {
-        val type = category?.let { categoryToType(it) }
+    override fun observeStatusCounts(mediaType: MediaType?): Flow<Map<StatusFilter, Int>> {
+        val type = mediaType?.let { mediaTypeToDbType(it) }
         return dao.observeStatusCounts(type)
             .map { list ->
                 val raw = list.associate { it.userStatus to it.count }
@@ -166,8 +168,8 @@ class MediaRepositoryImpl(
             .distinctUntilChanged()
     }
 
-    override fun observeDistinctGenres(category: MediaCategory?): Flow<List<String>> {
-        val type = category?.let { categoryToType(it) }
+    override fun observeDistinctGenres(mediaType: MediaType?): Flow<List<String>> {
+        val type = mediaType?.let { mediaTypeToDbType(it) }
         val source = if (type != null) dao.observeByType(type) else dao.observeAll()
         return source.map { entities ->
             entities.flatMap { converters.toList(it.genres) }
@@ -176,8 +178,8 @@ class MediaRepositoryImpl(
         }.flowOn(Dispatchers.IO).distinctUntilChanged()
     }
 
-    override fun observeDistinctTags(category: MediaCategory?): Flow<List<String>> {
-        val type = category?.let { categoryToType(it) }
+    override fun observeDistinctTags(mediaType: MediaType?): Flow<List<String>> {
+        val type = mediaType?.let { mediaTypeToDbType(it) }
         val source = if (type != null) dao.observeByType(type) else dao.observeAll()
         return source.map { entities ->
             entities.flatMap { converters.toList(it.tags) }
@@ -186,54 +188,54 @@ class MediaRepositoryImpl(
         }.flowOn(Dispatchers.IO).distinctUntilChanged()
     }
 
-    private val staticTopLevelCategories = listOf(
-        Category(id = "NOVEL", name = "Novel", icon = "book", unitName = "Chapter", actionVerb = "Read", sortOrder = 0),
-        Category(id = "MANGA", name = "Manga", icon = "image", unitName = "Chapter", actionVerb = "Read", sortOrder = 1),
-        Category(id = "ANIME", name = "Anime", icon = "tv", unitName = "Episode", actionVerb = "Watch", sortOrder = 2),
-        Category(id = "GAME", name = "Game", icon = "gamepad", unitName = "Hour", actionVerb = "Play", sortOrder = 3)
+    private val staticTopLevelTypes = listOf(
+        TypeConfig(id = "NOVEL", name = "Novel", icon = "book", unitName = "Chapter", actionVerb = "Read", sortOrder = 0),
+        TypeConfig(id = "MANGA", name = "Manga", icon = "image", unitName = "Chapter", actionVerb = "Read", sortOrder = 1),
+        TypeConfig(id = "ANIME", name = "Anime", icon = "tv", unitName = "Episode", actionVerb = "Watch", sortOrder = 2),
+        TypeConfig(id = "GAME", name = "Game", icon = "gamepad", unitName = "Hour", actionVerb = "Play", sortOrder = 3)
     )
 
-    private val staticSubtypes = mapOf(
+    private val staticFormats = mapOf(
         "NOVEL" to listOf(
-            Category(id = "LIGHT_NOVEL", parentId = "NOVEL", name = "Light Novel", unitName = "Volume", sortOrder = 0),
-            Category(id = "WEB_NOVEL", parentId = "NOVEL", name = "Web Novel", unitName = "Chapter", sortOrder = 1)
+            TypeConfig(id = "LIGHT_NOVEL", parentId = "NOVEL", name = "Light Novel", unitName = "Volume", sortOrder = 0),
+            TypeConfig(id = "WEB_NOVEL", parentId = "NOVEL", name = "Web Novel", unitName = "Chapter", sortOrder = 1)
         ),
         "MANGA" to listOf(
-            Category(id = "MANGA", parentId = "MANGA", name = "Manga", unitName = "Volume", sortOrder = 0),
-            Category(id = "MANHWA", parentId = "MANGA", name = "Manhwa", unitName = "Chapter", sortOrder = 1),
-            Category(id = "MANHUA", parentId = "MANGA", name = "Manhua", unitName = "Chapter", sortOrder = 2),
-            Category(id = "ONE_SHOT", parentId = "MANGA", name = "One Shot", unitName = "Chapter", sortOrder = 3)
+            TypeConfig(id = "MANGA", parentId = "MANGA", name = "Manga", unitName = "Volume", sortOrder = 0),
+            TypeConfig(id = "MANHWA", parentId = "MANGA", name = "Manhwa", unitName = "Chapter", sortOrder = 1),
+            TypeConfig(id = "MANHUA", parentId = "MANGA", name = "Manhua", unitName = "Chapter", sortOrder = 2),
+            TypeConfig(id = "ONE_SHOT", parentId = "MANGA", name = "One Shot", unitName = "Chapter", sortOrder = 3)
         ),
         "ANIME" to listOf(
-            Category(id = "TV", parentId = "ANIME", name = "TV Series", unitName = "Episode", secondaryUnitName = "Season", sortOrder = 0),
-            Category(id = "MOVIE", parentId = "ANIME", name = "Movie", unitName = "Minute", sortOrder = 1),
-            Category(id = "OVA", parentId = "ANIME", name = "OVA / Special", unitName = "Episode", sortOrder = 2)
+            TypeConfig(id = "TV", parentId = "ANIME", name = "TV Series", unitName = "Episode", secondaryUnitName = "Season", sortOrder = 0),
+            TypeConfig(id = "MOVIE", parentId = "ANIME", name = "Movie", unitName = "Minute", sortOrder = 1),
+            TypeConfig(id = "OVA", parentId = "ANIME", name = "OVA / Special", unitName = "Episode", sortOrder = 2)
         ),
         "GAME" to listOf(
-            Category(id = "PC", parentId = "GAME", name = "PC", unitName = "Hour", sortOrder = 0),
-            Category(id = "ANDROID", parentId = "GAME", name = "Android", unitName = "Hour", sortOrder = 1),
-            Category(id = "CONSOLE", parentId = "GAME", name = "Console", unitName = "Hour", sortOrder = 2),
-            Category(id = "WEB", parentId = "GAME", name = "Web", unitName = "Hour", sortOrder = 3),
-            Category(id = "CROSS_PLATFORM", parentId = "GAME", name = "Cross Platform", unitName = "Hour", sortOrder = 4)
+            TypeConfig(id = "PC", parentId = "GAME", name = "PC", unitName = "Hour", sortOrder = 0),
+            TypeConfig(id = "ANDROID", parentId = "GAME", name = "Android", unitName = "Hour", sortOrder = 1),
+            TypeConfig(id = "CONSOLE", parentId = "GAME", name = "Console", unitName = "Hour", sortOrder = 2),
+            TypeConfig(id = "WEB", parentId = "GAME", name = "Web", unitName = "Hour", sortOrder = 3),
+            TypeConfig(id = "CROSS_PLATFORM", parentId = "GAME", name = "Cross Platform", unitName = "Hour", sortOrder = 4)
         )
     )
 
-    override fun observeCategories(): Flow<List<Category>> = flowOf(staticTopLevelCategories + staticSubtypes.values.flatten())
+    override fun observeTypeConfigs(): Flow<List<TypeConfig>> = flowOf(staticTopLevelTypes + staticFormats.values.flatten())
 
-    override fun observeTopLevelCategories(): Flow<List<Category>> = flowOf(staticTopLevelCategories)
+    override fun observeTopLevelTypes(): Flow<List<TypeConfig>> = flowOf(staticTopLevelTypes)
 
-    override fun observeTypes(parentId: String): Flow<List<Category>> = flowOf(staticSubtypes[parentId.uppercase()] ?: emptyList())
+    override fun observeFormats(parentId: String): Flow<List<TypeConfig>> = flowOf(staticFormats[parentId.uppercase()] ?: emptyList())
 
-    override fun observeResolvedConfig(categoryId: String): Flow<ResolvedCategoryConfig> = flow {
-        emit(getResolvedConfig(categoryId))
+    override fun observeResolvedConfig(typeId: String): Flow<ResolvedTypeConfig> = flow {
+        emit(getResolvedConfig(typeId))
     }
 
-    override suspend fun getResolvedConfig(categoryId: String): ResolvedCategoryConfig {
-        val (type, format) = resolveTypeAndFormat(categoryId)
+    override suspend fun getResolvedConfig(typeId: String): ResolvedTypeConfig {
+        val (type, format) = resolveTypeAndFormat(typeId)
         val actualType = type ?: "NOVEL"
         return when (actualType) {
-            "MANGA" -> ResolvedCategoryConfig(
-                categoryId = categoryId,
+            "MANGA" -> ResolvedTypeConfig(
+                typeId = typeId,
                 topLevelId = "MANGA",
                 displayName = format ?: "Manga",
                 icon = "image",
@@ -245,8 +247,8 @@ class MediaRepositoryImpl(
                 hasAudioSpeed = false,
                 lengthUnit = LengthUnit.WORDS
             )
-            "ANIME" -> ResolvedCategoryConfig(
-                categoryId = categoryId,
+            "ANIME" -> ResolvedTypeConfig(
+                typeId = typeId,
                 topLevelId = "ANIME",
                 displayName = format ?: "Anime",
                 icon = "tv",
@@ -258,8 +260,8 @@ class MediaRepositoryImpl(
                 hasAudioSpeed = false,
                 lengthUnit = LengthUnit.WORDS
             )
-            "GAME" -> ResolvedCategoryConfig(
-                categoryId = categoryId,
+            "GAME" -> ResolvedTypeConfig(
+                typeId = typeId,
                 topLevelId = "GAME",
                 displayName = format ?: "Game",
                 icon = "gamepad",
@@ -271,8 +273,8 @@ class MediaRepositoryImpl(
                 hasAudioSpeed = false,
                 lengthUnit = LengthUnit.WORDS
             )
-            else -> ResolvedCategoryConfig(
-                categoryId = categoryId,
+            else -> ResolvedTypeConfig(
+                typeId = typeId,
                 topLevelId = "NOVEL",
                 displayName = format ?: "Novel",
                 icon = "book",
@@ -287,10 +289,6 @@ class MediaRepositoryImpl(
         }
     }
 
-    override suspend fun addCategory(category: Category): Category = category
-    override suspend fun updateCategory(category: Category) {}
-    override suspend fun deleteCategory(categoryId: String) {}
-
     override fun observeParts(mediaId: String): Flow<List<MediaPart>> = emptyFlow()
 
     override suspend fun setParts(mediaId: String, parts: List<MediaPart>) {}
@@ -299,6 +297,11 @@ class MediaRepositoryImpl(
         .map { list -> list.map { it.toDomain() } }
         .flowOn(Dispatchers.IO)
         .distinctUntilChanged()
+
+    override fun observeActivityPoints(startMs: Long?, endMs: Long?): Flow<List<ActivityDatePoint>> =
+        activityDao.observeActivityPoints(startMs, endMs)
+            .flowOn(Dispatchers.IO)
+            .distinctUntilChanged()
 
     override suspend fun getTimeSpentMinutes(mediaId: String): Pair<Double, Double> = withContext(Dispatchers.IO) {
         val updates = activityDao.getCountedProgressUpdates(mediaId)
@@ -359,6 +362,7 @@ class MediaRepositoryImpl(
         val autoUpdateOnMarkRead = settingDao.get("tracker.autoUpdateOnMarkRead") ?: "ALWAYS"
         val current = dao.getById(item.id)
         val statusChanged = current != null && current.userStatus != entity.userStatus
+        val progressDelta = if (current != null) entity.progress - current.progress else 0.0
 
         runInTransaction {
             val now = System.currentTimeMillis()
@@ -367,6 +371,20 @@ class MediaRepositoryImpl(
             val dirtyRows = linkDao.updateSyncStatusByMediaId(item.id, "DIRTY_LOCAL", now)
             if (dirtyRows > 0) {
                 // marked dirty
+            }
+
+            if (current != null && abs(progressDelta) > 1e-6) {
+                recordProgressActivity(
+                    mediaId = item.id,
+                    itemType = current.type,
+                    avgChapterLength = current.avgChapterLength,
+                    oldProgress = current.progress,
+                    newProgress = entity.progress,
+                    delta = progressDelta,
+                    mode = null,
+                    speed = 1.0,
+                    now = now
+                )
             }
 
             if (statusChanged) {
@@ -455,46 +473,18 @@ class MediaRepositoryImpl(
                 shouldPush = false
             }
 
-            if (delta != 0.0) {
-                val coalesceSec = settingDao.get("activity.coalesceSeconds")?.toLongOrNull() ?: 30L
-                val minTs = now - (coalesceSec * 1000L)
-                val existing = activityDao.findCoalescableProgress(id, mode, minTs)
-                val config = getResolvedConfig(item.type)
-                val rateKey = "rate.${mode ?: config.actionVerb.uppercase()}.${config.lengthUnit.name}"
-                val baseRate = settingDao.get(rateKey)?.toDoubleOrNull() ?: (if (mode == "LISTEN") 250.0 else 500.0)
-
-                if (existing != null) {
-                    val combinedDelta = (existing.delta ?: 0.0) + delta
-                    if (combinedDelta == 0.0) {
-                        activityDao.delete(existing.id)
-                    } else {
-                        activityDao.upsert(
-                            existing.copy(
-                                delta = combinedDelta,
-                                newValue = clampedProgress.toString(),
-                                timestamp = now
-                            )
-                        )
-                    }
-                } else {
-                    activityDao.upsert(
-                        ActivityEntity(
-                            id = UUID.randomUUID().toString(),
-                            mediaId = id,
-                            type = "PROGRESS_UPDATE",
-                            oldValue = item.progress.toString(),
-                            newValue = clampedProgress.toString(),
-                            delta = delta,
-                            mode = mode ?: config.actionVerb.uppercase(),
-                            speed = if (mode == "LISTEN") speed else 1.0,
-                            lengthSnapshot = item.avgChapterLength,
-                            lengthUnit = config.lengthUnit.name,
-                            rateSnapshot = baseRate,
-                            counted = 1,
-                            timestamp = now
-                        )
-                    )
-                }
+            if (abs(delta) > 1e-6) {
+                recordProgressActivity(
+                    mediaId = id,
+                    itemType = item.type,
+                    avgChapterLength = item.avgChapterLength,
+                    oldProgress = item.progress,
+                    newProgress = clampedProgress,
+                    delta = delta,
+                    mode = mode,
+                    speed = speed,
+                    now = now
+                )
             }
 
             if (newStatus != item.userStatus) {
@@ -535,6 +525,58 @@ class MediaRepositoryImpl(
         updatedDomain
     }
 
+    private suspend fun recordProgressActivity(
+        mediaId: String,
+        itemType: String,
+        avgChapterLength: Int?,
+        oldProgress: Double,
+        newProgress: Double,
+        delta: Double,
+        mode: String?,
+        speed: Double,
+        now: Long
+    ) {
+        val coalesceSec = settingDao.get("activity.coalesceSeconds")?.toLongOrNull() ?: 30L
+        val minTs = now - (coalesceSec * 1000L)
+        val existing = activityDao.findCoalescableProgress(mediaId, mode, minTs)
+        val config = getResolvedConfig(itemType)
+        val rateKey = "rate.${mode ?: config.actionVerb.uppercase()}.${config.lengthUnit.name}"
+        val baseRate = settingDao.get(rateKey)?.toDoubleOrNull() ?: (if (mode == "LISTEN") 250.0 else 500.0)
+
+        if (existing != null) {
+            val combinedDelta = (existing.delta ?: 0.0) + delta
+            if (abs(combinedDelta) <= 1e-6) {
+                activityDao.delete(existing.id)
+            } else {
+                activityDao.upsert(
+                    existing.copy(
+                        delta = combinedDelta,
+                        newValue = newProgress.toString(),
+                        timestamp = now
+                    )
+                )
+            }
+        } else {
+            activityDao.upsert(
+                ActivityEntity(
+                    id = UUID.randomUUID().toString(),
+                    mediaId = mediaId,
+                    type = "PROGRESS_UPDATE",
+                    oldValue = oldProgress.toString(),
+                    newValue = newProgress.toString(),
+                    delta = delta,
+                    mode = mode ?: config.actionVerb.uppercase(),
+                    speed = if (mode == "LISTEN") speed else 1.0,
+                    lengthSnapshot = avgChapterLength,
+                    lengthUnit = config.lengthUnit.name,
+                    rateSnapshot = baseRate,
+                    counted = 1,
+                    timestamp = now
+                )
+            )
+        }
+    }
+
     override suspend fun replaceAll(items: List<MediaItem>) = withContext(Dispatchers.IO) {
         runInTransaction {
             dao.deleteAll()
@@ -542,20 +584,20 @@ class MediaRepositoryImpl(
         }
     }
 
-    private fun categoryToType(category: MediaCategory): String = when (category) {
-        MediaCategory.NOVEL -> "NOVEL"
-        MediaCategory.MANGA -> "MANGA"
-        MediaCategory.ANIME, MediaCategory.MOVIE, MediaCategory.TV -> "ANIME"
-        MediaCategory.GAME -> "GAME"
+    private fun mediaTypeToDbType(mediaType: MediaType): String = when (mediaType) {
+        MediaType.NOVEL -> "NOVEL"
+        MediaType.MANGA -> "MANGA"
+        MediaType.ANIME, MediaType.MOVIE, MediaType.TV -> "ANIME"
+        MediaType.GAME -> "GAME"
     }
 
-    private fun resolveTypeAndFormat(categoryId: String?): Pair<String?, String?> {
-        if (categoryId == null) return null to null
-        return when (categoryId.uppercase()) {
-            "NOVEL", "CAT_NOVEL" -> "NOVEL" to null
-            "MANGA", "CAT_MANGA" -> "MANGA" to null
-            "ANIME", "CAT_ANIME" -> "ANIME" to null
-            "GAME", "CAT_GAME" -> "GAME" to null
+    private fun resolveTypeAndFormat(typeId: String?): Pair<String?, String?> {
+        if (typeId == null) return null to null
+        return when (typeId.uppercase()) {
+            "NOVEL", "TYP_NOVEL" -> "NOVEL" to null
+            "MANGA", "TYP_MANGA" -> "MANGA" to null
+            "ANIME", "TYP_ANIME" -> "ANIME" to null
+            "GAME", "TYP_GAME" -> "GAME" to null
             "LIGHT_NOVEL", "TYP_NOVEL_LN" -> "NOVEL" to "LIGHT_NOVEL"
             "WEB_NOVEL", "TYP_NOVEL_CN", "TYP_NOVEL_KR" -> "NOVEL" to "WEB_NOVEL"
             "MANHWA", "TYP_MANHWA" -> "MANGA" to "MANHWA"
@@ -569,7 +611,7 @@ class MediaRepositoryImpl(
             "CONSOLE" -> "GAME" to "CONSOLE"
             "WEB" -> "GAME" to "WEB"
             "CROSS_PLATFORM" -> "GAME" to "CROSS_PLATFORM"
-            else -> categoryId to null
+            else -> typeId to null
         }
     }
 
@@ -611,7 +653,9 @@ class MediaRepositoryImpl(
             lastUpdated = updatedAt,
             dateAdded = createdAt,
             deletedAt = deletedAt,
-            isAdult = isAdult
+            isAdult = isAdult,
+            repeat = repeat,
+            durationMinutes = durationMinutes
         )
     }
 
@@ -653,7 +697,9 @@ class MediaRepositoryImpl(
             lastUpdated = updatedAt,
             dateAdded = createdAt,
             deletedAt = deletedAt,
-            isAdult = isAdult
+            isAdult = isAdult,
+            repeat = repeat,
+            durationMinutes = durationMinutes
         )
     }
 
@@ -724,7 +770,7 @@ class MediaRepositoryImpl(
             secondaryProgress = secondaryProgress,
             secondaryProgressTotal = secondaryProgressTotal,
             scoreRaw = rawScore,
-            repeat = 0,
+            repeat = repeat,
             notes = notes,
             genres = genresJson,
             tags = tagsJson,
@@ -736,7 +782,7 @@ class MediaRepositoryImpl(
             endYear = eYear,
             endMonth = eMonth,
             endDay = eDay,
-            durationMinutes = null,
+            durationMinutes = durationMinutes,
             avgChapterLength = avgChapterLength,
             lengthUnitOverride = lengthUnitOverride,
             playbackSpeed = playbackSpeed,

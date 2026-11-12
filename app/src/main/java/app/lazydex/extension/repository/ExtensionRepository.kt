@@ -10,7 +10,7 @@ import app.lazydex.domain.model.ExtensionPackage
 import app.lazydex.domain.model.ExtensionRepo
 import app.lazydex.domain.model.ExtensionRuntimeType
 import app.lazydex.domain.model.InstalledExtension
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.SyncStatus
 import app.lazydex.extension.manifest.ManifestParser
 import app.lazydex.extension.runtime.DexRuntimeEngine
@@ -122,7 +122,7 @@ class ExtensionRepository(
                         isInstalled = true,
                         hasUpdate = hasUpdate,
                         installedVersionName = installed.versionName,
-                        categoryOverride = installed.categoryOverride?.let { runCatching { MediaCategory.valueOf(it) }.getOrNull() }
+                        typeOverride = installed.typeOverride?.let { runCatching { MediaType.valueOf(it) }.getOrNull() }
                     )
                 } else {
                     pkg
@@ -293,7 +293,7 @@ class ExtensionRepository(
                 }
 
                 val existing = installedDao.getExtension(pkg.pkgName)
-                val preservedCategory = pkg.categoryOverride?.name ?: existing?.categoryOverride
+                val preservedType = pkg.typeOverride?.name ?: existing?.typeOverride
 
                 val installedEntity = InstalledExtensionEntity(
                     pkgName = pkg.pkgName,
@@ -307,7 +307,7 @@ class ExtensionRepository(
                     apkOrArtifactPath = targetFile.absolutePath,
                     iconUrl = pkg.iconUrl,
                     entryClassOrFile = entryClassOrFile,
-                    categoryOverride = preservedCategory,
+                    typeOverride = preservedType,
                     installedAt = existing?.installedAt ?: System.currentTimeMillis(),
                     hasUpdate = false,
                     latestVersionName = null,
@@ -338,17 +338,17 @@ class ExtensionRepository(
         }
     }
 
-    suspend fun setCategoryOverride(pkgName: String, category: MediaCategory?) = withContext(Dispatchers.IO) {
-        installedDao.updateCategoryOverride(pkgName, category?.name)
+    suspend fun setTypeOverride(pkgName: String, mediaType: MediaType?) = withContext(Dispatchers.IO) {
+        installedDao.updateTypeOverride(pkgName, mediaType?.name)
     }
 
     private fun loadSourceFromEntity(entity: InstalledExtensionEntity): Source? {
         val file = File(entity.apkOrArtifactPath)
         if (!file.exists()) return null
 
-        val categoryHint = entity.categoryOverride?.let {
-            runCatching { MediaCategory.valueOf(it) }.getOrNull()
-        } ?: runCatching { ExtensionEcosystem.valueOf(entity.ecosystem).defaultCategory }.getOrNull()
+        val typeHint = entity.typeOverride?.let {
+            runCatching { MediaType.valueOf(it) }.getOrNull()
+        } ?: runCatching { ExtensionEcosystem.valueOf(entity.ecosystem).defaultType }.getOrNull()
 
         val runtimeType = runCatching { ExtensionRuntimeType.valueOf(entity.runtimeType) }.getOrDefault(ExtensionRuntimeType.UNSUPPORTED)
 
@@ -356,18 +356,18 @@ class ExtensionRepository(
             ExtensionRuntimeType.DEX_MIHON,
             ExtensionRuntimeType.DEX_ANIYOMI,
             ExtensionRuntimeType.DEX_IREADER -> {
-                dexEngine.loadSource(entity.pkgName, file, entity.entryClassOrFile, categoryHint)
+                dexEngine.loadSource(entity.pkgName, file, entity.entryClassOrFile, typeHint)
             }
             ExtensionRuntimeType.JS_LNREADER,
             ExtensionRuntimeType.JS_MANGAYOMI -> {
-                jsEngine.loadSource(entity.pkgName, file, entity.name, categoryHint)
+                jsEngine.loadSource(entity.pkgName, file, entity.name, typeHint)
             }
             ExtensionRuntimeType.LUA_SHOSETSU -> {
-                luaEngine.loadSource(entity.pkgName, file, entity.name, categoryHint)
+                luaEngine.loadSource(entity.pkgName, file, entity.name, typeHint)
             }
             ExtensionRuntimeType.WASM_TSUNDOKU,
             ExtensionRuntimeType.WASM_AIDOKU -> {
-                wasmEngine.loadSource(entity.pkgName, file, entity.name, categoryHint)
+                wasmEngine.loadSource(entity.pkgName, file, entity.name, typeHint)
             }
             ExtensionRuntimeType.UNSUPPORTED -> null
         }
@@ -474,7 +474,7 @@ class ExtensionRepository(
         apkOrArtifactPath = apkOrArtifactPath,
         iconUrl = iconUrl,
         entryClassOrFile = entryClassOrFile,
-        categoryOverride = categoryOverride?.let { runCatching { MediaCategory.valueOf(it) }.getOrNull() },
+        typeOverride = typeOverride?.let { runCatching { MediaType.valueOf(it) }.getOrNull() },
         installedAt = installedAt,
         hasUpdate = hasUpdate,
         latestVersionName = latestVersionName,

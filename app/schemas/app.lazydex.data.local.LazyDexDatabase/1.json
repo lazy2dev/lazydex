@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "0b04c64162e1969acf6dd902b2d0ce9f",
+    "identityHash": "f25f6848c1764132eb3dfc7a3fe9a61f",
     "entities": [
       {
         "tableName": "media_items",
@@ -730,7 +730,7 @@
       },
       {
         "tableName": "installed_extensions",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`pkgName` TEXT NOT NULL, `repoId` TEXT NOT NULL, `name` TEXT NOT NULL, `versionName` TEXT NOT NULL, `versionCode` INTEGER NOT NULL, `lang` TEXT NOT NULL, `ecosystem` TEXT NOT NULL, `runtimeType` TEXT NOT NULL, `apkOrArtifactPath` TEXT NOT NULL, `iconUrl` TEXT, `entryClassOrFile` TEXT, `categoryOverride` TEXT, `installedAt` INTEGER NOT NULL, `hasUpdate` INTEGER NOT NULL, `latestVersionName` TEXT, `latestVersionCode` INTEGER, `downloadUrl` TEXT, PRIMARY KEY(`pkgName`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`pkgName` TEXT NOT NULL, `repoId` TEXT NOT NULL, `name` TEXT NOT NULL, `versionName` TEXT NOT NULL, `versionCode` INTEGER NOT NULL, `lang` TEXT NOT NULL, `ecosystem` TEXT NOT NULL, `runtimeType` TEXT NOT NULL, `apkOrArtifactPath` TEXT NOT NULL, `iconUrl` TEXT, `entryClassOrFile` TEXT, `typeOverride` TEXT, `installedAt` INTEGER NOT NULL, `hasUpdate` INTEGER NOT NULL, `latestVersionName` TEXT, `latestVersionCode` INTEGER, `downloadUrl` TEXT, PRIMARY KEY(`pkgName`))",
         "fields": [
           {
             "fieldPath": "pkgName",
@@ -799,8 +799,8 @@
             "notNull": false
           },
           {
-            "fieldPath": "categoryOverride",
-            "columnName": "categoryOverride",
+            "fieldPath": "typeOverride",
+            "columnName": "typeOverride",
             "affinity": "TEXT",
             "notNull": false
           },
@@ -863,7 +863,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '0b04c64162e1969acf6dd902b2d0ce9f')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f25f6848c1764132eb3dfc7a3fe9a61f')"
     ]
   }
 }

@@ -61,7 +61,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.lazydex.data.local.LibraryDisplayMode
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.SortDirection
 import app.lazydex.domain.model.SortField
 import app.lazydex.domain.model.StatusFilter
@@ -73,7 +73,7 @@ import kotlinx.coroutines.launch
 fun DexSettingsSheet(
     sheetState: SheetState,
     onDismissRequest: () -> Unit,
-    selectedCategory: MediaCategory?,
+    selectedType: MediaType?,
     selectedStatus: StatusFilter,
     selectedGenres: Set<String>,
     availableGenres: List<String>,
@@ -84,7 +84,7 @@ fun DexSettingsSheet(
     maxRating: Double? = null,
     sortField: SortField,
     sortDirection: SortDirection,
-    onSelectCategory: (MediaCategory?) -> Unit,
+    onSelectType: (MediaType?) -> Unit,
     onSelectStatus: (StatusFilter) -> Unit,
     onToggleGenre: (String) -> Unit,
     onToggleTag: (String) -> Unit,
@@ -96,8 +96,8 @@ fun DexSettingsSheet(
     onSelectDisplayMode: (LibraryDisplayMode) -> Unit = {},
     gridColumns: Int = 0,
     onSelectGridColumns: (Int) -> Unit = {},
-    showCategoryTabs: Boolean = true,
-    onToggleCategoryTabs: (Boolean) -> Unit = {},
+    showTypeTabs: Boolean = true,
+    onToggleTypeTabs: (Boolean) -> Unit = {},
     showProgressBadge: Boolean = true,
     onToggleProgressBadge: (Boolean) -> Unit = {},
     showStatusBadge: Boolean = true,
@@ -161,14 +161,14 @@ fun DexSettingsSheet(
             ) { page ->
                 when (page) {
                     0 -> FilterPage(
-                        selectedCategory = selectedCategory,
+                        selectedType = selectedType,
                         selectedStatus = selectedStatus,
                         selectedGenres = selectedGenres,
                         availableGenres = availableGenres,
                         selectedTags = selectedTags,
                         availableTags = availableTags,
                         authorQuery = authorQuery,
-                        onSelectCategory = onSelectCategory,
+                        onSelectType = onSelectType,
                         onSelectStatus = onSelectStatus,
                         onToggleGenre = onToggleGenre,
                         onToggleTag = onToggleTag,
@@ -186,8 +186,8 @@ fun DexSettingsSheet(
                         onSelectDisplayMode = onSelectDisplayMode,
                         gridColumns = gridColumns,
                         onSelectGridColumns = onSelectGridColumns,
-                        showCategoryTabs = showCategoryTabs,
-                        onToggleCategoryTabs = onToggleCategoryTabs,
+                        showTypeTabs = showTypeTabs,
+                        onToggleTypeTabs = onToggleTypeTabs,
                         showProgressBadge = showProgressBadge,
                         onToggleProgressBadge = onToggleProgressBadge,
                         showStatusBadge = showStatusBadge,
@@ -205,68 +205,68 @@ fun DexSettingsSheet(
 
 @Composable
 private fun FilterPage(
-    selectedCategory: MediaCategory?,
+    selectedType: MediaType?,
     selectedStatus: StatusFilter,
     selectedGenres: Set<String>,
     availableGenres: List<String>,
     selectedTags: Set<String>,
     availableTags: List<String>,
     authorQuery: String,
-    onSelectCategory: (MediaCategory?) -> Unit,
+    onSelectType: (MediaType?) -> Unit,
     onSelectStatus: (StatusFilter) -> Unit,
     onToggleGenre: (String) -> Unit,
     onToggleTag: (String) -> Unit,
     onSetAuthorQuery: (String) -> Unit,
     onClearAll: () -> Unit,
 ) {
-    var showCategoryDialog by remember { mutableStateOf(false) }
+    var showTypeDialog by remember { mutableStateOf(false) }
 
-    if (showCategoryDialog) {
+    if (showTypeDialog) {
         AlertDialog(
-            onDismissRequest = { showCategoryDialog = false },
-            title = { Text("Categories") },
+            onDismissRequest = { showTypeDialog = false },
+            title = { Text("Types") },
             text = {
                 Column {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                onSelectCategory(null)
-                                showCategoryDialog = false
+                                onSelectType(null)
+                                showTypeDialog = false
                             }
                             .padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
-                            selected = selectedCategory == null,
+                            selected = selectedType == null,
                             onClick = null
                         )
                         Spacer(modifier = Modifier.width(16.dp))
                         Text("All")
                     }
-                    MediaCategory.entries.forEach { cat ->
+                    MediaType.entries.forEach { type ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    onSelectCategory(cat)
-                                    showCategoryDialog = false
+                                    onSelectType(type)
+                                    showTypeDialog = false
                                 }
                                 .padding(vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
-                                selected = selectedCategory == cat,
+                                selected = selectedType == type,
                                 onClick = null
                             )
                             Spacer(modifier = Modifier.width(16.dp))
-                            Text(cat.displayName)
+                            Text(type.displayName)
                         }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showCategoryDialog = false }) {
+                TextButton(onClick = { showTypeDialog = false }) {
                     Text("Close")
                 }
             }
@@ -289,7 +289,7 @@ private fun FilterPage(
         )
         statusList.forEach { stat ->
             val isChecked = selectedStatus == stat
-            val label = selectedCategory.statusLabel(stat)
+            val label = selectedType.statusLabel(stat)
             CheckboxItem(
                 label = label,
                 checked = isChecked,
@@ -303,20 +303,20 @@ private fun FilterPage(
             )
         }
 
-        // Categories Row with inline Edit button (matches Komikku)
-        val categoryLabel = if (selectedCategory == null) "Categories" else "Categories (${selectedCategory.displayName})"
+        // Types Row with inline Edit button (matches Komikku)
+        val typeLabel = if (selectedType == null) "Types" else "Types (${selectedType.displayName})"
         CheckboxItem(
-            label = categoryLabel,
-            checked = selectedCategory != null,
+            label = typeLabel,
+            checked = selectedType != null,
             onClick = {
-                if (selectedCategory != null) {
-                    onSelectCategory(null)
+                if (selectedType != null) {
+                    onSelectType(null)
                 } else {
-                    showCategoryDialog = true
+                    showTypeDialog = true
                 }
             },
             trailingContent = {
-                TextButton(onClick = { showCategoryDialog = true }) {
+                TextButton(onClick = { showTypeDialog = true }) {
                     Text("Edit")
                 }
             }
@@ -449,8 +449,8 @@ private fun DisplayPage(
     onSelectDisplayMode: (LibraryDisplayMode) -> Unit,
     gridColumns: Int,
     onSelectGridColumns: (Int) -> Unit,
-    showCategoryTabs: Boolean,
-    onToggleCategoryTabs: (Boolean) -> Unit,
+    showTypeTabs: Boolean,
+    onToggleTypeTabs: (Boolean) -> Unit,
     showProgressBadge: Boolean,
     onToggleProgressBadge: (Boolean) -> Unit,
     showStatusBadge: Boolean,
@@ -522,9 +522,9 @@ private fun DisplayPage(
         Spacer(modifier = Modifier.height(8.dp))
         HeadingItem(text = "Tabs")
         CheckboxItem(
-            label = "Show category tabs",
-            checked = showCategoryTabs,
-            onClick = { onToggleCategoryTabs(!showCategoryTabs) }
+            label = "Show type tabs",
+            checked = showTypeTabs,
+            onClick = { onToggleTypeTabs(!showTypeTabs) }
         )
         CheckboxItem(
             label = "Show number of items",

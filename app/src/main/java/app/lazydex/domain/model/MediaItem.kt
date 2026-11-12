@@ -46,25 +46,27 @@ data class MediaItem(
     val extraData: String = "{}",
     val deletedAt: Long? = null,
     val isDeleted: Boolean = deletedAt != null,
-    val isAdult: Boolean = false
+    val isAdult: Boolean = false,
+    val repeat: Int = 0,
+    val durationMinutes: Int? = null
 ) {
-    val categoryId: String get() = when {
+    val typeId: String get() = when {
         format.equals("MANHWA", ignoreCase = true) || (type.equals("MANGA", ignoreCase = true) && countryOfOrigin.equals("KR", ignoreCase = true)) -> "typ_manhwa"
         format.equals("MANHUA", ignoreCase = true) || (type.equals("MANGA", ignoreCase = true) && (countryOfOrigin.equals("CN", ignoreCase = true) || countryOfOrigin.equals("TW", ignoreCase = true))) -> "typ_manhua"
         format.equals("LIGHT_NOVEL", ignoreCase = true) -> "typ_novel_ln"
         format.equals("WEB_NOVEL", ignoreCase = true) && countryOfOrigin.equals("KR", ignoreCase = true) -> "typ_novel_kr"
         format.equals("WEB_NOVEL", ignoreCase = true) -> "typ_novel_cn"
-        type.equals("MANGA", ignoreCase = true) -> "cat_manga"
-        type.equals("ANIME", ignoreCase = true) -> "cat_anime"
-        type.equals("GAME", ignoreCase = true) -> "cat_game"
-        else -> "cat_novel"
+        type.equals("MANGA", ignoreCase = true) -> "typ_manga"
+        type.equals("ANIME", ignoreCase = true) -> "typ_anime"
+        type.equals("GAME", ignoreCase = true) -> "typ_game"
+        else -> "typ_novel"
     }
 
-    val category: MediaCategory get() = when (type.uppercase()) {
-        "MANGA" -> MediaCategory.MANGA
-        "ANIME" -> MediaCategory.ANIME
-        "GAME" -> MediaCategory.GAME
-        else -> MediaCategory.NOVEL
+    val mediaType: MediaType get() = when (type.uppercase()) {
+        "MANGA" -> MediaType.MANGA
+        "ANIME" -> MediaType.ANIME
+        "GAME" -> MediaType.GAME
+        else -> MediaType.NOVEL
     }
 
     val unitName: String get() = when (type.uppercase()) {
@@ -90,7 +92,7 @@ data class MediaItem(
 
     constructor(
         id: String,
-        category: MediaCategory,
+        mediaType: MediaType,
         title: String,
         alternativeTitles: List<String> = emptyList(),
         sourceUrl: String? = null,
@@ -111,22 +113,24 @@ data class MediaItem(
         dateAdded: Long = System.currentTimeMillis(),
         extraData: String = "{}",
         isDeleted: Boolean = false,
-        isAdult: Boolean = false
+        isAdult: Boolean = false,
+        repeat: Int = 0,
+        durationMinutes: Int? = null
     ) : this(
         id = id,
-        type = when (category) {
-            MediaCategory.NOVEL -> "NOVEL"
-            MediaCategory.MANGA -> "MANGA"
-            MediaCategory.ANIME, MediaCategory.MOVIE, MediaCategory.TV -> "ANIME"
-            MediaCategory.GAME -> "GAME"
+        type = when (mediaType) {
+            MediaType.NOVEL -> "NOVEL"
+            MediaType.MANGA -> "MANGA"
+            MediaType.ANIME, MediaType.MOVIE, MediaType.TV -> "ANIME"
+            MediaType.GAME -> "GAME"
         },
-        format = when (category) {
-            MediaCategory.NOVEL -> "NOVEL"
-            MediaCategory.MANGA -> "MANGA"
-            MediaCategory.MOVIE -> "MOVIE"
-            MediaCategory.TV -> "TV"
-            MediaCategory.ANIME -> "TV"
-            MediaCategory.GAME -> "PC"
+        format = when (mediaType) {
+            MediaType.NOVEL -> "NOVEL"
+            MediaType.MANGA -> "MANGA"
+            MediaType.MOVIE -> "MOVIE"
+            MediaType.TV -> "TV"
+            MediaType.ANIME -> "TV"
+            MediaType.GAME -> "PC"
         },
         countryOfOrigin = null,
         title = title,
@@ -152,12 +156,14 @@ data class MediaItem(
         extraData = extraData,
         deletedAt = if (isDeleted) lastUpdated else null,
         isDeleted = isDeleted,
-        isAdult = isAdult
+        isAdult = isAdult,
+        repeat = repeat,
+        durationMinutes = durationMinutes
     )
 
     constructor(
         id: String,
-        categoryId: String,
+        typeId: String,
         title: String,
         alternativeTitles: List<String> = emptyList(),
         sourceUrl: String? = null,
@@ -188,30 +194,30 @@ data class MediaItem(
         deletedAt: Long? = null,
         isDeleted: Boolean = deletedAt != null,
         isAdult: Boolean = false,
-        category: MediaCategory = resolveMediaCategory(categoryId)
+        mediaType: MediaType = resolveMediaType(typeId)
     ) : this(
         id = id,
-        type = when (category) {
-            MediaCategory.NOVEL -> "NOVEL"
-            MediaCategory.MANGA -> "MANGA"
-            MediaCategory.ANIME, MediaCategory.MOVIE, MediaCategory.TV -> "ANIME"
-            MediaCategory.GAME -> "GAME"
+        type = when (mediaType) {
+            MediaType.NOVEL -> "NOVEL"
+            MediaType.MANGA -> "MANGA"
+            MediaType.ANIME, MediaType.MOVIE, MediaType.TV -> "ANIME"
+            MediaType.GAME -> "GAME"
         },
         format = when {
-            categoryId.contains("manhwa", ignoreCase = true) -> "MANHWA"
-            categoryId.contains("manhua", ignoreCase = true) -> "MANHUA"
-            categoryId.contains("cn", ignoreCase = true) -> "WEB_NOVEL"
-            categoryId.contains("kr", ignoreCase = true) -> "WEB_NOVEL"
-            categoryId.contains("ln", ignoreCase = true) -> "LIGHT_NOVEL"
-            category == MediaCategory.MOVIE -> "MOVIE"
-            category == MediaCategory.TV -> "TV"
-            category == MediaCategory.GAME -> "PC"
+            typeId.contains("manhwa", ignoreCase = true) -> "MANHWA"
+            typeId.contains("manhua", ignoreCase = true) -> "MANHUA"
+            typeId.contains("cn", ignoreCase = true) -> "WEB_NOVEL"
+            typeId.contains("kr", ignoreCase = true) -> "WEB_NOVEL"
+            typeId.contains("ln", ignoreCase = true) -> "LIGHT_NOVEL"
+            mediaType == MediaType.MOVIE -> "MOVIE"
+            mediaType == MediaType.TV -> "TV"
+            mediaType == MediaType.GAME -> "PC"
             else -> ""
         },
         countryOfOrigin = when {
-            categoryId.contains("cn", ignoreCase = true) || categoryId.contains("manhua", ignoreCase = true) -> "CN"
-            categoryId.contains("kr", ignoreCase = true) || categoryId.contains("manhwa", ignoreCase = true) -> "KR"
-            categoryId.contains("jp", ignoreCase = true) -> "JP"
+            typeId.contains("cn", ignoreCase = true) || typeId.contains("manhua", ignoreCase = true) -> "CN"
+            typeId.contains("kr", ignoreCase = true) || typeId.contains("manhwa", ignoreCase = true) -> "KR"
+            typeId.contains("jp", ignoreCase = true) -> "JP"
             else -> null
         },
         title = title,

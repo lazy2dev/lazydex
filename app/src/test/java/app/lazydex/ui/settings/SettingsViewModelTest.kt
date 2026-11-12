@@ -7,7 +7,7 @@ import org.junit.Assert.assertNull
 import app.lazydex.data.local.LibraryDisplayMode
 import app.lazydex.data.local.ThemePreferences
 import app.lazydex.data.local.ThemePreset
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.MediaStats
 import app.lazydex.domain.model.StatusFilter
@@ -44,15 +44,15 @@ class SettingsViewModelTest {
         val items: MutableList<MediaItem> = mutableListOf()
     ) : MediaRepository {
         override fun observeAll(): Flow<List<MediaItem>> = flowOf(items)
-        override fun observeByCategory(category: MediaCategory): Flow<List<MediaItem>> = flowOf(items.filter { it.category == category })
-        override fun observeFiltered(category: MediaCategory?, statusFilter: StatusFilter): Flow<List<MediaItem>> = flowOf(items)
+        override fun observeByType(mediaType: MediaType): Flow<List<MediaItem>> = flowOf(items.filter { it.mediaType == mediaType })
+        override fun observeFiltered(mediaType: MediaType?, statusFilter: StatusFilter): Flow<List<MediaItem>> = flowOf(items)
         override fun observeById(id: String): Flow<MediaItem?> = flowOf(items.find { it.id == id })
         override fun observeCount(): Flow<Int> = flowOf(items.size)
         override fun observeStats(): Flow<MediaStats> = flowOf(MediaStats(0, 0, 0, null, 0, 0, 0, 0, 0))
-        override fun observeCategoryCounts(): Flow<Map<MediaCategory, Int>> = flowOf(emptyMap())
-        override fun observeStatusCounts(category: MediaCategory?): Flow<Map<StatusFilter, Int>> = flowOf(emptyMap())
-        override fun observeDistinctGenres(category: MediaCategory?): Flow<List<String>> = flowOf(emptyList())
-        override fun observeDistinctTags(category: MediaCategory?): Flow<List<String>> = flowOf(emptyList())
+        override fun observeTypeCounts(): Flow<Map<MediaType, Int>> = flowOf(emptyMap())
+        override fun observeStatusCounts(mediaType: MediaType?): Flow<Map<StatusFilter, Int>> = flowOf(emptyMap())
+        override fun observeDistinctGenres(mediaType: MediaType?): Flow<List<String>> = flowOf(emptyList())
+        override fun observeDistinctTags(mediaType: MediaType?): Flow<List<String>> = flowOf(emptyList())
 
         override suspend fun getById(id: String): MediaItem? = items.find { it.id == id }
         override suspend fun getAll(): List<MediaItem> = items.toList()
@@ -116,8 +116,8 @@ class SettingsViewModelTest {
             _displayPreferences.value = _displayPreferences.value.copy(gridColumns = columns)
         }
 
-        override suspend fun setShowCategoryTabs(enabled: Boolean) {
-            _displayPreferences.value = _displayPreferences.value.copy(showCategoryTabs = enabled)
+        override suspend fun setShowTypeTabs(enabled: Boolean) {
+            _displayPreferences.value = _displayPreferences.value.copy(showTypeTabs = enabled)
         }
 
         override suspend fun setShowProgressBadge(enabled: Boolean) {
@@ -232,7 +232,7 @@ class SettingsViewModelTest {
             MediaItem(
                 id = "item-1",
                 title = "Active 1",
-                category = MediaCategory.NOVEL,
+                mediaType = MediaType.NOVEL,
                 coverImagePath = activeFile1.absolutePath,
                 currentProgress = 10,
                 totalItems = 100,
@@ -243,7 +243,7 @@ class SettingsViewModelTest {
             MediaItem(
                 id = "item-2",
                 title = "Active 2",
-                category = MediaCategory.MANGA,
+                mediaType = MediaType.MANGA,
                 coverImagePath = activeFile2.absolutePath,
                 currentProgress = 5,
                 totalItems = 50,
@@ -254,7 +254,7 @@ class SettingsViewModelTest {
             MediaItem(
                 id = "item-3",
                 title = "Active 3",
-                category = MediaCategory.ANIME,
+                mediaType = MediaType.ANIME,
                 coverImagePath = "", // Blank cover path in DB, but file exists named item-3.png
                 currentProgress = 1,
                 totalItems = 12,
@@ -265,7 +265,7 @@ class SettingsViewModelTest {
             MediaItem(
                 id = "item-4",
                 title = "Active 4",
-                category = MediaCategory.GAME,
+                mediaType = MediaType.GAME,
                 coverImagePath = "/different/virtual/dir/custom_named_cover.jpg",
                 currentProgress = 0,
                 totalItems = 1,
@@ -316,7 +316,7 @@ class SettingsViewModelTest {
             MediaItem(
                 id = "item-1",
                 title = "Active 1",
-                category = MediaCategory.NOVEL,
+                mediaType = MediaType.NOVEL,
                 coverImagePath = activeFile.absolutePath,
                 currentProgress = 0,
                 totalItems = 0,

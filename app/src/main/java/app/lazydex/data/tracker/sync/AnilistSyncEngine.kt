@@ -132,7 +132,7 @@ open class AnilistSyncEngine(
         return Triple("MANGA", mangaFormat, c)
     }
 
-    fun mapToCategoryId(
+    fun mapToTypeId(
         format: String?,
         type: String,
         countryOfOrigin: String? = null,
@@ -466,6 +466,7 @@ open class AnilistSyncEngine(
                         secondaryProgress = resolvedSecondaryProgress,
                         scoreRaw = resolvedScore,
                         repeat = resolvedRepeat,
+                        durationMinutes = entry.media?.duration ?: localItem.durationMinutes,
                         isPrivate = resolvedPrivate,
                         notes = resolvedNotes,
                         progressTotal = updatedProgressTotal,

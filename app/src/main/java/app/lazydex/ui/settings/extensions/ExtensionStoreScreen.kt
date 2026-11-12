@@ -76,9 +76,9 @@ import androidx.compose.ui.unit.sp
 import app.lazydex.domain.model.ExtensionEcosystem
 import app.lazydex.domain.model.ExtensionPackage
 import app.lazydex.domain.model.InstalledExtension
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.SyncStatus
-import app.lazydex.ui.components.CategoryBadge
+import app.lazydex.ui.components.TypeBadge
 import coil3.compose.AsyncImage
 import org.koin.androidx.compose.koinViewModel
 
@@ -256,7 +256,7 @@ fun ExtensionStoreScreen(
                                     (uiState.searchQuery.isBlank() || it.name.contains(uiState.searchQuery, ignoreCase = true))
                         },
                         onUninstall = { viewModel.uninstallExtension(it.pkgName, it.name) },
-                        onOpenCategoryPicker = { viewModel.openCategoryPicker(it) },
+                        onOpenTypePicker = { viewModel.openTypePicker(it) },
                         onUpdate = { ext ->
                             val pkg = uiState.availableExtensions.firstOrNull { it.pkgName == ext.pkgName }
                             if (pkg != null) viewModel.installExtension(pkg)
@@ -428,52 +428,52 @@ fun ExtensionStoreScreen(
         }
     }
 
-    // Category Override Picker Dialog
-    uiState.categoryPickerExtension?.let { ext ->
+    // Type Override Picker Dialog
+    uiState.typePickerExtension?.let { ext ->
         AlertDialog(
-            onDismissRequest = { viewModel.dismissCategoryPicker() },
-            title = { Text("Category for ${ext.name}") },
+            onDismissRequest = { viewModel.dismissTypePicker() },
+            title = { Text("Type for ${ext.name}") },
             text = {
                 Column {
                     Text(
-                        "Override the default media category for this extension's search & scrape results:",
+                        "Override the default media type for this extension's search & scrape results:",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    val defaultCategory = ext.ecosystem.defaultCategory
-                    val selectedCategory = ext.categoryOverride
+                    val defaultType = ext.ecosystem.defaultType
+                    val selectedType = ext.typeOverride
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { viewModel.setCategoryOverride(null) }
+                            .clickable { viewModel.setTypeOverride(null) }
                             .padding(vertical = 4.dp)
                     ) {
-                        RadioButton(selected = selectedCategory == null, onClick = { viewModel.setCategoryOverride(null) })
+                        RadioButton(selected = selectedType == null, onClick = { viewModel.setTypeOverride(null) })
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Auto (${defaultCategory.name})")
+                        Text("Auto (${defaultType.name})")
                     }
 
-                    MediaCategory.entries.forEach { cat ->
+                    MediaType.entries.forEach { mediaType ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { viewModel.setCategoryOverride(cat) }
+                                .clickable { viewModel.setTypeOverride(mediaType) }
                                 .padding(vertical = 4.dp)
                         ) {
-                            RadioButton(selected = selectedCategory == cat, onClick = { viewModel.setCategoryOverride(cat) })
+                            RadioButton(selected = selectedType == mediaType, onClick = { viewModel.setTypeOverride(mediaType) })
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(cat.name)
+                            Text(mediaType.name)
                         }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { viewModel.dismissCategoryPicker() }) {
+                TextButton(onClick = { viewModel.dismissTypePicker() }) {
                     Text("Close")
                 }
             }
@@ -485,7 +485,7 @@ fun ExtensionStoreScreen(
 private fun InstalledExtensionsTab(
     installed: List<InstalledExtension>,
     onUninstall: (InstalledExtension) -> Unit,
-    onOpenCategoryPicker: (InstalledExtension) -> Unit,
+    onOpenTypePicker: (InstalledExtension) -> Unit,
     onUpdate: (InstalledExtension) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -574,9 +574,9 @@ private fun InstalledExtensionsTab(
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(4.dp))
-                                        .clickable { onOpenCategoryPicker(ext) }
+                                        .clickable { onOpenTypePicker(ext) }
                                 ) {
-                                    CategoryBadge(category = ext.categoryOverride ?: ext.ecosystem.defaultCategory)
+                                    TypeBadge(mediaType = ext.typeOverride ?: ext.ecosystem.defaultType)
                                 }
                             }
                         }

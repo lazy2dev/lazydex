@@ -43,7 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.lazydex.R
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.ui.components.icon
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -54,7 +54,7 @@ import java.io.File
 fun MediaInfoHeader(
     title: String,
     author: String,
-    category: MediaCategory,
+    mediaType: MediaType,
     formatName: String?,
     sourceUrl: String? = null,
     totalItems: Int? = null,
@@ -171,9 +171,9 @@ fun MediaInfoHeader(
                     // Type, Format & Source/Units row styled matching the Author row
                     val formatDisplayText = when {
                         !formatName.isNullOrBlank() &&
-                            !formatName.equals(category.displayName, ignoreCase = true) &&
-                            !formatName.startsWith("cat_", ignoreCase = true) -> formatName
-                        else -> category.displayName
+                            !formatName.equals(mediaType.displayName, ignoreCase = true) &&
+                            !formatName.startsWith("typ_", ignoreCase = true) -> formatName
+                        else -> mediaType.displayName
                     }
 
                     val secondaryInfo = buildString {
@@ -183,11 +183,11 @@ fun MediaInfoHeader(
                         }
                         if (totalItems != null && totalItems > 0) {
                             if (isNotEmpty()) append(" • ")
-                            val unit = when (category) {
-                                MediaCategory.NOVEL, MediaCategory.MANGA -> "Chapters"
-                                MediaCategory.ANIME, MediaCategory.TV -> "Episodes"
-                                MediaCategory.GAME -> "Hours"
-                                MediaCategory.MOVIE -> "Parts"
+                            val unit = when (mediaType) {
+                                MediaType.NOVEL, MediaType.MANGA -> "Chapters"
+                                MediaType.ANIME, MediaType.TV -> "Episodes"
+                                MediaType.GAME -> "Hours"
+                                MediaType.MOVIE -> "Parts"
                             }
                             append("$totalItems $unit")
                         }
@@ -199,7 +199,7 @@ fun MediaInfoHeader(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(
-                            imageVector = category.icon(),
+                            imageVector = mediaType.icon(),
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant

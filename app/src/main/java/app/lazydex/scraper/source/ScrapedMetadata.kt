@@ -1,6 +1,6 @@
 package app.lazydex.scraper.source
 
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 
 data class ScrapedMetadata(
     val title: String,
@@ -10,6 +10,6 @@ data class ScrapedMetadata(
     val description: String = "",
     val genres: List<String> = emptyList(),
     val tags: List<String> = emptyList(),
-    val category: MediaCategory? = null,
+    val type: MediaType? = null,
     val status: String? = null
 )

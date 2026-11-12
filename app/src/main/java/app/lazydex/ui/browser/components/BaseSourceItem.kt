@@ -28,7 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.lazydex.scraper.source.Source
-import app.lazydex.ui.components.CategoryBadge
+import app.lazydex.ui.components.TypeBadge
 import app.lazydex.ui.components.color
 import app.lazydex.ui.components.icon
 
@@ -47,9 +47,9 @@ fun BaseSourceItem(
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
-        val category = source.categoryHint
-        val iconColor = category?.color() ?: MaterialTheme.colorScheme.primary
-        val iconVector = category?.icon() ?: Icons.Default.Language
+        val mediaType = source.typeHint
+        val iconColor = mediaType?.color() ?: MaterialTheme.colorScheme.primary
+        val iconVector = mediaType?.icon() ?: Icons.Default.Language
 
         Box(
             contentAlignment = Alignment.Center,
@@ -89,9 +89,9 @@ fun BaseSourceItem(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (category != null) {
+                if (mediaType != null) {
                     Spacer(modifier = Modifier.width(6.dp))
-                    CategoryBadge(category = category)
+                    TypeBadge(mediaType = mediaType)
                 }
             }
         }

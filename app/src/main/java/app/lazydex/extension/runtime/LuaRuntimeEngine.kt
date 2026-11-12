@@ -1,6 +1,6 @@
 package app.lazydex.extension.runtime
 
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.scraper.source.ScrapedMetadata
 import app.lazydex.scraper.source.SearchResult
 import app.lazydex.scraper.source.Source
@@ -115,7 +115,7 @@ class LuaRuntimeEngine(
         pkgName: String,
         luaFile: File,
         name: String,
-        categoryHint: MediaCategory? = null
+        typeHint: MediaType? = null
     ): Source? {
         if (!luaFile.exists()) return null
         val scriptContent = luaFile.readText()
@@ -124,7 +124,7 @@ class LuaRuntimeEngine(
             name = name,
             scriptContent = scriptContent,
             engine = this,
-            categoryHint = categoryHint
+            typeHint = typeHint
         )
     }
 }
@@ -134,7 +134,7 @@ class LuaSourceAdapter(
     override val name: String,
     val scriptContent: String,
     private val engine: LuaRuntimeEngine,
-    override val categoryHint: MediaCategory? = null
+    override val typeHint: MediaType? = null
 ) : Source {
 
     override val id: String = "lua_${pkgName.replace('.', '_')}"
@@ -157,7 +157,7 @@ class LuaSourceAdapter(
                     ScrapedMetadata(
                         title = title,
                         imageUrl = "",
-                        category = categoryHint ?: MediaCategory.NOVEL
+                        type = typeHint ?: MediaType.NOVEL
                     )
                 } else null
             }

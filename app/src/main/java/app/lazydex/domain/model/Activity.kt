@@ -16,3 +16,12 @@ data class ActivityLog(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+data class ActivityDatePoint(
+    val mediaId: String,
+    val mediaType: String,
+    val mediaFormat: String,
+    val type: String,
+    val delta: Double? = null,
+    val timestamp: Long
+)
+

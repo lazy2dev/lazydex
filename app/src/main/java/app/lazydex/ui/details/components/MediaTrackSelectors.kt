@@ -54,7 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.UserStatus
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -62,17 +62,17 @@ import kotlin.math.roundToInt
 @Composable
 fun TrackStatusSelector(
     currentStatus: UserStatus,
-    category: MediaCategory = MediaCategory.NOVEL,
+    mediaType: MediaType = MediaType.NOVEL,
     onStatusSelected: (UserStatus) -> Unit,
     onDismissRequest: () -> Unit
 ) {
     var selected by remember { mutableStateOf(currentStatus) }
 
-    val availableStatuses = remember(category) {
-        val primary = when (category) {
-            MediaCategory.NOVEL, MediaCategory.MANGA -> UserStatus.READING
-            MediaCategory.ANIME, MediaCategory.TV, MediaCategory.MOVIE -> UserStatus.WATCHING
-            MediaCategory.GAME -> UserStatus.PLAYING
+    val availableStatuses = remember(mediaType) {
+        val primary = when (mediaType) {
+            MediaType.NOVEL, MediaType.MANGA -> UserStatus.READING
+            MediaType.ANIME, MediaType.TV, MediaType.MOVIE -> UserStatus.WATCHING
+            MediaType.GAME -> UserStatus.PLAYING
         }
         val common = listOf(UserStatus.COMPLETED, UserStatus.ON_HOLD, UserStatus.DROPPED, UserStatus.PLAN_TO)
         if (currentStatus !in listOf(primary) + common) {
@@ -89,10 +89,10 @@ fun TrackStatusSelector(
                 items(availableStatuses) { status ->
                     val isSelected = status == selected
                     val statusLabel = when (status) {
-                        UserStatus.PLAN_TO -> when (category) {
-                            MediaCategory.NOVEL, MediaCategory.MANGA -> "Plan to Read"
-                            MediaCategory.ANIME, MediaCategory.TV, MediaCategory.MOVIE -> "Plan to Watch"
-                            MediaCategory.GAME -> "Plan to Play"
+                        UserStatus.PLAN_TO -> when (mediaType) {
+                            MediaType.NOVEL, MediaType.MANGA -> "Plan to Read"
+                            MediaType.ANIME, MediaType.TV, MediaType.MOVIE -> "Plan to Watch"
+                            MediaType.GAME -> "Plan to Play"
                         }
                         else -> status.displayName
                     }

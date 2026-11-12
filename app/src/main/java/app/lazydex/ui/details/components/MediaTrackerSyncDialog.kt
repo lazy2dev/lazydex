@@ -65,7 +65,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.UserStatus
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -79,7 +79,7 @@ fun MediaTrackerSyncDialog(
     anilistSyncStatus: String?,
     anilistLastSynced: Long?,
     isSyncing: Boolean,
-    category: MediaCategory,
+    mediaType: MediaType,
     title: String,
     currentProgress: String,
     totalItems: String,
@@ -102,8 +102,8 @@ fun MediaTrackerSyncDialog(
     val context = LocalContext.current
     var menuExpanded by remember { mutableStateOf(false) }
 
-    val mediaType = if (category == MediaCategory.ANIME || category == MediaCategory.TV || category == MediaCategory.MOVIE) "anime" else "manga"
-    val anilistUrl = anilistMediaId?.let { "https://anilist.co/$mediaType/$it" }
+    val anilistType = if (mediaType == MediaType.ANIME || mediaType == MediaType.TV || mediaType == MediaType.MOVIE) "anime" else "manga"
+    val anilistUrl = anilistMediaId?.let { "https://anilist.co/$anilistType/$it" }
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,

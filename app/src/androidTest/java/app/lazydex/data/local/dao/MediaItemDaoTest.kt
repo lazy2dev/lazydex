@@ -41,7 +41,7 @@ class MediaItemDaoTest {
         // Item 1: Novel, completed, progress = 10, rating = 5.0
         val item1 = MediaItemEntity(
             id = "1",
-            category = "NOVEL",
+            type = "NOVEL",
             title = "Novel 1",
             alternativeTitles = "[]",
             sourceUrl = "url1",
@@ -58,7 +58,7 @@ class MediaItemDaoTest {
         // Item 2: Manga, reading, progress = 5, rating = 4.0
         val item2 = MediaItemEntity(
             id = "2",
-            category = "MANGA",
+            type = "MANGA",
             title = "Manga 1",
             alternativeTitles = "[]",
             sourceUrl = "url2",
@@ -75,7 +75,7 @@ class MediaItemDaoTest {
         // Item 3: Anime, watching, progress = 12, rating = null
         val item3 = MediaItemEntity(
             id = "3",
-            category = "ANIME",
+            type = "ANIME",
             title = "Anime 1",
             alternativeTitles = "[]",
             sourceUrl = "url3",

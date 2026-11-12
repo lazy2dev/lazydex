@@ -1,19 +1,19 @@
 package app.lazydex.data.local
 
 import app.lazydex.domain.model.LengthUnit
-import app.lazydex.domain.model.ResolvedCategoryConfig
+import app.lazydex.domain.model.ResolvedTypeConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class ResolvedCategoryConfigTest {
+class ResolvedTypeConfigTest {
 
     @Test
     fun `resolved config properties hold expected values`() {
-        val config = ResolvedCategoryConfig(
-            categoryId = "NOVEL",
+        val config = ResolvedTypeConfig(
+            typeId = "NOVEL",
             topLevelId = "NOVEL",
             displayName = "Novel",
             icon = "book",
@@ -26,7 +26,7 @@ class ResolvedCategoryConfigTest {
             lengthUnit = LengthUnit.WORDS
         )
 
-        assertEquals("NOVEL", config.categoryId)
+        assertEquals("NOVEL", config.typeId)
         assertEquals("NOVEL", config.topLevelId)
         assertEquals("Novel", config.displayName)
         assertEquals("book", config.icon)
@@ -41,8 +41,8 @@ class ResolvedCategoryConfigTest {
 
     @Test
     fun `resolved config without secondary unit`() {
-        val config = ResolvedCategoryConfig(
-            categoryId = "GAME",
+        val config = ResolvedTypeConfig(
+            typeId = "GAME",
             topLevelId = "GAME",
             displayName = "Game",
             icon = "gamepad",

@@ -1,6 +1,6 @@
 package app.lazydex.extension
 
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.extension.runtime.DexSourceAdapter
 import app.lazydex.extension.runtime.JsRuntimeEngine
 import app.lazydex.extension.runtime.LuaRuntimeEngine
@@ -118,12 +118,12 @@ class RuntimeEngineTest {
             pkgName = "eu.kanade.tachiyomi.extension.mock",
             entryClass = "MockMangaSource",
             instance = mockTachiyomiSource,
-            categoryHint = MediaCategory.MANGA
+            typeHint = MediaType.MANGA
         )
 
         assertEquals("dex_eu_kanade_tachiyomi_extension_mock", adapter.id)
         assertEquals("MockMangaSource", adapter.name)
-        assertEquals(MediaCategory.MANGA, adapter.categoryHint)
+        assertEquals(MediaType.MANGA, adapter.typeHint)
 
         runBlocking {
             val results = adapter.search("Solo")

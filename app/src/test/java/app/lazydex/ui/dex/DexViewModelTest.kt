@@ -2,8 +2,8 @@ package app.lazydex.ui.dex
 
 import app.lazydex.data.local.DisplayPreferences
 import app.lazydex.data.local.ThemePreferences
-import app.lazydex.domain.model.Category
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.TypeConfig
+import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.MediaStats
 import app.lazydex.domain.model.SortDirection
@@ -53,19 +53,19 @@ class DexViewModelTest {
     private class FakeMediaRepository(
         val itemsFlow: MutableStateFlow<List<MediaItem>> = MutableStateFlow(emptyList())
     ) : MediaRepository {
-        override fun observeFilteredByCategoryId(categoryId: String?, statusFilter: StatusFilter): Flow<List<MediaItem>> = itemsFlow
+        override fun observeFilteredByTypeId(typeId: String?, statusFilter: StatusFilter): Flow<List<MediaItem>> = itemsFlow
         override fun observeAll(): Flow<List<MediaItem>> = itemsFlow
-        override fun observeByCategory(category: MediaCategory): Flow<List<MediaItem>> = itemsFlow
-        override fun observeFiltered(category: MediaCategory?, statusFilter: StatusFilter): Flow<List<MediaItem>> = itemsFlow
+        override fun observeByType(mediaType: MediaType): Flow<List<MediaItem>> = itemsFlow
+        override fun observeFiltered(mediaType: MediaType?, statusFilter: StatusFilter): Flow<List<MediaItem>> = itemsFlow
         override fun observeById(id: String): Flow<MediaItem?> = flowOf(itemsFlow.value.find { it.id == id })
         override fun observeCount(): Flow<Int> = flowOf(itemsFlow.value.size)
         override fun observeStats(): Flow<MediaStats> = flowOf(MediaStats(0, 0, 0, null, 0, 0, 0, 0, 0))
-        override fun observeCategoryCounts(): Flow<Map<MediaCategory, Int>> = flowOf(emptyMap())
-        override fun observeStatusCounts(category: MediaCategory?): Flow<Map<StatusFilter, Int>> = flowOf(emptyMap())
-        override fun observeDistinctGenres(category: MediaCategory?): Flow<List<String>> = flowOf(emptyList())
-        override fun observeDistinctTags(category: MediaCategory?): Flow<List<String>> = flowOf(emptyList())
-        override fun observeTopLevelCategories(): Flow<List<Category>> = flowOf(emptyList())
-        override fun observeTypes(parentId: String): Flow<List<Category>> = flowOf(emptyList())
+        override fun observeTypeCounts(): Flow<Map<MediaType, Int>> = flowOf(emptyMap())
+        override fun observeStatusCounts(mediaType: MediaType?): Flow<Map<StatusFilter, Int>> = flowOf(emptyMap())
+        override fun observeDistinctGenres(mediaType: MediaType?): Flow<List<String>> = flowOf(emptyList())
+        override fun observeDistinctTags(mediaType: MediaType?): Flow<List<String>> = flowOf(emptyList())
+        override fun observeTopLevelTypes(): Flow<List<TypeConfig>> = flowOf(emptyList())
+        override fun observeFormats(parentId: String): Flow<List<TypeConfig>> = flowOf(emptyList())
 
         override suspend fun getById(id: String): MediaItem? = itemsFlow.value.find { it.id == id }
         override suspend fun getAll(): List<MediaItem> = itemsFlow.value
@@ -196,15 +196,15 @@ class DexViewModelTest {
     }
 
     @Test
-    fun `default display mode is LIST and selectCategoryId resolves manhwa category`() = runTest(testDispatcher) {
+    fun `default display mode is LIST and selectTypeId resolves manhwa type`() = runTest(testDispatcher) {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
         advanceUntilIdle()
 
         assertEquals(app.lazydex.data.local.LibraryDisplayMode.LIST, viewModel.uiState.value.displayMode)
 
-        viewModel.selectCategoryId("typ_manhwa")
+        viewModel.selectTypeId("typ_manhwa")
         advanceUntilIdle()
-        assertEquals(MediaCategory.MANGA, viewModel.uiState.value.selectedCategory)
+        assertEquals(MediaType.MANGA, viewModel.uiState.value.selectedType)
     }
 
     @Test

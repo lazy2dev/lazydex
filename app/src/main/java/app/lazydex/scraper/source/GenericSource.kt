@@ -1,6 +1,6 @@
 package app.lazydex.scraper.source
 
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
@@ -11,7 +11,7 @@ class GenericSource(private val okHttpClient: OkHttpClient) : Source {
     override val baseUrl: String = ""
     override val urlPattern: Regex = Regex(""".*""")
     override val isSearchable: Boolean = false
-    override val categoryHint: MediaCategory? = null
+    override val typeHint: MediaType? = null
 
     override suspend fun scrape(url: String): ScrapedMetadata? {
         return try {

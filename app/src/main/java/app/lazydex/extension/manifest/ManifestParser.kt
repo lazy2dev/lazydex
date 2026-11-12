@@ -3,7 +3,7 @@ package app.lazydex.extension.manifest
 import app.lazydex.domain.model.ExtensionEcosystem
 import app.lazydex.domain.model.ExtensionPackage
 import app.lazydex.domain.model.ExtensionRuntimeType
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -111,12 +111,12 @@ class ManifestParser(
                 Pair(ExtensionEcosystem.SHOSETSU, parseShosetsu(array, baseUrl, repoId))
             }
             isMangayomi -> {
-                val defaultCategory = when {
-                    manifestUrl.contains("anime_index", ignoreCase = true) -> MediaCategory.ANIME
-                    manifestUrl.contains("novel_index", ignoreCase = true) -> MediaCategory.NOVEL
-                    else -> MediaCategory.MANGA
+                val defaultType = when {
+                    manifestUrl.contains("anime_index", ignoreCase = true) -> MediaType.ANIME
+                    manifestUrl.contains("novel_index", ignoreCase = true) -> MediaType.NOVEL
+                    else -> MediaType.MANGA
                 }
-                Pair(ExtensionEcosystem.MANGAYOMI, parseMangayomi(array, baseUrl, repoId, defaultCategory))
+                Pair(ExtensionEcosystem.MANGAYOMI, parseMangayomi(array, baseUrl, repoId, defaultType))
             }
             isWasm -> {
                 val ecosystem = if (manifestUrl.contains("aidoku", ignoreCase = true)) {
@@ -252,7 +252,7 @@ class ManifestParser(
         array: JsonArray,
         baseUrl: String,
         repoId: String,
-        defaultCategory: MediaCategory = MediaCategory.MANGA
+        defaultType: MediaType = MediaType.MANGA
     ): List<ExtensionPackage> {
         val list = mutableListOf<ExtensionPackage>()
         for (element in array) {
@@ -283,7 +283,7 @@ class ManifestParser(
                     iconUrl = iconUrl,
                     nsfw = isNsfw,
                     entryClassOrFile = id,
-                    categoryOverride = defaultCategory
+                    typeOverride = defaultType
                 )
             )
         }

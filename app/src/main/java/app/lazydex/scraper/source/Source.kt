@@ -1,6 +1,6 @@
 package app.lazydex.scraper.source
 
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 
 interface Source {
     val id: String
@@ -8,7 +8,7 @@ interface Source {
     val baseUrl: String
     val urlPattern: Regex
     val isSearchable: Boolean
-    val categoryHint: MediaCategory?
+    val typeHint: MediaType?
 
     suspend fun scrape(url: String): ScrapedMetadata?
     suspend fun search(query: String): List<SearchResult>

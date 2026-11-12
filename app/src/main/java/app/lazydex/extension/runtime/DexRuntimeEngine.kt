@@ -2,7 +2,7 @@ package app.lazydex.extension.runtime
 
 import android.content.Context
 import android.content.pm.PackageManager
-import app.lazydex.domain.model.MediaCategory
+import app.lazydex.domain.model.MediaType
 import app.lazydex.scraper.source.ScrapedMetadata
 import app.lazydex.scraper.source.SearchResult
 import app.lazydex.scraper.source.Source
@@ -55,7 +55,7 @@ class DexRuntimeEngine(
         pkgName: String,
         apkFile: File,
         entryClassHint: String? = null,
-        categoryHint: MediaCategory? = null
+        typeHint: MediaType? = null
     ): Source? {
         if (!apkFile.exists()) return null
 
@@ -69,7 +69,7 @@ class DexRuntimeEngine(
                 pkgName = pkgName,
                 entryClass = entryClassName,
                 instance = instance,
-                categoryHint = categoryHint
+                typeHint = typeHint
             )
         } catch (_: Throwable) {
             null
@@ -103,7 +103,7 @@ class DexSourceAdapter(
     val pkgName: String,
     val entryClass: String,
     private val instance: Any,
-    override val categoryHint: MediaCategory? = null
+    override val typeHint: MediaType? = null
 ) : Source {
 
     override val id: String = "dex_${pkgName.replace('.', '_')}"
@@ -167,7 +167,7 @@ class DexSourceAdapter(
                             author = details.author.orEmpty(),
                             description = details.description.orEmpty(),
                             genres = details.genre?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList(),
-                            category = categoryHint ?: MediaCategory.MANGA
+                            type = typeHint ?: MediaType.MANGA
                         )
                     }
                     is eu.kanade.tachiyomi.animesource.AnimeSource -> {
@@ -180,7 +180,7 @@ class DexSourceAdapter(
                             author = details.author.orEmpty(),
                             description = details.description.orEmpty(),
                             genres = details.genre?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList(),
-                            category = categoryHint ?: MediaCategory.ANIME
+                            type = typeHint ?: MediaType.ANIME
                         )
                     }
                     is ireader.core.source.Source -> {
@@ -192,7 +192,7 @@ class DexSourceAdapter(
                             author = details.author,
                             description = details.description,
                             genres = details.genres,
-                            category = categoryHint ?: MediaCategory.NOVEL
+                            type = typeHint ?: MediaType.NOVEL
                         )
                     }
                     else -> null
