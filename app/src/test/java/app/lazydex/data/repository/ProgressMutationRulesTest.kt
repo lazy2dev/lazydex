@@ -25,6 +25,7 @@ import app.lazydex.domain.model.UserStatus
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -522,6 +523,33 @@ class ProgressMutationRulesTest {
         val persisted = itemDao.items["anime-synced"]!!
         assertEquals(2, persisted.repeat)
         assertEquals(24, persisted.durationMinutes)
+    }
+
+    @Test
+    fun observeFormats_normalizesLegacyTypPrefixesAndMangaSecondaryUnit() = runTest {
+        val repo = MediaRepositoryImpl(
+            db = null,
+            dao = FakeMediaItemDao(),
+            linkDao = FakeMediaLinkDao(),
+            activityDao = FakeActivityDao(),
+            outboxDao = FakeSyncOutboxDao(),
+            settingDao = FakeAppSettingDao(),
+            localCoversDir = File("")
+        )
+
+        val novelPrefixed = repo.observeFormats("typ_novel").first()
+        val novelPlain = repo.observeFormats("NOVEL").first()
+        assertEquals(listOf("LIGHT_NOVEL", "WEB_NOVEL"), novelPrefixed.map { it.id })
+        assertEquals(novelPlain.map { it.id }, novelPrefixed.map { it.id })
+
+        val mangaPrefixed = repo.observeFormats("typ_manga").first()
+        assertEquals(listOf("MANGA", "MANHWA", "MANHUA", "ONE_SHOT"), mangaPrefixed.map { it.id })
+
+        val animePrefixed = repo.observeFormats("typ_anime").first()
+        assertEquals(listOf("TV", "MOVIE", "OVA"), animePrefixed.map { it.id })
+
+        assertEquals("Volume", repo.getResolvedConfig("MANGA").secondaryUnitName)
+        assertNull(repo.getResolvedConfig("MANHWA").secondaryUnitName)
     }
 
     // --- Fakes ---

@@ -13,11 +13,13 @@ import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.MediaStats
 import app.lazydex.domain.model.StatusFilter
+import app.lazydex.domain.model.TypeConfig
 import app.lazydex.domain.model.UserStatus
 import app.lazydex.domain.repository.MediaRepository
 import app.lazydex.scraper.MetadataScraper
 import app.lazydex.scraper.source.SourceRegistry
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -56,6 +58,37 @@ class MediaDetailsViewModelTest {
         override fun observeStatusCounts(mediaType: MediaType?): Flow<Map<StatusFilter, Int>> = flowOf(emptyMap())
         override fun observeDistinctGenres(mediaType: MediaType?): Flow<List<String>> = flowOf(emptyList())
         override fun observeDistinctTags(mediaType: MediaType?): Flow<List<String>> = flowOf(emptyList())
+        override fun observeTopLevelTypes(): Flow<List<TypeConfig>> = flowOf(
+            listOf(
+                TypeConfig(id = "NOVEL", name = "Novel", unitName = "Chapter"),
+                TypeConfig(id = "MANGA", name = "Manga", unitName = "Chapter"),
+                TypeConfig(id = "ANIME", name = "Anime", unitName = "Episode"),
+                TypeConfig(id = "GAME", name = "Game", unitName = "Hour"),
+            )
+        )
+        override fun observeFormats(parentId: String): Flow<List<TypeConfig>> = flowOf(
+            when (parentId.uppercase()) {
+                "NOVEL", "TYP_NOVEL" -> listOf(
+                    TypeConfig(id = "LIGHT_NOVEL", parentId = "NOVEL", name = "Light Novel", unitName = "Volume"),
+                    TypeConfig(id = "WEB_NOVEL", parentId = "NOVEL", name = "Web Novel", unitName = "Chapter"),
+                )
+                "MANGA", "TYP_MANGA" -> listOf(
+                    TypeConfig(id = "MANGA", parentId = "MANGA", name = "Manga", unitName = "Volume"),
+                    TypeConfig(id = "MANHWA", parentId = "MANGA", name = "Manhwa", unitName = "Chapter"),
+                    TypeConfig(id = "MANHUA", parentId = "MANGA", name = "Manhua", unitName = "Chapter"),
+                    TypeConfig(id = "ONE_SHOT", parentId = "MANGA", name = "One Shot", unitName = "Chapter"),
+                )
+                "ANIME", "TYP_ANIME" -> listOf(
+                    TypeConfig(id = "TV", parentId = "ANIME", name = "TV Series", unitName = "Episode", secondaryUnitName = "Season"),
+                    TypeConfig(id = "MOVIE", parentId = "ANIME", name = "Movie", unitName = "Minute"),
+                    TypeConfig(id = "OVA", parentId = "ANIME", name = "OVA / Special", unitName = "Episode"),
+                )
+                "GAME", "TYP_GAME" -> listOf(
+                    TypeConfig(id = "PC", parentId = "GAME", name = "PC", unitName = "Hour"),
+                )
+                else -> emptyList()
+            }
+        )
 
         override suspend fun getById(id: String): MediaItem? = items.find { it.id == id }
         override suspend fun getAll(): List<MediaItem> = items
@@ -127,6 +160,35 @@ class MediaDetailsViewModelTest {
     }
 
     private val testDispatcher = kotlinx.coroutines.test.UnconfinedTestDispatcher()
+    private val viewModelStore = androidx.lifecycle.ViewModelStore()
+    private var vmCounter = 0
+
+    private fun createViewModel(
+        savedStateHandle: SavedStateHandle = SavedStateHandle(),
+        repository: MediaRepository = FakeRepository(),
+        scraper: MetadataScraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+        okHttpClient: OkHttpClient = OkHttpClient(),
+        cacheDir: File = File("."),
+        mediaLinkDao: MediaLinkDao? = null,
+        syncEngine: AnilistSyncEngine? = null,
+        tokenStore: AnilistTokenStore? = null,
+    ): MediaDetailsViewModel {
+        val instance = MediaDetailsViewModel(
+            savedStateHandle = savedStateHandle,
+            repository = repository,
+            scraper = scraper,
+            okHttpClient = okHttpClient,
+            cacheDir = cacheDir,
+            mediaLinkDao = mediaLinkDao,
+            syncEngine = syncEngine,
+            tokenStore = tokenStore,
+        )
+        val factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <V : androidx.lifecycle.ViewModel> create(modelClass: Class<V>): V = instance as V
+        }
+        return androidx.lifecycle.ViewModelProvider(viewModelStore, factory)["vm-${vmCounter++}", MediaDetailsViewModel::class.java]
+    }
 
     @Before
     fun setUp() {
@@ -135,13 +197,14 @@ class MediaDetailsViewModelTest {
 
     @After
     fun tearDown() {
+        viewModelStore.clear()
         kotlinx.coroutines.Dispatchers.resetMain()
     }
 
     @Test
     fun newEntry_startsBlank_saveWithoutTitleSetsError() = runTest {
         val repo = FakeRepository()
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -185,7 +248,7 @@ class MediaDetailsViewModelTest {
         )
         repo.items.add(existing)
 
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -206,7 +269,7 @@ class MediaDetailsViewModelTest {
     @Test
     fun initialize_withMissingItemId_clearsLoading() = runTest {
         val repo = FakeRepository()
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -221,9 +284,9 @@ class MediaDetailsViewModelTest {
     }
 
     @Test
-    fun save_withMetadataAndFormat_preservesRomajiNativeAndSecondaryProgress() = runTest {
+    fun save_withMetadataAndFormat_preservesFormatAndSecondaryProgress() = runTest {
         val repo = FakeRepository()
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -232,18 +295,12 @@ class MediaDetailsViewModelTest {
         )
 
         vm.updateTitle("The Beginning After the End")
-        vm.updateTitleRomaji("The Beginning After the End")
-        vm.updateTitleNative("끝이 아닌 시작")
         vm.updateMediaType(MediaType.MANGA)
-        vm.updateFormatId("typ_manhwa")
+        vm.updateFormatId("MANHWA")
         vm.updateCurrentProgress("175")
         vm.updateTotalItems("200")
         vm.updateSecondaryProgress("3")
-        vm.updateSecondaryProgressTotal("8")
         vm.updateBannerImage("https://example.com/tbate_banner.jpg")
-        vm.addGenre("Action")
-        vm.addGenre("Fantasy")
-        vm.addTag("Magic")
 
         assertTrue(vm.uiState.value.hasSecondaryProgress)
         vm.save()
@@ -252,16 +309,13 @@ class MediaDetailsViewModelTest {
         assertEquals(1, repo.items.size)
         val saved = repo.items[0]
         assertEquals("The Beginning After the End", saved.title)
+        assertEquals("MANHWA", saved.format)
+        assertEquals("KR", saved.countryOfOrigin)
         assertEquals("typ_manhwa", saved.typeId)
-        assertEquals("The Beginning After the End", saved.alternativeTitles.getOrNull(0))
-        assertEquals("끝이 아닌 시작", saved.alternativeTitles.getOrNull(2))
         assertEquals(175.0, saved.progress, 0.001)
         assertEquals(200.0, saved.progressTotal!!, 0.001)
         assertEquals(3.0, saved.secondaryProgress, 0.001)
-        assertEquals(8.0, saved.secondaryProgressTotal!!, 0.001)
         assertEquals("https://example.com/tbate_banner.jpg", saved.getExtra("banner_image"))
-        assertTrue(saved.genres.contains("Action"))
-        assertTrue(saved.tags.contains("Magic"))
     }
 
     @Test
@@ -279,7 +333,7 @@ class MediaDetailsViewModelTest {
         )
         repo.items.add(existing)
 
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -314,7 +368,7 @@ class MediaDetailsViewModelTest {
         )
         repo.items.add(existing)
 
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -332,7 +386,7 @@ class MediaDetailsViewModelTest {
     @Test
     fun checkBackPressAllowed_uninitializedExistingItem_allowsBackPressWithoutDiscardPrompt() = runTest {
         val repo = FakeRepository()
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -362,7 +416,7 @@ class MediaDetailsViewModelTest {
         )
         repo.items.add(existing)
 
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -393,7 +447,7 @@ class MediaDetailsViewModelTest {
         )
         repo.items.add(existing)
 
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -428,7 +482,7 @@ class MediaDetailsViewModelTest {
         )
         repo.items.add(existing)
 
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -448,7 +502,7 @@ class MediaDetailsViewModelTest {
     @Test
     fun scrapeUrl_onFailure_surfacesErrorMessage() = runTest {
         val repo = FakeRepository()
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -460,7 +514,7 @@ class MediaDetailsViewModelTest {
         testScheduler.advanceUntilIdle()
 
         assertFalse(vm.uiState.value.isScraping)
-        assertEquals("Failed to scrape metadata from URL: https://example.com/notfound", vm.uiState.value.errorMsg)
+        assertNull(vm.uiState.value.errorMsg)
         assertEquals("Failed to scrape metadata from URL: https://example.com/notfound", vm.uiState.value.scrapeError)
     }
 
@@ -498,7 +552,7 @@ class MediaDetailsViewModelTest {
         val tokenStore = AnilistTokenStore(prefs)
         tokenStore.accessToken = "mock_token"
 
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -532,7 +586,7 @@ class MediaDetailsViewModelTest {
         repo.items.add(existing)
 
         val syncEngine = TestSyncEngine()
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -566,7 +620,7 @@ class MediaDetailsViewModelTest {
         val syncEngine = TestSyncEngine()
         syncEngine.shouldSucceed = false
 
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -597,7 +651,7 @@ class MediaDetailsViewModelTest {
         )
         repo.items.add(existing)
 
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -619,7 +673,7 @@ class MediaDetailsViewModelTest {
     @Test
     fun linkAniListId_whenItemIsNew_setsError() = runTest {
         val repo = FakeRepository()
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -646,7 +700,7 @@ class MediaDetailsViewModelTest {
         )
         repo.items.add(existing)
 
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -695,7 +749,7 @@ class MediaDetailsViewModelTest {
         )
         linkDao.links.add(suggestedLink)
 
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -755,7 +809,7 @@ class MediaDetailsViewModelTest {
         )
         linkDao.links.add(suggestedLink)
 
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -779,7 +833,7 @@ class MediaDetailsViewModelTest {
     @Test
     fun coverTheming_defaultsToTrue_and_setSeedColorUpdatesState() = runTest {
         val repo = FakeRepository()
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -798,7 +852,7 @@ class MediaDetailsViewModelTest {
     @Test
     fun initialize_resetsSeedColor() = runTest {
         val repo = FakeRepository()
-        val vm = MediaDetailsViewModel(
+        val vm = createViewModel(
             savedStateHandle = SavedStateHandle(),
             repository = repo,
             scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
@@ -812,6 +866,264 @@ class MediaDetailsViewModelTest {
 
         vm.initialize("new-id", null)
         assertNull(vm.uiState.value.seedColor)
+    }
+
+    @Test
+    fun initialize_loadsAvailableTypesAndDynamicallyObservesFormats() = runTest {
+        val repo = FakeRepository()
+        val vm = createViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+
+        val state = vm.uiState.value
+        assertEquals(listOf("NOVEL", "MANGA", "ANIME", "GAME"), state.availableTypes.map { it.id })
+        assertEquals(listOf("LIGHT_NOVEL", "WEB_NOVEL"), state.availableFormats.map { it.id })
+
+        val animeFormats = vm.observeFormatsForType("ANIME").first()
+        assertEquals(listOf("TV", "MOVIE", "OVA"), animeFormats.map { it.id })
+    }
+
+    @Test
+    fun commitMetadataEdits_existingItem_preservesDurationRepeatGenresTagsAndFormat() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "anime-1",
+            type = "ANIME",
+            format = "MOVIE",
+            countryOfOrigin = "JP",
+            title = "Your Name",
+            genres = listOf("Drama", "Romance"),
+            tags = listOf("Time Travel"),
+            author = "Makoto Shinkai",
+            description = "Old desc",
+            currentProgress = 1,
+            totalItems = 1,
+            userStatus = UserStatus.COMPLETED,
+            repeat = 2,
+            durationMinutes = 106,
+            extraData = """{"custom":"keep"}""",
+            lengthUnitOverride = "WORDS",
+            lastUpdated = 1000L,
+            dateAdded = 500L,
+        )
+        repo.items.add(existing)
+
+        val vm = createViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+        vm.initialize("anime-1", null)
+
+        val ok = vm.commitMetadataEdits(
+            sourceUrl = "https://anilist.co/anime/21519",
+            mediaType = MediaType.ANIME,
+            formatId = "TV",
+            title = "Your Name Edited",
+            author = "CoMix Wave Films",
+            totalItems = "12",
+            description = "Updated desc",
+        )
+
+        assertTrue(ok)
+        val saved = repo.items.single()
+        assertEquals("Your Name Edited", saved.title)
+        assertEquals("TV", saved.format)
+        assertEquals("JP", saved.countryOfOrigin)
+        assertEquals(2, saved.repeat)
+        assertEquals(106, saved.durationMinutes)
+        assertEquals(listOf("Drama", "Romance"), saved.genres)
+        assertEquals(listOf("Time Travel"), saved.tags)
+        assertEquals(500L, saved.dateAdded)
+        assertEquals("""{"custom":"keep"}""", saved.extraData)
+        assertEquals("WORDS", saved.lengthUnitOverride)
+    }
+
+    @Test
+    fun commitMetadataEdits_invalidUrlOrProgressExceedsTotal_returnsFalseWithoutSaving() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "item-val-1",
+            type = "NOVEL",
+            format = "WEB_NOVEL",
+            title = "Original",
+            currentProgress = 25,
+            totalItems = 100,
+            userStatus = UserStatus.READING,
+            lastUpdated = 1000L,
+            dateAdded = 1000L,
+        )
+        repo.items.add(existing)
+
+        val vm = createViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+        vm.initialize("item-val-1", null)
+
+        assertFalse(
+            vm.commitMetadataEdits(
+                sourceUrl = "not-a-url",
+                mediaType = MediaType.NOVEL,
+                formatId = "WEB_NOVEL",
+                title = "Changed",
+                author = "",
+                totalItems = "100",
+                description = "",
+            )
+        )
+        assertEquals("Source URL must start with http:// or https://", vm.uiState.value.errorMsg)
+        assertEquals("Original", repo.items.single().title)
+
+        assertFalse(
+            vm.commitMetadataEdits(
+                sourceUrl = "",
+                mediaType = MediaType.NOVEL,
+                formatId = "WEB_NOVEL",
+                title = "Changed",
+                author = "",
+                totalItems = "10",
+                description = "",
+            )
+        )
+        assertEquals("Progress cannot exceed total items", vm.uiState.value.errorMsg)
+        assertEquals("Original", repo.items.single().title)
+    }
+
+    @Test
+    fun commitMetadataEdits_newItem_updatesDraftWithoutImmediateDbWrite() = runTest {
+        val repo = FakeRepository()
+        val vm = createViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+
+        val ok = vm.commitMetadataEdits(
+            sourceUrl = "https://example.com/novel",
+            mediaType = MediaType.MANGA,
+            formatId = "MANHWA",
+            title = "New Manhwa",
+            author = "Studio",
+            totalItems = "50",
+            description = "Synopsis",
+        )
+
+        assertTrue(ok)
+        assertTrue(vm.uiState.value.isNew)
+        assertEquals(0, repo.items.size)
+        assertEquals("New Manhwa", vm.uiState.value.title)
+        assertEquals("MANHWA", vm.uiState.value.formatId)
+
+        vm.save()
+        assertEquals(1, repo.items.size)
+        assertEquals("MANHWA", repo.items.single().format)
+        assertEquals("KR", repo.items.single().countryOfOrigin)
+    }
+
+    @Test
+    fun observeItem_whileMetadataSheetOpen_ignoresDbEmissionsUntilClosed() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "sheet-guard-1",
+            type = "NOVEL",
+            title = "Initial Title",
+            currentProgress = 5,
+            userStatus = UserStatus.READING,
+            lastUpdated = 1000L,
+            dateAdded = 1000L,
+        )
+        repo.items.add(existing)
+
+        val vm = createViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+        vm.initialize("sheet-guard-1", null)
+        assertEquals("Initial Title", vm.uiState.value.title)
+
+        vm.setMetadataSheetOpen(true)
+        repo.update(existing.copy(title = "Background Update"))
+        assertEquals("Initial Title", vm.uiState.value.title)
+
+        vm.setMetadataSheetOpen(false)
+        repo.update(existing.copy(title = "Background Update 2"))
+        assertEquals("Background Update 2", vm.uiState.value.title)
+    }
+
+    @Test
+    fun observeItem_mangaKr_normalizesFormatToManhwa_andSwitchingToMangaClearsKr() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "manhwa-kr-1",
+            type = "MANGA",
+            format = "MANGA",
+            countryOfOrigin = "KR",
+            title = "Omniscient Reader",
+            userStatus = UserStatus.READING,
+            lastUpdated = 1000L,
+            dateAdded = 1000L,
+        )
+        repo.items.add(existing)
+
+        val vm = createViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+        vm.initialize("manhwa-kr-1", null)
+        assertEquals("MANHWA", vm.uiState.value.formatId)
+
+        assertTrue(
+            vm.commitMetadataEdits(
+                sourceUrl = "",
+                mediaType = MediaType.MANGA,
+                formatId = "MANGA",
+                title = "Omniscient Reader",
+                author = "",
+                totalItems = "",
+                description = "",
+            )
+        )
+        val saved = repo.items.single()
+        assertEquals("MANGA", saved.format)
+        assertNull(saved.countryOfOrigin)
+        assertEquals("typ_manga", saved.typeId)
+    }
+
+    @Test
+    fun scrapeUrl_failure_setsScrapeErrorWithoutSettingScreenErrorMsg() = runTest {
+        val repo = FakeRepository()
+        val vm = createViewModel(
+            savedStateHandle = SavedStateHandle(),
+            repository = repo,
+            scraper = MetadataScraper(SourceRegistry(emptyList()), ioDispatcher = testDispatcher),
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+
+        vm.scrapeUrl("http://127.0.0.1/blocked")
+        testScheduler.advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.isScraping)
+        assertNotNull(vm.uiState.value.scrapeError)
+        assertNull(vm.uiState.value.errorMsg)
     }
 }
 

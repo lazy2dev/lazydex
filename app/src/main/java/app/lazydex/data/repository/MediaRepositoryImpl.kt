@@ -224,7 +224,10 @@ class MediaRepositoryImpl(
 
     override fun observeTopLevelTypes(): Flow<List<TypeConfig>> = flowOf(staticTopLevelTypes)
 
-    override fun observeFormats(parentId: String): Flow<List<TypeConfig>> = flowOf(staticFormats[parentId.uppercase()] ?: emptyList())
+    override fun observeFormats(parentId: String): Flow<List<TypeConfig>> {
+        val normalizedParent = resolveTypeAndFormat(parentId).first ?: parentId.uppercase()
+        return flowOf(staticFormats[normalizedParent] ?: emptyList())
+    }
 
     override fun observeResolvedConfig(typeId: String): Flow<ResolvedTypeConfig> = flow {
         emit(getResolvedConfig(typeId))
@@ -240,7 +243,7 @@ class MediaRepositoryImpl(
                 displayName = format ?: "Manga",
                 icon = "image",
                 unitName = "Chapter",
-                secondaryUnitName = if (format == "MANGA") "Volume" else null,
+                secondaryUnitName = if (format == null || format == "MANGA") "Volume" else null,
                 actionVerb = "Read",
                 hasParts = false,
                 hasCharEstimate = false,

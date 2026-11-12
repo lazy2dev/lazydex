@@ -26,6 +26,7 @@ import app.lazydex.ui.components.formatProgress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -53,6 +54,7 @@ data class MediaDetailsUiState(
     val id: String = "",
     val mediaType: MediaType = MediaType.NOVEL,
     val formatId: String? = null,
+    val availableTypes: List<TypeConfig> = emptyList(),
     val availableFormats: List<TypeConfig> = emptyList(),
     val title: String = "",
     val titleRomaji: String = "",
@@ -84,6 +86,8 @@ data class MediaDetailsUiState(
     val isSaving: Boolean = false,
     val errorMsg: String? = null,
     val scrapeError: String? = null,
+    val scrapeVersion: Int = 0,
+    val isMetadataSheetOpen: Boolean = false,
     val isDone: Boolean = false,
     val showDeleteConfirm: Boolean = false,
     val showDiscardConfirm: Boolean = false,
@@ -111,7 +115,10 @@ data class MediaDetailsUiState(
     val hasSecondaryProgress: Boolean get() = (resolvedConfig?.hasSecondaryProgress == true) ||
             ((parsedSecondaryProgress ?: 0.0) > 0.0) ||
             ((parsedSecondaryTotal ?: 0.0) > 0.0) ||
-            formatId in setOf("typ_novel_ln", "typ_manga_jp", "typ_tv", "typ_anime_series")
+            formatId in setOf(
+                "LIGHT_NOVEL", "MANGA", "TV",
+                "typ_novel_ln", "typ_manga_jp", "typ_manga", "typ_manhwa", "typ_tv", "typ_anime_series"
+            )
 
     val isTitleBlank: Boolean get() = title.trim().isBlank()
     val parsedProgress: Int? get() = currentProgress.trim().toIntOrNull()
@@ -169,6 +176,11 @@ class MediaDetailsViewModel(
 
     init {
         initialize(itemId, initialUrl)
+        viewModelScope.launch {
+            repository.observeTopLevelTypes().collect { types ->
+                _uiState.update { it.copy(availableTypes = types) }
+            }
+        }
         if (themePreferences != null) {
             viewModelScope.launch {
                 themePreferences.blurAdultCovers.collect { blur ->
@@ -215,22 +227,39 @@ class MediaDetailsViewModel(
             scrapeUrl(url)
         }
 
-        observeTypeFormats(_uiState.value.mediaType.toTopLevelId())
+        observeTypeFormats(_uiState.value.mediaType.name, _uiState.value.formatId)
 
         effectiveId?.let { targetId ->
             observeItem(targetId)
         }
     }
 
-    private fun observeTypeFormats(typeId: String) {
+    fun observeFormatsForType(typeId: String): Flow<List<TypeConfig>> = repository.observeFormats(typeId)
+
+    fun setMetadataSheetOpen(open: Boolean) {
+        _uiState.update { it.copy(isMetadataSheetOpen = open) }
+    }
+
+    fun clearScrapeError() {
+        _uiState.update { it.copy(scrapeError = null, errorMsg = null) }
+    }
+
+    private fun observeTypeFormats(typeId: String, formatId: String? = null) {
         formatObservationJob?.cancel()
         formatObservationJob = viewModelScope.launch {
-            val config = repository.getResolvedConfig(typeId)
+            val config = repository.getResolvedConfig(formatId ?: typeId)
             _uiState.value = _uiState.value.copy(resolvedConfig = config)
             repository.observeFormats(typeId).collect { formats ->
                 _uiState.value = _uiState.value.copy(availableFormats = formats)
             }
         }
+    }
+
+    private fun resolveFormatId(item: MediaItem): String? = when {
+        item.type.equals("MANGA", ignoreCase = true) && item.countryOfOrigin.equals("KR", ignoreCase = true) -> "MANHWA"
+        item.type.equals("MANGA", ignoreCase = true) && (item.countryOfOrigin.equals("CN", ignoreCase = true) || item.countryOfOrigin.equals("TW", ignoreCase = true)) -> "MANHUA"
+        item.format.isNotBlank() -> item.format.uppercase()
+        else -> null
     }
 
     private fun observeItem(targetId: String) {
@@ -263,18 +292,19 @@ class MediaDetailsViewModel(
         itemObservationJob?.cancel()
         itemObservationJob = viewModelScope.launch {
             repository.observeById(targetId).collect { item ->
-                if (item != null && !_uiState.value.isSaving && !_uiState.value.isScraping) {
+                if (item != null && !_uiState.value.isSaving && !_uiState.value.isScraping && !_uiState.value.isMetadataSheetOpen) {
                     originalItem = item
-                    val config = repository.getResolvedConfig(item.typeId)
+                    val resolvedFormatId = resolveFormatId(item)
+                    val config = repository.getResolvedConfig(resolvedFormatId ?: item.mediaType.name)
                     val timeSpent = repository.getTimeSpentMinutes(item.id)
-                    val topTypeId = item.mediaType.toTopLevelId()
+                    val typeChanged = item.mediaType != _uiState.value.mediaType || _uiState.value.availableFormats.isEmpty()
                     val romaji = item.alternativeTitles.getOrNull(0) ?: ""
                     val native = item.alternativeTitles.getOrNull(2) ?: ""
                     val banner = item.getExtra("banner_image")
                     _uiState.value = _uiState.value.copy(
                         id = item.id,
                         mediaType = item.mediaType,
-                        formatId = item.typeId,
+                        formatId = resolvedFormatId,
                         title = item.title,
                         titleRomaji = romaji,
                         titleNative = native,
@@ -306,8 +336,8 @@ class MediaDetailsViewModel(
                         isNew = false,
                         isLoading = false,
                     )
-                    if (item.mediaType != _uiState.value.mediaType || _uiState.value.availableFormats.isEmpty()) {
-                        observeTypeFormats(topTypeId)
+                    if (typeChanged) {
+                        observeTypeFormats(item.mediaType.name, resolvedFormatId)
                     }
                     extractSeedColor(item.coverImagePath, item.coverImageUrl ?: "")
                 } else if (item == null) {
@@ -323,12 +353,12 @@ class MediaDetailsViewModel(
 
     fun updateMediaType(mediaType: MediaType) {
         _uiState.value = _uiState.value.copy(mediaType = mediaType, formatId = null)
-        observeTypeFormats(mediaType.toTopLevelId())
+        observeTypeFormats(mediaType.name)
     }
 
     fun updateFormatId(formatId: String?) {
         viewModelScope.launch {
-            val typeId = formatId ?: _uiState.value.mediaType.toTopLevelId()
+            val typeId = formatId ?: _uiState.value.mediaType.name
             val config = repository.getResolvedConfig(typeId)
             _uiState.value = _uiState.value.copy(formatId = formatId, resolvedConfig = config)
         }
@@ -338,16 +368,8 @@ class MediaDetailsViewModel(
         _uiState.value = _uiState.value.copy(bannerImage = url)
     }
 
-    fun updateTitleRomaji(title: String) {
-        _uiState.value = _uiState.value.copy(titleRomaji = title)
-    }
-
-    fun updateTitleNative(title: String) {
-        _uiState.value = _uiState.value.copy(titleNative = title)
-    }
-
     fun updateSourceUrl(url: String) {
-        _uiState.value = _uiState.value.copy(sourceUrl = url, errorMsg = null)
+        _uiState.value = _uiState.value.copy(sourceUrl = url, errorMsg = null, scrapeError = null)
     }
 
     private var lastExtractedSource: String? = null
@@ -452,22 +474,6 @@ class MediaDetailsViewModel(
         _uiState.value = _uiState.value.copy(secondaryProgress = progress)
     }
 
-    fun updateSecondaryProgressTotal(total: String) {
-        _uiState.value = _uiState.value.copy(secondaryProgressTotal = total)
-    }
-
-    fun updateActionOverride(action: String?) {
-        _uiState.value = _uiState.value.copy(actionOverride = action)
-    }
-
-    fun updatePlaybackSpeed(speed: Double) {
-        _uiState.value = _uiState.value.copy(playbackSpeed = speed)
-    }
-
-    fun updateAvgChapterLength(length: String) {
-        _uiState.value = _uiState.value.copy(avgChapterLength = length)
-    }
-
     fun updateUserStatus(status: UserStatus) {
         _uiState.value = _uiState.value.copy(userStatus = status)
     }
@@ -488,28 +494,6 @@ class MediaDetailsViewModel(
             originalItem = originalItem?.copy(notes = _uiState.value.notes)
             autoSave()
         }
-    }
-
-    fun addGenre(genre: String) {
-        val trimmed = genre.trim()
-        if (trimmed.isNotEmpty() && trimmed !in _uiState.value.genres) {
-            _uiState.value = _uiState.value.copy(genres = _uiState.value.genres + trimmed)
-        }
-    }
-
-    fun removeGenre(genre: String) {
-        _uiState.value = _uiState.value.copy(genres = _uiState.value.genres - genre)
-    }
-
-    fun addTag(tag: String) {
-        val trimmed = tag.trim()
-        if (trimmed.isNotEmpty() && trimmed !in _uiState.value.tags) {
-            _uiState.value = _uiState.value.copy(tags = _uiState.value.tags + trimmed)
-        }
-    }
-
-    fun removeTag(tag: String) {
-        _uiState.value = _uiState.value.copy(tags = _uiState.value.tags - tag)
     }
 
     fun updateAuthor(author: String) {
@@ -547,7 +531,11 @@ class MediaDetailsViewModel(
                         downloadImageToTemp(coverUrl)
                     }
 
+                    val targetType = metadata.type ?: guessTypeFromUrl(trimmed) ?: _uiState.value.mediaType
+                    val typeChanged = targetType != _uiState.value.mediaType
                     _uiState.value = _uiState.value.copy(
+                        mediaType = targetType,
+                        formatId = if (typeChanged) null else _uiState.value.formatId,
                         title = metadata.title.takeIf { it.isNotBlank() } ?: _uiState.value.title,
                         description = metadata.description.takeIf { it.isNotBlank() } ?: _uiState.value.description,
                         author = metadata.author.takeIf { it.isNotBlank() } ?: _uiState.value.author,
@@ -556,51 +544,94 @@ class MediaDetailsViewModel(
                         genres = if (metadata.genres.isNotEmpty()) metadata.genres else _uiState.value.genres,
                         tags = if (metadata.tags.isNotEmpty()) metadata.tags else _uiState.value.tags,
                         isScraping = false,
+                        scrapeError = null,
+                        errorMsg = null,
+                        scrapeVersion = _uiState.value.scrapeVersion + 1,
                     )
-
-                    metadata.type?.let { type ->
-                        updateMediaType(type)
-                    } ?: run {
-                        guessTypeFromUrl(trimmed)?.let { guessed ->
-                            updateMediaType(guessed)
-                        }
+                    if (typeChanged) {
+                        observeTypeFormats(targetType.name)
                     }
                 }.onFailure { exception ->
-                    val msg = exception.message ?: "Failed to scrape metadata"
-                    _uiState.value = _uiState.value.copy(
-                        isScraping = false,
-                        scrapeError = msg,
-                        errorMsg = msg,
-                    )
+                    setScrapeError(exception.message ?: "Failed to scrape metadata")
                 }
             } catch (e: Exception) {
-                val msg = e.message ?: "Failed to scrape metadata"
-                _uiState.value = _uiState.value.copy(
-                    isScraping = false,
-                    scrapeError = msg,
-                    errorMsg = msg,
-                )
+                setScrapeError(e.message ?: "Failed to scrape metadata")
             }
         }
+    }
+
+    private fun setScrapeError(message: String) {
+        _uiState.value = _uiState.value.copy(
+            isScraping = false,
+            scrapeError = message,
+        )
+    }
+
+    private fun validateMetadata(state: MediaDetailsUiState): String? = when {
+        state.isTitleBlank -> "Title is required"
+        state.isProgressInvalid -> "Progress cannot exceed total items"
+        state.isTotalInvalid -> "Total items cannot be negative"
+        state.isUrlInvalid -> "Source URL must start with http:// or https://"
+        else -> null
+    }
+
+    fun commitMetadataEdits(
+        sourceUrl: String,
+        mediaType: MediaType,
+        formatId: String?,
+        title: String,
+        author: String,
+        totalItems: String,
+        description: String,
+    ): Boolean {
+        val current = _uiState.value
+        if (current.isScraping || current.isSaving) return false
+
+        val candidate = current.copy(
+            sourceUrl = sourceUrl,
+            mediaType = mediaType,
+            formatId = formatId,
+            title = title,
+            author = author,
+            totalItems = totalItems,
+            description = description,
+            errorMsg = null,
+        )
+        val validationError = validateMetadata(candidate)
+        if (validationError != null) {
+            _uiState.value = candidate.copy(errorMsg = validationError)
+            return false
+        }
+
+        _uiState.value = candidate
+        if (mediaType != current.mediaType || formatId != current.formatId) {
+            observeTypeFormats(mediaType.name, formatId)
+        }
+        if (!candidate.isNew) {
+            save(exitOnSuccess = false)
+        }
+        return true
+    }
+
+    private fun formatIdToDomainFormat(formatId: String?): String = when (formatId?.lowercase()) {
+        null, "" -> ""
+        "typ_novel_ln" -> "LIGHT_NOVEL"
+        "typ_novel_kr", "typ_novel_cn" -> "WEB_NOVEL"
+        "typ_manga", "typ_manga_jp" -> "MANGA"
+        "typ_manhwa" -> "MANHWA"
+        "typ_manhua" -> "MANHUA"
+        "typ_tv", "typ_anime_series" -> "TV"
+        "typ_anime_movie" -> "MOVIE"
+        "typ_anime_ova" -> "OVA"
+        else -> if (formatId.startsWith("typ_", ignoreCase = true)) "" else formatId.uppercase()
     }
 
     fun save(exitOnSuccess: Boolean = true) {
         flushNotes()
         val state = _uiState.value
-        if (state.isTitleBlank) {
-            _uiState.value = _uiState.value.copy(errorMsg = "Title is required")
-            return
-        }
-        if (state.isProgressInvalid) {
-            _uiState.value = _uiState.value.copy(errorMsg = "Progress cannot exceed total items")
-            return
-        }
-        if (state.isTotalInvalid) {
-            _uiState.value = _uiState.value.copy(errorMsg = "Total items cannot be negative")
-            return
-        }
-        if (state.isUrlInvalid) {
-            _uiState.value = _uiState.value.copy(errorMsg = "Source URL must start with http:// or https://")
+        val validationError = validateMetadata(state)
+        if (validationError != null) {
+            _uiState.value = _uiState.value.copy(errorMsg = validationError)
             return
         }
         if (state.isSaving || state.isScraping) return
@@ -611,7 +642,19 @@ class MediaDetailsViewModel(
             val totalVal = state.parsedTotal
             val progressVal = state.parsedProgress ?: 0
 
-            val resolvedTypeId = state.formatId ?: state.mediaType.toTopLevelId()
+            val existing = originalItem
+            val resolvedFormat = formatIdToDomainFormat(state.formatId).ifBlank {
+                existing?.format?.takeIf { state.mediaType == existing.mediaType }.orEmpty()
+            }
+            val resolvedCountry = when {
+                state.mediaType != MediaType.MANGA -> existing?.countryOfOrigin
+                resolvedFormat == "MANHWA" -> "KR"
+                resolvedFormat == "MANHUA" -> existing?.countryOfOrigin?.takeIf {
+                    it.equals("CN", ignoreCase = true) || it.equals("TW", ignoreCase = true)
+                } ?: "CN"
+                resolvedFormat == "MANGA" && existing?.countryOfOrigin?.uppercase() in setOf("KR", "CN", "TW") -> null
+                else -> existing?.countryOfOrigin
+            }
 
             val romaji = state.titleRomaji.trim().ifEmpty { state.alternativeTitles.getOrNull(0) ?: "" }
             val english = state.alternativeTitles.getOrNull(1) ?: ""
@@ -624,37 +667,72 @@ class MediaDetailsViewModel(
                 emptyList()
             }
 
-            var item = MediaItem(
-                id = state.id.ifBlank { UUID.randomUUID().toString() },
-                typeId = resolvedTypeId,
-                mediaType = state.mediaType,
-                title = state.title.trim(),
-                alternativeTitles = altTitles,
-                sourceUrl = state.sourceUrl.trim().ifEmpty { null },
-                coverImagePath = state.coverImagePath,
-                coverImageUrl = state.coverImageUrl.ifEmpty { null },
-                currentProgress = progressVal,
-                totalItems = totalVal,
-                progress = progressVal.toDouble(),
-                progressTotal = totalVal?.toDouble(),
-                secondaryProgress = state.parsedSecondaryProgress ?: 0.0,
-                secondaryProgressTotal = state.parsedSecondaryTotal,
-                actionOverride = state.actionOverride,
-                playbackSpeed = state.playbackSpeed,
-                avgChapterLength = state.avgChapterLength.toIntOrNull(),
-                userStatus = state.userStatus,
-                rating = state.rating,
-                notes = state.notes,
-                genres = state.genres,
-                tags = state.tags,
-                author = state.author.trim(),
-                description = state.description.trim(),
-                startDate = state.startDate,
-                endDate = state.endDate,
-                lastUpdated = System.currentTimeMillis(),
-                dateAdded = originalItem?.dateAdded ?: System.currentTimeMillis(),
-                isAdult = state.isAdult,
-            )
+            val now = System.currentTimeMillis()
+            var item = if (existing != null) {
+                existing.copy(
+                    type = state.mediaType.name,
+                    format = resolvedFormat,
+                    countryOfOrigin = resolvedCountry,
+                    title = state.title.trim(),
+                    alternativeTitles = altTitles,
+                    sourceUrl = state.sourceUrl.trim().ifEmpty { null },
+                    coverImagePath = state.coverImagePath,
+                    coverImageUrl = state.coverImageUrl.ifEmpty { null },
+                    currentProgress = progressVal,
+                    totalItems = totalVal,
+                    progress = progressVal.toDouble(),
+                    progressTotal = totalVal?.toDouble(),
+                    secondaryProgress = state.parsedSecondaryProgress ?: 0.0,
+                    secondaryProgressTotal = state.parsedSecondaryTotal,
+                    actionOverride = state.actionOverride,
+                    playbackSpeed = state.playbackSpeed,
+                    avgChapterLength = state.avgChapterLength.toIntOrNull(),
+                    userStatus = state.userStatus,
+                    rating = state.rating,
+                    notes = state.notes,
+                    genres = state.genres,
+                    tags = state.tags,
+                    author = state.author.trim(),
+                    description = state.description.trim(),
+                    startDate = state.startDate,
+                    endDate = state.endDate,
+                    lastUpdated = now,
+                    isAdult = state.isAdult,
+                )
+            } else {
+                MediaItem(
+                    id = state.id.ifBlank { UUID.randomUUID().toString() },
+                    type = state.mediaType.name,
+                    format = resolvedFormat,
+                    countryOfOrigin = resolvedCountry,
+                    title = state.title.trim(),
+                    alternativeTitles = altTitles,
+                    sourceUrl = state.sourceUrl.trim().ifEmpty { null },
+                    coverImagePath = state.coverImagePath,
+                    coverImageUrl = state.coverImageUrl.ifEmpty { null },
+                    currentProgress = progressVal,
+                    totalItems = totalVal,
+                    progress = progressVal.toDouble(),
+                    progressTotal = totalVal?.toDouble(),
+                    secondaryProgress = state.parsedSecondaryProgress ?: 0.0,
+                    secondaryProgressTotal = state.parsedSecondaryTotal,
+                    actionOverride = state.actionOverride,
+                    playbackSpeed = state.playbackSpeed,
+                    avgChapterLength = state.avgChapterLength.toIntOrNull(),
+                    userStatus = state.userStatus,
+                    rating = state.rating,
+                    notes = state.notes,
+                    genres = state.genres,
+                    tags = state.tags,
+                    author = state.author.trim(),
+                    description = state.description.trim(),
+                    startDate = state.startDate,
+                    endDate = state.endDate,
+                    lastUpdated = now,
+                    dateAdded = now,
+                    isAdult = state.isAdult,
+                )
+            }
 
             if (!state.bannerImage.isNullOrBlank()) {
                 item = item.withExtra("banner_image", state.bannerImage!!)
@@ -912,7 +990,7 @@ class MediaDetailsViewModel(
             state.alternativeTitles != orig.alternativeTitles ||
             state.titleRomaji != (orig.alternativeTitles.getOrNull(0) ?: "") ||
             state.titleNative != (orig.alternativeTitles.getOrNull(2) ?: "") ||
-            state.formatId != orig.typeId ||
+            state.formatId != resolveFormatId(orig) ||
             state.bannerImage != orig.getExtra("banner_image") ||
             state.secondaryProgress != formatProgress(orig.secondaryProgress) ||
             state.secondaryProgressTotal != (orig.secondaryProgressTotal?.let { formatProgress(it) } ?: "") ||

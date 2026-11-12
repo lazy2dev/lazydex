@@ -3,15 +3,14 @@ package app.lazydex.ui.details
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -22,7 +21,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Delete
@@ -33,16 +31,19 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -55,6 +56,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -476,19 +478,11 @@ fun MediaDetailsScreen(
             )
         }
         ActiveDialog.Metadata -> {
-            ModalBottomSheet(
-                onDismissRequest = { activeDialog = null },
-                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-            ) {
-                EditMetadataSheetContent(
-                    state = state,
-                    viewModel = viewModel,
-                    onClose = {
-                        viewModel.autoSave()
-                        activeDialog = null
-                    }
-                )
-            }
+            EditMetadataModalSheet(
+                state = state,
+                viewModel = viewModel,
+                onDismiss = { activeDialog = null }
+            )
         }
         ActiveDialog.Sync -> {
             MediaTrackerSyncDialog(
@@ -569,182 +563,353 @@ fun MediaDetailsScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EditMetadataSheetContent(
+private fun EditMetadataModalSheet(
     state: MediaDetailsUiState,
     viewModel: MediaDetailsViewModel,
-    onClose: () -> Unit
+    onDismiss: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
-            .navigationBarsPadding()
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Edit Media Details",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-            Button(onClick = onClose) {
-                Text("Done")
+    DisposableEffect(Unit) {
+        viewModel.setMetadataSheetOpen(true)
+        onDispose { viewModel.setMetadataSheetOpen(false) }
+    }
+
+    var sourceUrl by remember { mutableStateOf(state.sourceUrl) }
+    var selectedType by remember { mutableStateOf(state.mediaType) }
+    var selectedFormatId by remember { mutableStateOf(state.formatId) }
+    var title by remember { mutableStateOf(state.title) }
+    var author by remember { mutableStateOf(state.author) }
+    var totalItems by remember { mutableStateOf(state.totalItems) }
+    var description by remember { mutableStateOf(state.description) }
+    var localError by remember { mutableStateOf<String?>(null) }
+    var handledScrapeVersion by remember { mutableIntStateOf(state.scrapeVersion) }
+    var committed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.scrapeVersion) {
+        if (state.scrapeVersion != handledScrapeVersion) {
+            handledScrapeVersion = state.scrapeVersion
+            selectedType = state.mediaType
+            selectedFormatId = state.formatId
+            title = state.title
+            author = state.author
+            description = state.description
+            localError = null
+        }
+    }
+
+    val scope = rememberCoroutineScope()
+
+    val trimmedUrl = sourceUrl.trim()
+    val urlInvalid = trimmedUrl.isNotEmpty() &&
+        !trimmedUrl.startsWith("http://", ignoreCase = true) &&
+        !trimmedUrl.startsWith("https://", ignoreCase = true)
+    val titleBlank = title.trim().isBlank()
+    val parsedDraftTotal = totalItems.trim().takeIf { it.isNotEmpty() }?.toIntOrNull()
+    val progressNum = state.parsedProgress
+    val totalInvalid = (totalItems.trim().isNotEmpty() && (parsedDraftTotal == null || parsedDraftTotal < 0)) ||
+        (progressNum != null && parsedDraftTotal != null && progressNum > parsedDraftTotal)
+
+    fun tryCommit(): Boolean {
+        if (state.isScraping) {
+            localError = "Wait for metadata fetch to finish"
+            return false
+        }
+        val err = when {
+            titleBlank -> "Title is required"
+            totalInvalid -> if (progressNum != null && parsedDraftTotal != null && progressNum > parsedDraftTotal) {
+                "Progress cannot exceed total items"
+            } else {
+                "Total items cannot be negative"
+            }
+            urlInvalid -> "Source URL must start with http:// or https://"
+            else -> null
+        }
+        if (err != null) {
+            localError = err
+            return false
+        }
+        val ok = viewModel.commitMetadataEdits(
+            sourceUrl = sourceUrl,
+            mediaType = selectedType,
+            formatId = selectedFormatId,
+            title = title,
+            author = author,
+            totalItems = totalItems,
+            description = description,
+        )
+        if (!ok) {
+            localError = viewModel.uiState.value.errorMsg ?: "Unable to save changes"
+            return false
+        }
+        committed = true
+        localError = null
+        return true
+    }
+
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { target ->
+            if (target == SheetValue.Hidden && !committed) {
+                tryCommit()
+            } else {
+                true
             }
         }
+    )
 
-        // Relocated Scraper / Source URL Fetcher
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.small
+    val dynamicFormats by remember(selectedType) {
+        viewModel.observeFormatsForType(selectedType.name)
+    }.collectAsState(initial = if (selectedType == state.mediaType) state.availableFormats else emptyList())
+
+    val typeOptions = remember(state.availableTypes) {
+        val mapped = state.availableTypes.mapNotNull { cfg ->
+            runCatching { MediaType.valueOf(cfg.id.uppercase()) }.getOrNull()?.let { it to cfg.name }
+        }
+        mapped.ifEmpty {
+            listOf(
+                MediaType.NOVEL to MediaType.NOVEL.displayName,
+                MediaType.MANGA to MediaType.MANGA.displayName,
+                MediaType.ANIME to MediaType.ANIME.displayName,
+                MediaType.GAME to MediaType.GAME.displayName,
+            )
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = {
+            if (committed || tryCommit()) {
+                onDismiss()
+            } else {
+                scope.launch { sheetState.show() }
+            }
+        },
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.CloudDownload,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
+                Text(
+                    text = "Edit Media Details",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
                 )
-                OutlinedTextField(
-                    value = state.sourceUrl,
-                    onValueChange = { viewModel.updateSourceUrl(it) },
-                    label = { Text("Source URL") },
-                    placeholder = { Text("Paste URL to auto-fetch info") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f)
-                )
-                FilledTonalButton(
-                    onClick = { viewModel.scrapeUrl() },
-                    enabled = !state.isScraping && state.sourceUrl.isNotBlank()
-                ) {
-                    if (state.isScraping) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Default.Refresh, contentDescription = "Fetch", modifier = Modifier.size(16.dp))
-                    }
-                }
-            }
-        }
-
-        // Type & Format Picker
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            var typeExpanded by remember { mutableStateOf(false) }
-            Box(modifier = Modifier.weight(1f)) {
-                OutlinedTextField(
-                    value = state.mediaType.displayName,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Type") },
-                    trailingIcon = {
-                        IconButton(onClick = { typeExpanded = true }) {
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                Button(
+                    onClick = {
+                        if (tryCommit()) {
+                            scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
                         }
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { typeExpanded = true }
-                )
-                DropdownMenu(
-                    expanded = typeExpanded,
-                    onDismissRequest = { typeExpanded = false },
+                    enabled = !state.isScraping && !state.isSaving
                 ) {
-                    MediaType.entries.forEach { mediaType ->
-                        DropdownMenuItem(
-                            text = { Text(mediaType.displayName) },
-                            onClick = {
-                                viewModel.updateMediaType(mediaType)
-                                typeExpanded = false
-                            }
-                        )
-                    }
+                    Text("Done")
                 }
             }
 
-            if (state.availableFormats.isNotEmpty()) {
-                var formatExpanded by remember { mutableStateOf(false) }
-                val currentFormatName = state.availableFormats.find { it.id == state.formatId }?.name
-                    ?: state.availableFormats.firstOrNull()?.name ?: "Standard"
-                Box(modifier = Modifier.weight(1f)) {
-                    OutlinedTextField(
-                        value = currentFormatName,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Format") },
-                        trailingIcon = {
-                            IconButton(onClick = { formatExpanded = true }) {
-                                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                            }
-                        },
+            if (localError != null) {
+                Text(
+                    text = localError!!,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+
+            // Source URL Fetcher
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { formatExpanded = true }
-                    )
-                    DropdownMenu(
-                        expanded = formatExpanded,
-                        onDismissRequest = { formatExpanded = false },
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        state.availableFormats.forEach { format ->
+                        Icon(
+                            imageVector = Icons.Default.CloudDownload,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        OutlinedTextField(
+                            value = sourceUrl,
+                            onValueChange = {
+                                sourceUrl = it
+                                localError = null
+                                viewModel.clearScrapeError()
+                            },
+                            label = { Text("Source URL") },
+                            placeholder = { Text("Paste URL to auto-fetch info") },
+                            isError = urlInvalid && localError != null,
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilledTonalButton(
+                            onClick = {
+                                localError = null
+                                viewModel.clearScrapeError()
+                                viewModel.updateSourceUrl(sourceUrl)
+                                viewModel.scrapeUrl(sourceUrl)
+                            },
+                            enabled = !state.isScraping && sourceUrl.isNotBlank() && !urlInvalid
+                        ) {
+                            if (state.isScraping) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(Icons.Default.Refresh, contentDescription = "Fetch", modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    }
+                }
+                if (state.scrapeError != null) {
+                    Text(
+                        text = state.scrapeError,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                }
+            }
+
+            // Type & Format Picker
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                var typeExpanded by remember { mutableStateOf(false) }
+                val selectedTypeLabel = typeOptions.find { it.first == selectedType }?.second ?: selectedType.displayName
+                ExposedDropdownMenuBox(
+                    expanded = typeExpanded,
+                    onExpandedChange = { typeExpanded = it },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    OutlinedTextField(
+                        value = selectedTypeLabel,
+                        onValueChange = {},
+                        readOnly = true,
+                        singleLine = true,
+                        label = { Text("Type") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
+                        colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = typeExpanded,
+                        onDismissRequest = { typeExpanded = false },
+                    ) {
+                        typeOptions.forEach { (mediaType, label) ->
                             DropdownMenuItem(
-                                text = { Text(format.name) },
+                                text = { Text(label) },
                                 onClick = {
-                                    viewModel.updateFormatId(format.id)
-                                    formatExpanded = false
+                                    if (mediaType != selectedType) {
+                                        selectedType = mediaType
+                                        selectedFormatId = null
+                                    }
+                                    typeExpanded = false
                                 }
                             )
                         }
                     }
                 }
+
+                if (dynamicFormats.isNotEmpty()) {
+                    var formatExpanded by remember { mutableStateOf(false) }
+                    val currentFormatName = dynamicFormats.find {
+                        it.id.equals(selectedFormatId, ignoreCase = true)
+                    }?.name ?: "Standard"
+                    ExposedDropdownMenuBox(
+                        expanded = formatExpanded,
+                        onExpandedChange = { formatExpanded = it },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        OutlinedTextField(
+                            value = currentFormatName,
+                            onValueChange = {},
+                            readOnly = true,
+                            singleLine = true,
+                            label = { Text("Format") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = formatExpanded) },
+                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                        )
+                        ExposedDropdownMenu(
+                            expanded = formatExpanded,
+                            onDismissRequest = { formatExpanded = false },
+                        ) {
+                            dynamicFormats.forEach { format ->
+                                DropdownMenuItem(
+                                    text = { Text(format.name) },
+                                    onClick = {
+                                        selectedFormatId = format.id
+                                        formatExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
             }
+
+            OutlinedTextField(
+                value = title,
+                onValueChange = {
+                    title = it
+                    localError = null
+                },
+                label = { Text("Title *") },
+                isError = titleBlank && localError != null,
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            OutlinedTextField(
+                value = author,
+                onValueChange = { author = it },
+                label = { Text("Author / Artist / Studio") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            OutlinedTextField(
+                value = totalItems,
+                onValueChange = {
+                    totalItems = it.filter { ch -> ch.isDigit() }
+                    localError = null
+                },
+                label = { Text("Total Units (Chapters/Episodes)") },
+                isError = totalInvalid && localError != null,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            OutlinedTextField(
+                value = description,
+                onValueChange = { description = it },
+                label = { Text("Synopsis / Description") },
+                minLines = 3,
+                maxLines = 8,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
-
-        OutlinedTextField(
-            value = state.title,
-            onValueChange = { viewModel.updateTitle(it) },
-            label = { Text("Title *") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        OutlinedTextField(
-            value = state.author,
-            onValueChange = { viewModel.updateAuthor(it) },
-            label = { Text("Author / Artist / Studio") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        OutlinedTextField(
-            value = state.totalItems,
-            onValueChange = { viewModel.updateTotalItems(it.filter { ch -> ch.isDigit() }) },
-            label = { Text("Total Units (Chapters/Episodes)") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        OutlinedTextField(
-            value = state.description,
-            onValueChange = { viewModel.updateDescription(it) },
-            label = { Text("Synopsis / Description") },
-            minLines = 3,
-            maxLines = 8,
-            modifier = Modifier.fillMaxWidth()
-        )
     }
 }
 
