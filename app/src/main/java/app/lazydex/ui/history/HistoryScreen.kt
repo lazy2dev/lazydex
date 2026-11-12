@@ -49,7 +49,7 @@ fun HistoryScreen(
     modifier: Modifier = Modifier,
     repository: MediaRepository = koinInject()
 ) {
-    val items by repository.observeAll().collectAsState(initial = emptyList())
+    val items by repository.observeHistory().collectAsState(initial = emptyList())
     var isSearching by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
 
@@ -61,7 +61,6 @@ fun HistoryScreen(
                 else item.title.contains(query, ignoreCase = true) ||
                         (item.author?.contains(query, ignoreCase = true) == true)
             }
-            .sortedByDescending { it.lastUpdated }
             .toList()
     }
 

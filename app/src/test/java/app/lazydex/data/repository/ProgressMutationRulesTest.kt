@@ -14,6 +14,7 @@ import app.lazydex.data.local.entity.AppSettingEntity
 import app.lazydex.data.local.entity.MediaItemEntity
 import app.lazydex.data.local.entity.MediaLinkEntity
 import app.lazydex.data.local.entity.SyncOutboxEntity
+import app.lazydex.data.local.entity.UserDataEntity
 import app.lazydex.data.tracker.anilist.AnilistApi
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.anilist.TokenBucketLimiter
@@ -192,13 +193,17 @@ class ProgressMutationRulesTest {
             type = "MANGA",
             format = "MANGA",
             title = "Solo Leveling",
-            userStatus = "IN_PROGRESS",
-            progress = 10.0,
             progressTotal = 200.0,
             createdAt = 1_000_000L,
             updatedAt = 1_000_000L
         )
         itemDao.items[localItem.id] = localItem
+        itemDao.userData[localItem.id] = UserDataEntity(
+            mediaId = "media-1",
+            userStatus = "IN_PROGRESS",
+            progress = 10.0,
+            updatedAt = 1_000_000L
+        )
 
         val link = MediaLinkEntity(
             id = "link-1",
@@ -219,7 +224,7 @@ class ProgressMutationRulesTest {
         assertNotNull(updated)
         assertEquals(11.0, updated!!.progress, 0.001)
 
-        val updatedDb = itemDao.items["media-1"]!!
+        val updatedDb = itemDao.getActiveById("media-1")!!
         assertEquals(11.0, updatedDb.progress, 0.001)
         assertEquals("IN_PROGRESS", updatedDb.userStatus)
 
@@ -256,18 +261,22 @@ class ProgressMutationRulesTest {
             type = "MANGA",
             format = "MANGA",
             title = "Local Only Comic",
-            userStatus = "PLANNING",
-            progress = 0.0,
             progressTotal = 50.0,
             createdAt = 1_000_000L,
             updatedAt = 1_000_000L
         )
         itemDao.items[localItem.id] = localItem
+        itemDao.userData[localItem.id] = UserDataEntity(
+            mediaId = "media-unlinked",
+            userStatus = "PLANNING",
+            progress = 0.0,
+            updatedAt = 1_000_000L
+        )
 
         val updated = repo.incrementProgress("media-unlinked", 1.0)
         assertNotNull(updated)
         assertEquals(1.0, updated!!.progress, 0.001)
-        val updatedDb = itemDao.items["media-unlinked"]!!
+        val updatedDb = itemDao.getActiveById("media-unlinked")!!
         assertEquals("IN_PROGRESS", updatedDb.userStatus)
 
         testScope.advanceUntilIdle()
@@ -303,13 +312,17 @@ class ProgressMutationRulesTest {
             type = "ANIME",
             format = "TV",
             title = "Frieren",
-            userStatus = "IN_PROGRESS",
-            progress = 10.0,
             progressTotal = 28.0,
             createdAt = 1_000_000L,
             updatedAt = 1_000_000L
         )
         itemDao.items[localItem.id] = localItem
+        itemDao.userData[localItem.id] = UserDataEntity(
+            mediaId = "media-update",
+            userStatus = "IN_PROGRESS",
+            progress = 10.0,
+            updatedAt = 1_000_000L
+        )
 
         val link = MediaLinkEntity(
             id = "link-update",
@@ -341,7 +354,7 @@ class ProgressMutationRulesTest {
         )
         repo.update(domainItem)
 
-        val updatedDb = itemDao.items["media-update"]!!
+        val updatedDb = itemDao.getActiveById("media-update")!!
         assertEquals("COMPLETED", updatedDb.userStatus)
 
         testScope.advanceUntilIdle()
@@ -379,13 +392,17 @@ class ProgressMutationRulesTest {
             type = "MANGA",
             format = "MANGA",
             title = "Berserk",
-            userStatus = "IN_PROGRESS",
-            progress = 375.0,
             progressTotal = 376.0,
             createdAt = 1_000_000L,
             updatedAt = 1_000_000L
         )
         itemDao.items[localItem.id] = localItem
+        itemDao.userData[localItem.id] = UserDataEntity(
+            mediaId = "media-never",
+            userStatus = "IN_PROGRESS",
+            progress = 375.0,
+            updatedAt = 1_000_000L
+        )
 
         val link = MediaLinkEntity(
             id = "link-never",
@@ -404,7 +421,7 @@ class ProgressMutationRulesTest {
 
         repo.incrementProgress("media-never", 1.0)
 
-        val updatedDb = itemDao.items["media-never"]!!
+        val updatedDb = itemDao.getActiveById("media-never")!!
         assertEquals("COMPLETED", updatedDb.userStatus)
 
         testScope.advanceUntilIdle()
@@ -439,13 +456,17 @@ class ProgressMutationRulesTest {
             type = "NOVEL",
             format = "NOVEL",
             title = "Lord of the Mysteries",
-            userStatus = "READING",
-            progress = 10.0,
             progressTotal = 1400.0,
             createdAt = 1_000_000L,
             updatedAt = 1_000_000L
         )
         itemDao.items[localItem.id] = localItem
+        itemDao.userData[localItem.id] = UserDataEntity(
+            mediaId = "media-manual",
+            userStatus = "READING",
+            progress = 10.0,
+            updatedAt = 1_000_000L
+        )
 
         val unchangedDomain = MediaItem(
             id = "media-manual",
@@ -505,22 +526,26 @@ class ProgressMutationRulesTest {
             type = "ANIME",
             format = "TV",
             title = "Frieren",
-            userStatus = "COMPLETED",
-            progress = 28.0,
             progressTotal = 28.0,
-            repeat = 2,
             durationMinutes = 24,
             createdAt = 1_000_000L,
             updatedAt = 1_000_000L
         )
         itemDao.items[syncedEntity.id] = syncedEntity
+        itemDao.userData[syncedEntity.id] = UserDataEntity(
+            mediaId = "anime-synced",
+            userStatus = "COMPLETED",
+            progress = 28.0,
+            repeat = 2,
+            updatedAt = 1_000_000L
+        )
 
         val loaded = repo.getById("anime-synced")!!
         assertEquals(2, loaded.repeat)
         assertEquals(24, loaded.durationMinutes)
 
         repo.update(loaded.copy(notes = "Edited notes locally"))
-        val persisted = itemDao.items["anime-synced"]!!
+        val persisted = repo.getById("anime-synced")!!
         assertEquals(2, persisted.repeat)
         assertEquals(24, persisted.durationMinutes)
     }
@@ -550,6 +575,146 @@ class ProgressMutationRulesTest {
 
         assertEquals("Volume", repo.getResolvedConfig("MANGA").secondaryUnitName)
         assertNull(repo.getResolvedConfig("MANHWA").secondaryUnitName)
+        assertNull(repo.getResolvedConfig("ANIME").secondaryUnitName)
+        assertNull(repo.getResolvedConfig("TV").secondaryUnitName)
+    }
+
+    @Test
+    fun `catalog-only edit does not bump progressIncreasedAt, userUpdatedAt, or mark links dirty`() = runTest {
+        val testDispatcher = StandardTestDispatcher(testScheduler)
+        val testScope = TestScope(testDispatcher)
+
+        val itemDao = FakeMediaItemDao()
+        val linkDao = FakeMediaLinkDao()
+        val activityDao = FakeActivityDao()
+        val outboxDao = FakeSyncOutboxDao()
+        val settingDao = FakeAppSettingDao()
+        val syncEngine = FakeSyncEngine()
+
+        val repo = MediaRepositoryImpl(
+            db = null,
+            dao = itemDao,
+            linkDao = linkDao,
+            activityDao = activityDao,
+            outboxDao = outboxDao,
+            settingDao = settingDao,
+            localCoversDir = File(""),
+            syncEngine = syncEngine,
+            syncScope = testScope
+        )
+
+        val entity = MediaItemEntity(
+            id = "catalog-test",
+            type = "MANGA",
+            format = "MANGA",
+            title = "Original Title",
+            description = "Original Description",
+            createdAt = 1_000_000L,
+            updatedAt = 1_000_000L
+        )
+        val userData = UserDataEntity(
+            mediaId = "catalog-test",
+            userStatus = "IN_PROGRESS",
+            progress = 10.0,
+            updatedAt = 1_000_000L,
+            progressIncreasedAt = 1_000_000L
+        )
+        itemDao.items[entity.id] = entity
+        itemDao.userData[entity.id] = userData
+
+        val link = MediaLinkEntity(
+            id = "link-catalog",
+            mediaId = entity.id,
+            kind = "TRACKER",
+            providerId = "anilist",
+            remoteId = "12345",
+            url = "https://anilist.co/manga/12345",
+            syncStatus = "SYNCED",
+            createdAt = 1_000_000L,
+            updatedAt = 1_000_000L
+        )
+        linkDao.links[link.id] = link
+
+        val loaded = repo.getById("catalog-test")!!
+        assertEquals(1_000_000L, loaded.progressIncreasedAt)
+
+        // Modify catalog only (title, description)
+        repo.update(loaded.copy(title = "Edited Catalog Title", description = "New Description"))
+
+        val persistedItem = itemDao.items["catalog-test"]!!
+        val persistedUser = itemDao.userData["catalog-test"]!!
+        assertEquals("Edited Catalog Title", persistedItem.title)
+        assertEquals("New Description", persistedItem.description)
+        assertTrue(persistedItem.updatedAt > 1_000_000L)
+
+        // User data and history timestamp MUST remain completely unchanged
+        assertEquals(1_000_000L, persistedUser.updatedAt)
+        assertEquals(1_000_000L, persistedUser.progressIncreasedAt)
+
+        testScope.advanceUntilIdle()
+        // Must NOT mark link DIRTY_LOCAL or push to remote
+        assertEquals("SYNCED", linkDao.links[link.id]!!.syncStatus)
+        assertTrue(syncEngine.pushedMediaIds.isEmpty())
+    }
+
+    @Test
+    fun `non-increasing user data edit does not bump progressIncreasedAt`() = runTest {
+        val testDispatcher = StandardTestDispatcher(testScheduler)
+        val testScope = TestScope(testDispatcher)
+
+        val itemDao = FakeMediaItemDao()
+        val linkDao = FakeMediaLinkDao()
+        val activityDao = FakeActivityDao()
+        val outboxDao = FakeSyncOutboxDao()
+        val settingDao = FakeAppSettingDao()
+        val syncEngine = FakeSyncEngine()
+
+        val repo = MediaRepositoryImpl(
+            db = null,
+            dao = itemDao,
+            linkDao = linkDao,
+            activityDao = activityDao,
+            outboxDao = outboxDao,
+            settingDao = settingDao,
+            localCoversDir = File(""),
+            syncEngine = syncEngine,
+            syncScope = testScope
+        )
+
+        val entity = MediaItemEntity(
+            id = "userdata-test",
+            type = "MANGA",
+            format = "MANGA",
+            title = "Test Manga",
+            createdAt = 1_000_000L,
+            updatedAt = 1_000_000L
+        )
+        val userData = UserDataEntity(
+            mediaId = "userdata-test",
+            userStatus = "IN_PROGRESS",
+            progress = 10.0,
+            notes = "Old note",
+            updatedAt = 1_000_000L,
+            progressIncreasedAt = 1_000_000L
+        )
+        itemDao.items[entity.id] = entity
+        itemDao.userData[entity.id] = userData
+
+        val loaded = repo.getById("userdata-test")!!
+        // Edit notes only (no progress increase)
+        repo.update(loaded.copy(notes = "Updated note only"))
+
+        val persistedUser = itemDao.userData["userdata-test"]!!
+        assertEquals("Updated note only", persistedUser.notes)
+        assertTrue(persistedUser.updatedAt!! > 1_000_000L)
+        // progressIncreasedAt MUST NOT be bumped
+        assertEquals(1_000_000L, persistedUser.progressIncreasedAt)
+
+        // Strict progress increase DOES bump progressIncreasedAt
+        repo.update(loaded.copy(currentProgress = 11, progress = 11.0))
+        val bumpedUser = itemDao.userData["userdata-test"]!!
+        assertEquals(11.0, bumpedUser.progress, 0.001)
+        assertTrue(bumpedUser.progressIncreasedAt!! > 1_000_000L)
     }
 
     // --- Fakes ---
@@ -574,8 +739,10 @@ class ProgressMutationRulesTest {
 
     class FakeMediaItemDao : MediaItemDao {
         val items = mutableMapOf<String, MediaItemEntity>()
+        val userData = mutableMapOf<String, UserDataEntity>()
 
         override fun observeAll(): Flow<List<ActiveMediaItemView>> = emptyFlow()
+        override fun observeHistory(): Flow<List<ActiveMediaItemView>> = emptyFlow()
         override fun observeByType(type: String): Flow<List<ActiveMediaItemView>> = emptyFlow()
         override fun observeTypeCounts(): Flow<List<TypeCount>> = emptyFlow()
         override fun observeStatusCounts(type: String?): Flow<List<StatusCount>> = emptyFlow()
@@ -584,7 +751,11 @@ class ProgressMutationRulesTest {
         override fun observeCount(): Flow<Int> = emptyFlow()
         override fun observeById(id: String): Flow<ActiveMediaItemView?> = emptyFlow()
         override suspend fun getById(id: String): MediaItemEntity? = items[id]
+        override suspend fun getUserData(mediaId: String): UserDataEntity? = userData[mediaId]
+        override suspend fun upsertUserData(userData: UserDataEntity) { this.userData[userData.mediaId] = userData }
+        override suspend fun upsertUserDataAll(items: List<UserDataEntity>) { items.forEach { this.userData[it.mediaId] = it } }
         override suspend fun getActiveById(id: String): ActiveMediaItemView? = items[id]?.let { e ->
+            val u = userData[id]
             ActiveMediaItemView(
                 id = e.id,
                 type = e.type,
@@ -599,30 +770,32 @@ class ProgressMutationRulesTest {
                 bannerImage = e.bannerImage,
                 description = e.description,
                 author = e.author,
-                userStatus = e.userStatus,
-                progress = e.progress,
+                userStatus = u?.userStatus ?: "PLAN_TO",
+                progress = u?.progress ?: 0.0,
                 progressTotal = e.progressTotal,
-                secondaryProgress = e.secondaryProgress,
+                secondaryProgress = u?.secondaryProgress ?: 0.0,
                 secondaryProgressTotal = e.secondaryProgressTotal,
-                scoreRaw = e.scoreRaw,
-                repeat = e.repeat,
-                notes = e.notes,
+                scoreRaw = u?.scoreRaw,
+                repeat = u?.repeat ?: 0,
+                notes = u?.notes ?: "",
                 genres = e.genres,
                 tags = e.tags,
-                isPrivate = e.isPrivate,
+                isPrivate = u?.isPrivate ?: false,
                 isAdult = e.isAdult,
-                startYear = e.startYear,
-                startMonth = e.startMonth,
-                startDay = e.startDay,
-                endYear = e.endYear,
-                endMonth = e.endMonth,
-                endDay = e.endDay,
+                startYear = u?.startYear,
+                startMonth = u?.startMonth,
+                startDay = u?.startDay,
+                endYear = u?.endYear,
+                endMonth = u?.endMonth,
+                endDay = u?.endDay,
                 durationMinutes = e.durationMinutes,
                 avgChapterLength = e.avgChapterLength,
                 lengthUnitOverride = e.lengthUnitOverride,
                 playbackSpeed = e.playbackSpeed,
                 createdAt = e.createdAt,
-                updatedAt = e.updatedAt,
+                catalogUpdatedAt = e.updatedAt,
+                userUpdatedAt = u?.updatedAt,
+                progressIncreasedAt = u?.progressIncreasedAt,
                 deletedAt = e.deletedAt
             )
         }
@@ -633,8 +806,8 @@ class ProgressMutationRulesTest {
         override suspend fun atomicIncrementProgress(id: String, delta: Double, now: Long): Int = 1
         override suspend fun softDelete(id: String, now: Long) {}
         override suspend fun restore(id: String, now: Long) {}
-        override suspend fun hardDelete(id: String) { items.remove(id) }
-        override suspend fun deleteAll() { items.clear() }
+        override suspend fun hardDelete(id: String) { items.remove(id); userData.remove(id) }
+        override suspend fun deleteAll() { items.clear(); userData.clear() }
         override fun getStats(): Flow<MediaStats> = emptyFlow()
     }
 

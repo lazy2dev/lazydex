@@ -1,6 +1,8 @@
 package app.lazydex.data.tracker.sync
 
+import app.lazydex.data.local.entity.ActiveMediaItemView
 import app.lazydex.data.local.entity.MediaItemEntity
+import app.lazydex.data.local.entity.UserDataEntity
 import app.lazydex.data.tracker.anilist.dto.AniListMediaListEntry
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -54,16 +56,28 @@ data class LocalState(
     val updatedAt: Long = 0L // Epoch milliseconds
 ) {
     companion object {
-        fun from(entity: MediaItemEntity): LocalState = LocalState(
+        fun from(entity: MediaItemEntity, userData: UserDataEntity? = null): LocalState = LocalState(
             id = entity.id,
-            userStatus = entity.userStatus,
-            progress = entity.progress,
-            secondaryProgress = entity.secondaryProgress,
-            scoreRaw = entity.scoreRaw,
-            repeat = entity.repeat,
-            isPrivate = entity.isPrivate,
-            notes = entity.notes,
-            updatedAt = entity.updatedAt
+            userStatus = userData?.userStatus ?: "PLANNING",
+            progress = userData?.progress ?: 0.0,
+            secondaryProgress = userData?.secondaryProgress ?: 0.0,
+            scoreRaw = userData?.scoreRaw,
+            repeat = userData?.repeat ?: 0,
+            isPrivate = userData?.isPrivate ?: false,
+            notes = userData?.notes ?: "",
+            updatedAt = userData?.updatedAt ?: entity.updatedAt
+        )
+
+        fun from(view: ActiveMediaItemView): LocalState = LocalState(
+            id = view.id,
+            userStatus = view.userStatus,
+            progress = view.progress,
+            secondaryProgress = view.secondaryProgress,
+            scoreRaw = view.scoreRaw,
+            repeat = view.repeat,
+            isPrivate = view.isPrivate,
+            notes = view.notes,
+            updatedAt = view.userUpdatedAt ?: view.catalogUpdatedAt
         )
     }
 }

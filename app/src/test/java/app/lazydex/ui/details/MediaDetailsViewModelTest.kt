@@ -43,6 +43,7 @@ class MediaDetailsViewModelTest {
         val itemFlows = mutableMapOf<String, kotlinx.coroutines.flow.MutableSharedFlow<MediaItem?>>()
 
         override fun observeAll(): Flow<List<MediaItem>> = flowOf(items)
+        override fun observeHistory(): Flow<List<MediaItem>> = flowOf(items.filter { it.progressIncreasedAt != null }.sortedByDescending { it.progressIncreasedAt })
         override fun observeByType(mediaType: MediaType): Flow<List<MediaItem>> = flowOf(items.filter { it.mediaType == mediaType })
         override fun observeFiltered(mediaType: MediaType?, statusFilter: StatusFilter): Flow<List<MediaItem>> = flowOf(items)
         override fun observeById(id: String): Flow<MediaItem?> {

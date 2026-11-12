@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.emptyFlow
 interface MediaRepository {
     /** Reactive observation — UI bindings */
     fun observeAll(): Flow<List<MediaItem>>
+    fun observeHistory(): Flow<List<MediaItem>> = emptyFlow()
     fun observeByType(type: String): Flow<List<MediaItem>> = emptyFlow()
     fun observeByType(mediaType: MediaType): Flow<List<MediaItem>>
     fun observeByTypeId(typeId: String): Flow<List<MediaItem>> = emptyFlow()

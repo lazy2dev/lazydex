@@ -191,11 +191,14 @@ fun resolveHasSecondaryProgress(
     hasSecondaryOverride: Boolean? = null,
 ): Boolean {
     if (hasSecondaryOverride != null) return hasSecondaryOverride
+    if (typeId.startsWith("typ_anime", ignoreCase = true) || typeId.equals("anime", ignoreCase = true)) {
+        return false
+    }
     if (secondaryProgress > 0.0 || (secondaryProgressTotal != null && secondaryProgressTotal > 0.0)) {
         return true
     }
     return when (typeId) {
-        "typ_novel_ln", "typ_manga_jp", "typ_tv", "typ_anime_series" -> true
+        "typ_novel_ln", "typ_manga_jp", "typ_tv" -> true
         else -> false
     }
 }
@@ -307,7 +310,8 @@ fun MediaCard(
 
     when (effectiveMode) {
         LibraryDisplayMode.LIST -> {
-            val relativeTime = remember(item.lastUpdated) { getRelativeTime(item.lastUpdated) }
+            val displayTimestamp = item.progressIncreasedAt ?: item.dateAdded
+            val relativeTime = remember(displayTimestamp) { getRelativeTime(displayTimestamp) }
             val resolvedFormat = remember(item.typeId, item.extraData, item.mediaType, formatName) {
                 resolveFormatName(item.typeId, item.getExtra("format"), item.mediaType, formatName)
             }

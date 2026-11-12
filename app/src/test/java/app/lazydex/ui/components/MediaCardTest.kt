@@ -48,7 +48,7 @@ class MediaCardTest {
         assertTrue(resolveHasSecondaryProgress(typeId = "typ_novel_ln"))
         assertTrue(resolveHasSecondaryProgress(typeId = "typ_manga_jp"))
         assertTrue(resolveHasSecondaryProgress(typeId = "typ_tv"))
-        assertTrue(resolveHasSecondaryProgress(typeId = "typ_anime_series"))
+        assertFalse(resolveHasSecondaryProgress(typeId = "typ_anime_series"))
     }
 
     @Test

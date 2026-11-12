@@ -39,6 +39,7 @@ val databaseModule = module {
             "lazydex_db"
         )
         .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+        .fallbackToDestructiveMigration()
         .fallbackToDestructiveMigrationOnDowngrade()
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {

@@ -55,6 +55,7 @@ class DexViewModelTest {
     ) : MediaRepository {
         override fun observeFilteredByTypeId(typeId: String?, statusFilter: StatusFilter): Flow<List<MediaItem>> = itemsFlow
         override fun observeAll(): Flow<List<MediaItem>> = itemsFlow
+        override fun observeHistory(): Flow<List<MediaItem>> = itemsFlow
         override fun observeByType(mediaType: MediaType): Flow<List<MediaItem>> = itemsFlow
         override fun observeFiltered(mediaType: MediaType?, statusFilter: StatusFilter): Flow<List<MediaItem>> = itemsFlow
         override fun observeById(id: String): Flow<MediaItem?> = flowOf(itemsFlow.value.find { it.id == id })

@@ -51,6 +51,7 @@ fun MediaTrackingSection(
     startDate: Long?,
     endDate: Long?,
     hasSecondaryProgress: Boolean,
+    secondaryUnitName: String? = null,
     secondaryProgress: String,
     secondaryProgressTotal: String,
     notes: String,
@@ -172,7 +173,7 @@ fun MediaTrackingSection(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        text = "Volume Progress",
+                        text = "${secondaryUnitName ?: "Volume"} Progress",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

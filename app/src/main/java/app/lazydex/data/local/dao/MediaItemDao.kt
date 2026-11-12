@@ -6,6 +6,7 @@ import androidx.room.Transaction
 import androidx.room.Upsert
 import app.lazydex.data.local.entity.ActiveMediaItemView
 import app.lazydex.data.local.entity.MediaItemEntity
+import app.lazydex.data.local.entity.UserDataEntity
 import app.lazydex.domain.model.MediaStats
 import kotlinx.coroutines.flow.Flow
 
@@ -16,6 +17,9 @@ data class StatusCount(val userStatus: String, val count: Int)
 interface MediaItemDao {
     @Query("SELECT * FROM active_media_items ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<ActiveMediaItemView>>
+
+    @Query("SELECT * FROM active_media_items WHERE progressIncreasedAt IS NOT NULL ORDER BY progressIncreasedAt DESC")
+    fun observeHistory(): Flow<List<ActiveMediaItemView>>
 
     @Query("SELECT * FROM active_media_items WHERE type = :type ORDER BY createdAt DESC")
     fun observeByType(type: String): Flow<List<ActiveMediaItemView>>
@@ -80,11 +84,21 @@ interface MediaItemDao {
     @Upsert
     suspend fun upsertAll(items: List<MediaItemEntity>)
 
+    @Query("SELECT * FROM user_data WHERE mediaId = :mediaId")
+    suspend fun getUserData(mediaId: String): UserDataEntity?
+
+    @Upsert
+    suspend fun upsertUserData(userData: UserDataEntity)
+
+    @Upsert
+    suspend fun upsertUserDataAll(items: List<UserDataEntity>)
+
     @Query("""
-        UPDATE media_items
-        SET progress = MAX(0.0, MIN(progress + :delta, COALESCE(progressTotal, progress + :delta))),
-            updatedAt = :now
-        WHERE id = :id AND deletedAt IS NULL
+        UPDATE user_data
+        SET progress = MAX(0.0, MIN(progress + :delta, COALESCE((SELECT progressTotal FROM media_items WHERE id = :id), progress + :delta))),
+            updatedAt = :now,
+            progressIncreasedAt = CASE WHEN :delta > 0 THEN :now ELSE progressIncreasedAt END
+        WHERE mediaId = :id AND EXISTS(SELECT 1 FROM media_items WHERE id = :id AND deletedAt IS NULL)
     """)
     suspend fun atomicIncrementProgress(id: String, delta: Double, now: Long): Int
 
@@ -104,6 +118,13 @@ interface MediaItemDao {
     suspend fun replaceAll(items: List<MediaItemEntity>) {
         deleteAll()
         upsertAll(items)
+    }
+
+    @Transaction
+    suspend fun replaceAllWithUserData(items: List<MediaItemEntity>, userDataList: List<UserDataEntity>) {
+        deleteAll()
+        upsertAll(items)
+        upsertUserDataAll(userDataList)
     }
 
     @Query("""

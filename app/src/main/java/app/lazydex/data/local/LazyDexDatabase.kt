@@ -16,6 +16,7 @@ import app.lazydex.data.local.entity.AppSettingEntity
 import app.lazydex.data.local.entity.MediaItemEntity
 import app.lazydex.data.local.entity.MediaLinkEntity
 import app.lazydex.data.local.entity.SyncOutboxEntity
+import app.lazydex.data.local.entity.UserDataEntity
 
 fun SupportSQLiteDatabase.setupInitialTriggersAndSeeds() {
     execSQL(
@@ -34,6 +35,7 @@ fun SupportSQLiteDatabase.setupInitialTriggersAndSeeds() {
 @Database(
     entities = [
         MediaItemEntity::class,
+        UserDataEntity::class,
         MediaLinkEntity::class,
         ActivityEntity::class,
         SyncOutboxEntity::class,

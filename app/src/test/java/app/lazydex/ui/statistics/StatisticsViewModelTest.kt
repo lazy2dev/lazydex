@@ -38,6 +38,7 @@ class StatisticsViewModelTest {
         val activityPoints: List<ActivityDatePoint> = emptyList()
     ) : MediaRepository {
         override fun observeAll(): Flow<List<MediaItem>> = flowOf(items)
+        override fun observeHistory(): Flow<List<MediaItem>> = flowOf(items)
         override fun observeByType(mediaType: MediaType): Flow<List<MediaItem>> =
             flowOf(items.filter { it.mediaType == mediaType })
         override fun observeFiltered(mediaType: MediaType?, statusFilter: StatusFilter): Flow<List<MediaItem>> =

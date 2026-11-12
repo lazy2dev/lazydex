@@ -14,6 +14,7 @@ import app.lazydex.data.local.entity.ActiveMediaItemView
 import app.lazydex.data.local.entity.ActivityEntity
 import app.lazydex.data.local.entity.MediaItemEntity
 import app.lazydex.data.local.entity.SyncOutboxEntity
+import app.lazydex.data.local.entity.UserDataEntity
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.service.DelayedTrackingUpdateJob
 import app.lazydex.data.tracker.sync.AnilistSyncEngine
@@ -82,6 +83,10 @@ class MediaRepositoryImpl(
     }
 
     override fun observeAll(): Flow<List<MediaItem>> = dao.observeAll()
+        .map { list -> list.map { it.toDomain() } }
+        .distinctUntilChanged()
+
+    override fun observeHistory(): Flow<List<MediaItem>> = dao.observeHistory()
         .map { list -> list.map { it.toDomain() } }
         .distinctUntilChanged()
 
@@ -207,7 +212,7 @@ class MediaRepositoryImpl(
             TypeConfig(id = "ONE_SHOT", parentId = "MANGA", name = "One Shot", unitName = "Chapter", sortOrder = 3)
         ),
         "ANIME" to listOf(
-            TypeConfig(id = "TV", parentId = "ANIME", name = "TV Series", unitName = "Episode", secondaryUnitName = "Season", sortOrder = 0),
+            TypeConfig(id = "TV", parentId = "ANIME", name = "TV Series", unitName = "Episode", sortOrder = 0),
             TypeConfig(id = "MOVIE", parentId = "ANIME", name = "Movie", unitName = "Minute", sortOrder = 1),
             TypeConfig(id = "OVA", parentId = "ANIME", name = "OVA / Special", unitName = "Episode", sortOrder = 2)
         ),
@@ -245,7 +250,7 @@ class MediaRepositoryImpl(
                 unitName = "Chapter",
                 secondaryUnitName = if (format == null || format == "MANGA") "Volume" else null,
                 actionVerb = "Read",
-                hasParts = false,
+                hasParts = true,
                 hasCharEstimate = false,
                 hasAudioSpeed = false,
                 lengthUnit = LengthUnit.WORDS
@@ -256,7 +261,7 @@ class MediaRepositoryImpl(
                 displayName = format ?: "Anime",
                 icon = "tv",
                 unitName = if (format == "MOVIE") "Minute" else "Episode",
-                secondaryUnitName = if (format == "TV") "Season" else null,
+                secondaryUnitName = null,
                 actionVerb = "Watch",
                 hasParts = false,
                 hasCharEstimate = false,
@@ -332,7 +337,9 @@ class MediaRepositoryImpl(
     }
 
     override suspend fun getById(id: String): MediaItem? = withContext(Dispatchers.IO) {
-        dao.getActiveById(id)?.toDomain()
+        dao.getActiveById(id)?.toDomain() ?: dao.getById(id)?.let { media ->
+            media.toDomain(dao.getUserData(id))
+        }
     }
 
     override suspend fun getAll(): List<MediaItem> = withContext(Dispatchers.IO) {
@@ -341,8 +348,22 @@ class MediaRepositoryImpl(
 
     override suspend fun add(item: MediaItem): MediaItem = withContext(Dispatchers.IO) {
         val normalized = item.normalize()
-        val entity = normalized.toEntity()
-        dao.upsert(entity)
+        val now = System.currentTimeMillis()
+        val hasInitialProgress = normalized.progress > 0.0 ||
+            (normalized.hasSecondaryProgress && normalized.secondaryProgress > 0.0)
+        val initialProgressIncreasedAt = normalized.progressIncreasedAt
+            ?: if (hasInitialProgress) normalized.dateAdded else null
+
+        val mediaEntity = normalized.toEntity()
+        val userEntity = normalized.toUserDataEntity(
+            updatedAtOverride = now,
+            progressIncreasedAtOverride = initialProgressIncreasedAt
+        )
+
+        runInTransaction {
+            dao.upsert(mediaEntity)
+            dao.upsertUserData(userEntity)
+        }
 
         val autoUpdateOnMarkRead = settingDao.get("tracker.autoUpdateOnMarkRead") ?: "ALWAYS"
         val skipPush = normalized.userStatus == UserStatus.COMPLETED && autoUpdateOnMarkRead == "NEVER"
@@ -355,71 +376,109 @@ class MediaRepositoryImpl(
             }
         }
 
-        normalized
+        normalized.copy(progressIncreasedAt = initialProgressIncreasedAt)
     }
 
     override suspend fun update(item: MediaItem) = withContext(Dispatchers.IO) {
         val normalized = item.normalize()
-        val entity = normalized.toEntity()
+        val existingActive = dao.getActiveById(item.id)
+        val currentDomain = existingActive?.toDomain()
+        val currentUserData = dao.getUserData(item.id)
 
         val autoUpdateOnMarkRead = settingDao.get("tracker.autoUpdateOnMarkRead") ?: "ALWAYS"
-        val current = dao.getById(item.id)
-        val statusChanged = current != null && current.userStatus != entity.userStatus
-        val progressDelta = if (current != null) entity.progress - current.progress else 0.0
+
+        if (currentDomain == null) {
+            val now = System.currentTimeMillis()
+            val initialProgressIncreasedAt = normalized.progressIncreasedAt
+                ?: if (normalized.progress > 0.0 || (normalized.hasSecondaryProgress && normalized.secondaryProgress > 0.0)) now else null
+            runInTransaction {
+                dao.upsert(normalized.toEntity().copy(updatedAt = now))
+                dao.upsertUserData(
+                    normalized.toUserDataEntity(
+                        updatedAtOverride = now,
+                        progressIncreasedAtOverride = initialProgressIncreasedAt
+                    )
+                )
+            }
+            return@withContext
+        }
+
+        val userdataChanged = normalized.hasUserdataChangedFrom(currentDomain)
+        val itemDataChanged = normalized.hasItemDataChangedFrom(currentDomain)
+        val progressIncreased = normalized.hasProgressIncreasedFrom(currentDomain)
+
+        if (!userdataChanged && !itemDataChanged) {
+            return@withContext
+        }
+
+        val now = System.currentTimeMillis()
+        val existingRawStatus = currentUserData?.userStatus ?: currentDomain.userStatus.name
+        val statusChanged = normalized.userStatus != currentDomain.userStatus
+        val progressDelta = normalized.progress - currentDomain.progress
 
         runInTransaction {
-            val now = System.currentTimeMillis()
-            dao.upsert(entity)
-
-            val dirtyRows = linkDao.updateSyncStatusByMediaId(item.id, "DIRTY_LOCAL", now)
-            if (dirtyRows > 0) {
-                // marked dirty
+            if (itemDataChanged) {
+                dao.upsert(normalized.toEntity().copy(updatedAt = now))
             }
 
-            if (current != null && abs(progressDelta) > 1e-6) {
-                recordProgressActivity(
-                    mediaId = item.id,
-                    itemType = current.type,
-                    avgChapterLength = current.avgChapterLength,
-                    oldProgress = current.progress,
-                    newProgress = entity.progress,
-                    delta = progressDelta,
-                    mode = null,
-                    speed = 1.0,
-                    now = now
+            if (userdataChanged) {
+                val newProgressIncreasedAt = if (progressIncreased) now else currentDomain.progressIncreasedAt
+                val updatedUserData = normalized.toUserDataEntity(
+                    updatedAtOverride = now,
+                    progressIncreasedAtOverride = newProgressIncreasedAt,
+                    existing = currentUserData
                 )
-            }
+                dao.upsertUserData(updatedUserData)
 
-            if (statusChanged) {
-                activityDao.upsert(
-                    ActivityEntity(
-                        id = UUID.randomUUID().toString(),
-                        mediaId = item.id,
-                        type = "STATUS_CHANGE",
-                        oldValue = current!!.userStatus,
-                        newValue = normalized.userStatus.name,
-                        counted = 0,
-                        timestamp = now
-                    )
-                )
+                linkDao.updateSyncStatusByMediaId(item.id, "DIRTY_LOCAL", now)
 
-                outboxDao.insert(
-                    SyncOutboxEntity(
-                        id = UUID.randomUUID().toString(),
+                if (abs(progressDelta) > 1e-6) {
+                    recordProgressActivity(
                         mediaId = item.id,
-                        action = "UPDATE",
-                        payload = """{"userStatus":"${normalized.userStatus.name}"}""",
-                        createdAt = now
+                        itemType = currentDomain.type,
+                        avgChapterLength = currentDomain.avgChapterLength,
+                        oldProgress = currentDomain.progress,
+                        newProgress = normalized.progress,
+                        delta = progressDelta,
+                        mode = null,
+                        speed = 1.0,
+                        now = now
                     )
-                )
+                }
+
+                if (statusChanged) {
+                    activityDao.upsert(
+                        ActivityEntity(
+                            id = UUID.randomUUID().toString(),
+                            mediaId = item.id,
+                            type = "STATUS_CHANGE",
+                            oldValue = existingRawStatus,
+                            newValue = normalized.userStatus.name,
+                            counted = 0,
+                            timestamp = now
+                        )
+                    )
+
+                    outboxDao.insert(
+                        SyncOutboxEntity(
+                            id = UUID.randomUUID().toString(),
+                            mediaId = item.id,
+                            action = "UPDATE",
+                            payload = """{"userStatus":"${normalized.userStatus.name}"}""",
+                            createdAt = now
+                        )
+                    )
+                }
             }
         }
 
-        val skipStatusPush = statusChanged && normalized.userStatus == UserStatus.COMPLETED && autoUpdateOnMarkRead == "NEVER"
-        if (!skipStatusPush) {
-            syncEngine?.let { engine ->
-                syncScope.launch {
-                    runCatching { engine.pushDirtyItem(item.id) }
+        if (userdataChanged) {
+            val skipStatusPush = statusChanged && normalized.userStatus == UserStatus.COMPLETED && autoUpdateOnMarkRead == "NEVER"
+            if (!skipStatusPush) {
+                syncEngine?.let { engine ->
+                    syncScope.launch {
+                        runCatching { engine.pushDirtyItem(item.id) }
+                    }
                 }
             }
         }
@@ -438,33 +497,61 @@ class MediaRepositoryImpl(
     ): MediaItem? = withContext(Dispatchers.IO) {
         var shouldPush = false
         val updatedDomain = runInTransaction {
-            val item = dao.getActiveById(id) ?: return@runInTransaction null
+            val activeView = dao.getActiveById(id) ?: return@runInTransaction null
+            val mediaEntity = dao.getById(id) ?: return@runInTransaction null
+            val existingUser = dao.getUserData(id) ?: UserDataEntity(
+                mediaId = id,
+                userStatus = activeView.userStatus,
+                progress = activeView.progress,
+                secondaryProgress = activeView.secondaryProgress,
+                scoreRaw = activeView.scoreRaw,
+                repeat = activeView.repeat,
+                notes = activeView.notes,
+                isPrivate = activeView.isPrivate,
+                startYear = activeView.startYear,
+                startMonth = activeView.startMonth,
+                startDay = activeView.startDay,
+                endYear = activeView.endYear,
+                endMonth = activeView.endMonth,
+                endDay = activeView.endDay,
+                updatedAt = activeView.userUpdatedAt,
+                progressIncreasedAt = activeView.progressIncreasedAt
+            )
             val now = System.currentTimeMillis()
 
-            val maxProgress = item.progressTotal
-            val newProgress = item.progress + delta
+            val maxProgress = activeView.progressTotal
+            val newProgress = existingUser.progress + delta
             val clampedProgress = if (maxProgress != null) {
                 newProgress.coerceIn(0.0, maxProgress)
             } else {
                 newProgress.coerceAtLeast(0.0)
             }
 
-            var newStatus = item.userStatus
-            if (item.userStatus == "PLANNING" && clampedProgress > 0.0) {
+            var newStatus = existingUser.userStatus
+            if ((existingUser.userStatus == "PLANNING" || existingUser.userStatus == "PLAN_TO") && clampedProgress > 0.0) {
                 newStatus = "IN_PROGRESS"
             }
-            if (maxProgress != null && clampedProgress >= maxProgress && item.userStatus != "COMPLETED") {
+            if (maxProgress != null && clampedProgress >= maxProgress && existingUser.userStatus != "COMPLETED") {
                 newStatus = "COMPLETED"
-            } else if (item.userStatus == "COMPLETED" && maxProgress != null && clampedProgress < maxProgress) {
+            } else if (existingUser.userStatus == "COMPLETED" && maxProgress != null && clampedProgress < maxProgress) {
                 newStatus = "IN_PROGRESS"
             }
 
-            val updatedEntity = item.toEntity().copy(
+            val progressChanged = abs(clampedProgress - existingUser.progress) > 1e-6 || newStatus != existingUser.userStatus
+            if (!progressChanged) {
+                return@runInTransaction activeView.toDomain()
+            }
+
+            val progressIncreased = clampedProgress > existingUser.progress + 1e-6
+            val newProgressIncreasedAt = if (progressIncreased) now else existingUser.progressIncreasedAt
+
+            val updatedUser = existingUser.copy(
                 progress = clampedProgress,
                 userStatus = newStatus,
-                updatedAt = now
+                updatedAt = now,
+                progressIncreasedAt = newProgressIncreasedAt
             )
-            dao.upsert(updatedEntity)
+            dao.upsertUserData(updatedUser)
 
             val dirtyRows = linkDao.updateSyncStatusByMediaId(id, "DIRTY_LOCAL", now)
             if (dirtyRows > 0) {
@@ -479,9 +566,9 @@ class MediaRepositoryImpl(
             if (abs(delta) > 1e-6) {
                 recordProgressActivity(
                     mediaId = id,
-                    itemType = item.type,
-                    avgChapterLength = item.avgChapterLength,
-                    oldProgress = item.progress,
+                    itemType = activeView.type,
+                    avgChapterLength = activeView.avgChapterLength,
+                    oldProgress = existingUser.progress,
                     newProgress = clampedProgress,
                     delta = delta,
                     mode = mode,
@@ -490,13 +577,13 @@ class MediaRepositoryImpl(
                 )
             }
 
-            if (newStatus != item.userStatus) {
+            if (newStatus != existingUser.userStatus) {
                 activityDao.upsert(
                     ActivityEntity(
                         id = UUID.randomUUID().toString(),
                         mediaId = id,
                         type = "STATUS_CHANGE",
-                        oldValue = item.userStatus,
+                        oldValue = existingUser.userStatus,
                         newValue = newStatus,
                         counted = 0,
                         timestamp = now
@@ -514,7 +601,7 @@ class MediaRepositoryImpl(
                 )
             )
 
-            updatedEntity.toDomain()
+            mediaEntity.toDomain(updatedUser)
         }
 
         if (shouldPush) {
@@ -582,8 +669,16 @@ class MediaRepositoryImpl(
 
     override suspend fun replaceAll(items: List<MediaItem>) = withContext(Dispatchers.IO) {
         runInTransaction {
-            dao.deleteAll()
-            dao.upsertAll(items.map { it.normalize().toEntity() })
+            val normalizedItems = items.map { it.normalize() }
+            dao.replaceAllWithUserData(
+                normalizedItems.map { it.toEntity() },
+                normalizedItems.map {
+                    val hasInitial = it.progress > 0.0 || (it.hasSecondaryProgress && it.secondaryProgress > 0.0)
+                    it.toUserDataEntity(
+                        progressIncreasedAtOverride = it.progressIncreasedAt ?: if (hasInitial) it.lastUpdated.takeIf { ts -> ts > 0L } ?: it.dateAdded else null
+                    )
+                }
+            )
         }
     }
 
@@ -653,21 +748,24 @@ class MediaRepositoryImpl(
             description = description,
             startDate = fuzzyDateToMillis(startYear, startMonth, startDay),
             endDate = fuzzyDateToMillis(endYear, endMonth, endDay),
-            lastUpdated = updatedAt,
+            lastUpdated = userUpdatedAt ?: catalogUpdatedAt,
             dateAdded = createdAt,
+            extraData = if (!bannerImage.isNullOrBlank()) """{"banner_image":"${bannerImage.replace("\"", "\\\"")}"}""" else "{}",
             deletedAt = deletedAt,
             isAdult = isAdult,
             repeat = repeat,
-            durationMinutes = durationMinutes
+            durationMinutes = durationMinutes,
+            progressIncreasedAt = progressIncreasedAt
         )
     }
 
-    private fun MediaItemEntity.toDomain(): MediaItem {
+    private fun MediaItemEntity.toDomain(userData: UserDataEntity? = null): MediaItem {
         val altTitles = listOfNotNull(titleRomaji, titleEnglish, titleNative)
         val genresList = converters.toList(genres)
         val tagsList = converters.toList(tags)
-        val stat = UserStatus.fromString(userStatus) ?: UserStatus.PLAN_TO
-        val calcRating = scoreRaw?.let { it / 20.0 }
+        val stat = userData?.userStatus?.let { UserStatus.fromString(it) } ?: UserStatus.PLAN_TO
+        val calcRating = userData?.scoreRaw?.let { it / 20.0 }
+        val userProg = userData?.progress ?: 0.0
         return MediaItem(
             id = id,
             type = type,
@@ -678,11 +776,11 @@ class MediaRepositoryImpl(
             sourceUrl = null,
             coverImagePath = coverImagePath,
             coverImageUrl = coverImageUrl,
-            currentProgress = progress.toInt(),
+            currentProgress = userProg.toInt(),
             totalItems = progressTotal?.toInt(),
-            progress = progress,
+            progress = userProg,
             progressTotal = progressTotal,
-            secondaryProgress = secondaryProgress,
+            secondaryProgress = userData?.secondaryProgress ?: 0.0,
             secondaryProgressTotal = secondaryProgressTotal,
             actionOverride = null,
             avgChapterLength = avgChapterLength,
@@ -690,69 +788,27 @@ class MediaRepositoryImpl(
             playbackSpeed = playbackSpeed,
             userStatus = stat,
             rating = calcRating,
-            notes = notes,
+            notes = userData?.notes ?: "",
             genres = genresList,
             tags = tagsList,
             author = author,
             description = description,
-            startDate = fuzzyDateToMillis(startYear, startMonth, startDay),
-            endDate = fuzzyDateToMillis(endYear, endMonth, endDay),
-            lastUpdated = updatedAt,
+            startDate = fuzzyDateToMillis(userData?.startYear, userData?.startMonth, userData?.startDay),
+            endDate = fuzzyDateToMillis(userData?.endYear, userData?.endMonth, userData?.endDay),
+            lastUpdated = userData?.updatedAt ?: updatedAt,
             dateAdded = createdAt,
+            extraData = if (!bannerImage.isNullOrBlank()) """{"banner_image":"${bannerImage.replace("\"", "\\\"")}"}""" else "{}",
             deletedAt = deletedAt,
             isAdult = isAdult,
-            repeat = repeat,
-            durationMinutes = durationMinutes
+            repeat = userData?.repeat ?: 0,
+            durationMinutes = durationMinutes,
+            progressIncreasedAt = userData?.progressIncreasedAt
         )
     }
-
-    private fun ActiveMediaItemView.toEntity(): MediaItemEntity = MediaItemEntity(
-        id = id,
-        type = type,
-        format = format,
-        countryOfOrigin = countryOfOrigin,
-        title = title,
-        titleEnglish = titleEnglish,
-        titleRomaji = titleRomaji,
-        titleNative = titleNative,
-        coverImagePath = coverImagePath,
-        coverImageUrl = coverImageUrl,
-        bannerImage = bannerImage,
-        description = description,
-        author = author,
-        userStatus = userStatus,
-        progress = progress,
-        progressTotal = progressTotal,
-        secondaryProgress = secondaryProgress,
-        secondaryProgressTotal = secondaryProgressTotal,
-        scoreRaw = scoreRaw,
-        repeat = repeat,
-        notes = notes,
-        genres = genres,
-        tags = tags,
-        isPrivate = isPrivate,
-        isAdult = isAdult,
-        startYear = startYear,
-        startMonth = startMonth,
-        startDay = startDay,
-        endYear = endYear,
-        endMonth = endMonth,
-        endDay = endDay,
-        durationMinutes = durationMinutes,
-        avgChapterLength = avgChapterLength,
-        lengthUnitOverride = lengthUnitOverride,
-        playbackSpeed = playbackSpeed,
-        createdAt = createdAt,
-        updatedAt = updatedAt,
-        deletedAt = deletedAt
-    )
 
     private fun MediaItem.toEntity(): MediaItemEntity {
         val genresJson = converters.fromList(genres)
         val tagsJson = converters.fromList(tags)
-        val rawScore = rating?.let { kotlin.math.round(it * 20.0).toInt().coerceIn(0, 100) }
-        val (sYear, sMonth, sDay) = millisToFuzzyDate(startDate)
-        val (eYear, eMonth, eDay) = millisToFuzzyDate(endDate)
         return MediaItemEntity(
             id = id,
             type = type,
@@ -764,27 +820,14 @@ class MediaRepositoryImpl(
             titleNative = alternativeTitles.getOrNull(2),
             coverImagePath = coverImagePath,
             coverImageUrl = coverImageUrl,
-            bannerImage = null,
+            bannerImage = getExtra("banner_image"),
             description = description,
             author = author,
-            userStatus = userStatus.name,
-            progress = progress,
             progressTotal = progressTotal,
-            secondaryProgress = secondaryProgress,
             secondaryProgressTotal = secondaryProgressTotal,
-            scoreRaw = rawScore,
-            repeat = repeat,
-            notes = notes,
             genres = genresJson,
             tags = tagsJson,
-            isPrivate = false,
             isAdult = isAdult,
-            startYear = sYear,
-            startMonth = sMonth,
-            startDay = sDay,
-            endYear = eYear,
-            endMonth = eMonth,
-            endDay = eDay,
             durationMinutes = durationMinutes,
             avgChapterLength = avgChapterLength,
             lengthUnitOverride = lengthUnitOverride,
@@ -792,6 +835,34 @@ class MediaRepositoryImpl(
             createdAt = dateAdded,
             updatedAt = lastUpdated,
             deletedAt = deletedAt
+        )
+    }
+
+    private fun MediaItem.toUserDataEntity(
+        updatedAtOverride: Long? = null,
+        progressIncreasedAtOverride: Long? = null,
+        existing: UserDataEntity? = null
+    ): UserDataEntity {
+        val rawScore = rating?.let { kotlin.math.round(it * 20.0).toInt().coerceIn(0, 100) }
+        val (sYear, sMonth, sDay) = millisToFuzzyDate(startDate)
+        val (eYear, eMonth, eDay) = millisToFuzzyDate(endDate)
+        return UserDataEntity(
+            mediaId = id,
+            userStatus = userStatus.name,
+            progress = progress,
+            secondaryProgress = if (hasSecondaryProgress) secondaryProgress else 0.0,
+            scoreRaw = rawScore,
+            repeat = repeat,
+            notes = notes,
+            isPrivate = existing?.isPrivate ?: false,
+            startYear = sYear,
+            startMonth = sMonth,
+            startDay = sDay,
+            endYear = eYear,
+            endMonth = eMonth,
+            endDay = eDay,
+            updatedAt = updatedAtOverride ?: lastUpdated,
+            progressIncreasedAt = progressIncreasedAtOverride ?: progressIncreasedAt
         )
     }
 

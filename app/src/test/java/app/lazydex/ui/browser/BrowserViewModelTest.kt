@@ -61,6 +61,7 @@ class BrowserViewModelTest {
     private class FakeMediaRepository : MediaRepository {
         val itemsFlow = MutableStateFlow<List<MediaItem>>(emptyList())
         override fun observeAll(): Flow<List<MediaItem>> = itemsFlow
+        override fun observeHistory(): Flow<List<MediaItem>> = flowOf(emptyList())
         override fun observeByType(mediaType: MediaType): Flow<List<MediaItem>> = flowOf(emptyList())
         override fun observeFiltered(mediaType: MediaType?, statusFilter: StatusFilter): Flow<List<MediaItem>> = flowOf(emptyList())
         override fun observeById(id: String): Flow<MediaItem?> = flowOf(null)

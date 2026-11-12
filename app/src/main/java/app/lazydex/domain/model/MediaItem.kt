@@ -48,7 +48,8 @@ data class MediaItem(
     val isDeleted: Boolean = deletedAt != null,
     val isAdult: Boolean = false,
     val repeat: Int = 0,
-    val durationMinutes: Int? = null
+    val durationMinutes: Int? = null,
+    val progressIncreasedAt: Long? = null
 ) {
     val typeId: String get() = when {
         format.equals("MANHWA", ignoreCase = true) || (type.equals("MANGA", ignoreCase = true) && countryOfOrigin.equals("KR", ignoreCase = true)) -> "typ_manhwa"
@@ -115,7 +116,8 @@ data class MediaItem(
         isDeleted: Boolean = false,
         isAdult: Boolean = false,
         repeat: Int = 0,
-        durationMinutes: Int? = null
+        durationMinutes: Int? = null,
+        progressIncreasedAt: Long? = null
     ) : this(
         id = id,
         type = when (mediaType) {
@@ -158,7 +160,8 @@ data class MediaItem(
         isDeleted = isDeleted,
         isAdult = isAdult,
         repeat = repeat,
-        durationMinutes = durationMinutes
+        durationMinutes = durationMinutes,
+        progressIncreasedAt = progressIncreasedAt
     )
 
     constructor(
@@ -194,6 +197,7 @@ data class MediaItem(
         deletedAt: Long? = null,
         isDeleted: Boolean = deletedAt != null,
         isAdult: Boolean = false,
+        progressIncreasedAt: Long? = null,
         mediaType: MediaType = resolveMediaType(typeId)
     ) : this(
         id = id,
@@ -249,7 +253,8 @@ data class MediaItem(
         extraData = extraData,
         deletedAt = deletedAt,
         isDeleted = isDeleted,
-        isAdult = isAdult
+        isAdult = isAdult,
+        progressIncreasedAt = progressIncreasedAt
     )
 
     val extraMap: Map<String, String> by lazy(LazyThreadSafetyMode.NONE) {
@@ -324,8 +329,62 @@ data class MediaItem(
             author = author.trim(),
             description = description.trim(),
             startDate = startDate?.takeIf { it > 0 },
-            endDate = endDate?.takeIf { it > 0 }
+            endDate = endDate?.takeIf { it > 0 },
+            progressIncreasedAt = progressIncreasedAt
         )
+    }
+
+    val hasSecondaryProgress: Boolean get() = when {
+        type.equals("MANGA", ignoreCase = true) -> true
+        type.equals("NOVEL", ignoreCase = true) ->
+            format.equals("LIGHT_NOVEL", ignoreCase = true) ||
+                secondaryProgress > 0.0 ||
+                (secondaryProgressTotal != null && secondaryProgressTotal > 0.0)
+        else -> false
+    }
+
+    fun hasProgressIncreasedFrom(old: MediaItem): Boolean {
+        val primaryIncreased = progress > old.progress + 1e-6 || currentProgress > old.currentProgress
+        val secondaryIncreased = hasSecondaryProgress && (secondaryProgress > old.secondaryProgress + 1e-6)
+        return primaryIncreased || secondaryIncreased
+    }
+
+    fun hasUserdataChangedFrom(old: MediaItem): Boolean {
+        if (userStatus != old.userStatus) return true
+        if (kotlin.math.abs(progress - old.progress) > 1e-6) return true
+        if (currentProgress != old.currentProgress) return true
+        if (hasSecondaryProgress && kotlin.math.abs(secondaryProgress - old.secondaryProgress) > 1e-6) return true
+        if (rating != old.rating) return true
+        if (notes.trim() != old.notes.trim()) return true
+        if (repeat != old.repeat) return true
+        if (startDate != old.startDate) return true
+        if (endDate != old.endDate) return true
+        return false
+    }
+
+    fun hasItemDataChangedFrom(old: MediaItem): Boolean {
+        if (title.trim() != old.title.trim()) return true
+        if (type != old.type) return true
+        if (format != old.format) return true
+        if (countryOfOrigin != old.countryOfOrigin) return true
+        if (alternativeTitles != old.alternativeTitles) return true
+        if (sourceUrl?.trim() != old.sourceUrl?.trim()) return true
+        if (coverImagePath.trim() != old.coverImagePath.trim()) return true
+        if (coverImageUrl?.trim() != old.coverImageUrl?.trim()) return true
+        if (totalItems != old.totalItems) return true
+        if (progressTotal != old.progressTotal) return true
+        if (secondaryProgressTotal != old.secondaryProgressTotal) return true
+        if (author.trim() != old.author.trim()) return true
+        if (description.trim() != old.description.trim()) return true
+        if (genres != old.genres) return true
+        if (tags != old.tags) return true
+        if (isAdult != old.isAdult) return true
+        if (durationMinutes != old.durationMinutes) return true
+        if (avgChapterLength != old.avgChapterLength) return true
+        if (lengthUnitOverride != old.lengthUnitOverride) return true
+        if (playbackSpeed != old.playbackSpeed) return true
+        if (getExtra("banner_image") != old.getExtra("banner_image")) return true
+        return false
     }
 
     companion object {

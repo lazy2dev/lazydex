@@ -4,7 +4,52 @@ import androidx.room.DatabaseView
 
 @DatabaseView(
     viewName = "active_media_items",
-    value = "SELECT * FROM media_items WHERE deletedAt IS NULL"
+    value = """
+        SELECT 
+            m.id,
+            m.type,
+            m.format,
+            m.countryOfOrigin,
+            m.title,
+            m.titleEnglish,
+            m.titleRomaji,
+            m.titleNative,
+            m.coverImagePath,
+            m.coverImageUrl,
+            m.bannerImage,
+            m.description,
+            m.author,
+            COALESCE(u.userStatus, 'PLAN_TO') AS userStatus,
+            COALESCE(u.progress, 0.0) AS progress,
+            m.progressTotal,
+            COALESCE(u.secondaryProgress, 0.0) AS secondaryProgress,
+            m.secondaryProgressTotal,
+            u.scoreRaw,
+            COALESCE(u.repeat, 0) AS repeat,
+            COALESCE(u.notes, '') AS notes,
+            m.genres,
+            m.tags,
+            COALESCE(u.isPrivate, 0) AS isPrivate,
+            m.isAdult,
+            u.startYear,
+            u.startMonth,
+            u.startDay,
+            u.endYear,
+            u.endMonth,
+            u.endDay,
+            m.durationMinutes,
+            m.avgChapterLength,
+            m.lengthUnitOverride,
+            m.playbackSpeed,
+            m.createdAt,
+            m.updatedAt AS catalogUpdatedAt,
+            u.updatedAt AS userUpdatedAt,
+            u.progressIncreasedAt,
+            m.deletedAt
+        FROM media_items m
+        LEFT JOIN user_data u ON u.mediaId = m.id
+        WHERE m.deletedAt IS NULL
+    """
 )
 data class ActiveMediaItemView(
     val id: String,
@@ -43,6 +88,10 @@ data class ActiveMediaItemView(
     val lengthUnitOverride: String?,
     val playbackSpeed: Double,
     val createdAt: Long,
-    val updatedAt: Long,
+    val catalogUpdatedAt: Long,
+    val userUpdatedAt: Long?,
+    val progressIncreasedAt: Long?,
     val deletedAt: Long?
-)
+) {
+    val updatedAt: Long get() = userUpdatedAt ?: catalogUpdatedAt
+}

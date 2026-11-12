@@ -350,6 +350,7 @@ fun MediaDetailsScreen(
                     startDate = state.startDate,
                     endDate = state.endDate,
                     hasSecondaryProgress = state.hasSecondaryProgress,
+                    secondaryUnitName = state.resolvedConfig?.secondaryUnitName,
                     secondaryProgress = state.secondaryProgress,
                     secondaryProgressTotal = state.secondaryProgressTotal,
                     notes = state.notes,
@@ -361,8 +362,10 @@ fun MediaDetailsScreen(
                     onSecondaryStep = { step ->
                         val cur = state.parsedSecondaryProgress ?: 0.0
                         val next = (cur + step).coerceAtLeast(0.0)
-                        viewModel.updateSecondaryProgress(next.toString())
-                        viewModel.autoSave()
+                        if (kotlin.math.abs(next - cur) > 1e-6) {
+                            viewModel.updateSecondaryProgress(next.toString())
+                            viewModel.autoSave()
+                        }
                     },
                     onNotesChange = {
                         viewModel.updateNotes(it)
@@ -382,8 +385,10 @@ fun MediaDetailsScreen(
                 currentStatus = state.userStatus,
                 mediaType = state.mediaType,
                 onStatusSelected = { status ->
-                    viewModel.updateUserStatus(status)
-                    viewModel.autoSave()
+                    if (status != state.userStatus) {
+                        viewModel.updateUserStatus(status)
+                        viewModel.autoSave()
+                    }
                 },
                 onDismissRequest = { activeDialog = null }
             )
@@ -399,8 +404,10 @@ fun MediaDetailsScreen(
                 currentProgress = state.parsedProgress ?: 0,
                 total = state.parsedTotal,
                 onProgressConfirmed = { progress ->
-                    viewModel.updateCurrentProgress(progress.toString())
-                    viewModel.autoSave()
+                    if (progress != (state.parsedProgress ?: 0)) {
+                        viewModel.updateCurrentProgress(progress.toString())
+                        viewModel.autoSave()
+                    }
                 },
                 onDismissRequest = { activeDialog = null }
             )
@@ -409,8 +416,10 @@ fun MediaDetailsScreen(
             TrackScoreSelector(
                 currentScore = state.rating,
                 onScoreConfirmed = { score ->
-                    viewModel.updateRating(score)
-                    viewModel.autoSave()
+                    if (score != state.rating) {
+                        viewModel.updateRating(score)
+                        viewModel.autoSave()
+                    }
                 },
                 onDismissRequest = { activeDialog = null }
             )
@@ -420,8 +429,10 @@ fun MediaDetailsScreen(
                 title = "Started Reading Date",
                 initialDateMillis = state.startDate,
                 onDateConfirmed = { date ->
-                    viewModel.updateStartDate(date)
-                    viewModel.autoSave()
+                    if (date != state.startDate) {
+                        viewModel.updateStartDate(date)
+                        viewModel.autoSave()
+                    }
                 },
                 onDismissRequest = { activeDialog = null }
             )
@@ -431,8 +442,10 @@ fun MediaDetailsScreen(
                 title = "Finished Reading Date",
                 initialDateMillis = state.endDate,
                 onDateConfirmed = { date ->
-                    viewModel.updateEndDate(date)
-                    viewModel.autoSave()
+                    if (date != state.endDate) {
+                        viewModel.updateEndDate(date)
+                        viewModel.autoSave()
+                    }
                 },
                 onDismissRequest = { activeDialog = null }
             )

@@ -303,14 +303,18 @@ class DexViewModel(
     fun setProgress(id: String, progress: Double) {
         viewModelScope.launch {
             val item = repository.getById(id) ?: return@launch
-            repository.update(item.copy(progress = progress, currentProgress = progress.toInt(), lastUpdated = System.currentTimeMillis()))
+            if (kotlin.math.abs(item.progress - progress) > 1e-6) {
+                repository.update(item.copy(progress = progress, currentProgress = progress.toInt()))
+            }
         }
     }
 
     fun setSecondaryProgress(id: String, secondaryProgress: Double) {
         viewModelScope.launch {
             val item = repository.getById(id) ?: return@launch
-            repository.update(item.copy(secondaryProgress = secondaryProgress, lastUpdated = System.currentTimeMillis()))
+            if (kotlin.math.abs(item.secondaryProgress - secondaryProgress) > 1e-6) {
+                repository.update(item.copy(secondaryProgress = secondaryProgress))
+            }
         }
     }
 
@@ -441,7 +445,8 @@ class DexViewModel(
         val comparator: Comparator<MediaItem> = when (field) {
             SortField.ALPHABETICAL -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
             SortField.TOTAL_COUNT -> compareBy { it.totalItems ?: 0 }
-            SortField.LAST_READ -> compareBy { it.lastUpdated }
+            SortField.LAST_READ -> compareBy<MediaItem> { it.progressIncreasedAt != null }
+                .thenBy { it.progressIncreasedAt ?: it.dateAdded }
             SortField.UNREAD_COUNT -> compareBy { (it.totalItems ?: 0) - it.currentProgress }
             SortField.CURRENT_PROGRESS -> compareBy { it.currentProgress }
             SortField.DATE_ADDED -> compareBy { it.dateAdded }

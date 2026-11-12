@@ -112,13 +112,18 @@ data class MediaDetailsUiState(
     val parsedSecondaryProgress: Double? get() = secondaryProgress.trim().toDoubleOrNull()
     val parsedSecondaryTotal: Double? get() = secondaryProgressTotal.trim().takeIf { it.isNotEmpty() }?.toDoubleOrNull()
 
-    val hasSecondaryProgress: Boolean get() = (resolvedConfig?.hasSecondaryProgress == true) ||
+    val hasSecondaryProgress: Boolean get() {
+        if (mediaType == MediaType.ANIME || mediaType == MediaType.MOVIE || mediaType == MediaType.GAME || mediaType == MediaType.TV) {
+            return false
+        }
+        return (resolvedConfig?.hasSecondaryProgress == true) ||
             ((parsedSecondaryProgress ?: 0.0) > 0.0) ||
             ((parsedSecondaryTotal ?: 0.0) > 0.0) ||
             formatId in setOf(
-                "LIGHT_NOVEL", "MANGA", "TV",
-                "typ_novel_ln", "typ_manga_jp", "typ_manga", "typ_manhwa", "typ_tv", "typ_anime_series"
+                "LIGHT_NOVEL", "MANGA",
+                "typ_novel_ln", "typ_manga_jp", "typ_manga", "typ_manhwa", "typ_manhua"
             )
+    }
 
     val isTitleBlank: Boolean get() = title.trim().isBlank()
     val parsedProgress: Int? get() = currentProgress.trim().toIntOrNull()
@@ -433,6 +438,10 @@ class MediaDetailsViewModel(
     fun updateArtwork(coverUrl: String, bannerUrl: String?) {
         val trimmedCover = coverUrl.trim()
         val trimmedBanner = bannerUrl?.trim()?.ifEmpty { null }
+        val current = _uiState.value
+        if (trimmedCover == current.coverImageUrl.trim() && trimmedBanner == current.bannerImage?.trim()?.ifEmpty { null }) {
+            return
+        }
         _uiState.value = _uiState.value.copy(
             isUpdatingArtwork = true,
             bannerImage = trimmedBanner,
@@ -491,7 +500,6 @@ class MediaDetailsViewModel(
         val pending = notesFlow.value
         if (pending != null) {
             notesFlow.value = null
-            originalItem = originalItem?.copy(notes = _uiState.value.notes)
             autoSave()
         }
     }
@@ -587,6 +595,15 @@ class MediaDetailsViewModel(
         val current = _uiState.value
         if (current.isScraping || current.isSaving) return false
 
+        val unchanged = current.sourceUrl.trim() == sourceUrl.trim() &&
+            current.mediaType == mediaType &&
+            current.formatId == formatId &&
+            current.title.trim() == title.trim() &&
+            current.author.trim() == author.trim() &&
+            current.totalItems.trim() == totalItems.trim() &&
+            current.description.trim() == description.trim()
+        if (unchanged) return true
+
         val candidate = current.copy(
             sourceUrl = sourceUrl,
             mediaType = mediaType,
@@ -627,7 +644,7 @@ class MediaDetailsViewModel(
     }
 
     fun save(exitOnSuccess: Boolean = true) {
-        flushNotes()
+        notesFlow.value = null
         val state = _uiState.value
         val validationError = validateMetadata(state)
         if (validationError != null) {
@@ -669,7 +686,7 @@ class MediaDetailsViewModel(
 
             val now = System.currentTimeMillis()
             var item = if (existing != null) {
-                existing.copy(
+                val candidate = existing.copy(
                     type = state.mediaType.name,
                     format = resolvedFormat,
                     countryOfOrigin = resolvedCountry,
@@ -696,11 +713,37 @@ class MediaDetailsViewModel(
                     description = state.description.trim(),
                     startDate = state.startDate,
                     endDate = state.endDate,
-                    lastUpdated = now,
                     isAdult = state.isAdult,
                 )
+                val bannerChanged = (state.bannerImage?.trim()?.ifEmpty { null }) != existing.getExtra("banner_image")
+                val candidateWithBanner = if (!state.bannerImage.isNullOrBlank()) {
+                    candidate.withExtra("banner_image", state.bannerImage!!)
+                } else {
+                    candidate
+                }
+
+                val userdataChanged = candidateWithBanner.hasUserdataChangedFrom(existing)
+                val itemDataChanged = candidateWithBanner.hasItemDataChangedFrom(existing) || bannerChanged
+
+                if (!userdataChanged && !itemDataChanged) {
+                    if (exitOnSuccess) {
+                        _uiState.value = _uiState.value.copy(id = existing.id, isDone = true, isSaving = false)
+                    } else {
+                        _uiState.value = _uiState.value.copy(id = existing.id, isNew = false, isSaving = false)
+                    }
+                    return@launch
+                }
+
+                val progressIncreased = candidateWithBanner.hasProgressIncreasedFrom(existing)
+                val newProgressIncreasedAt = if (progressIncreased) now else existing.progressIncreasedAt
+                val newLastUpdated = if (userdataChanged) now else existing.lastUpdated
+
+                candidateWithBanner.copy(
+                    lastUpdated = newLastUpdated,
+                    progressIncreasedAt = newProgressIncreasedAt
+                )
             } else {
-                MediaItem(
+                val newItem = MediaItem(
                     id = state.id.ifBlank { UUID.randomUUID().toString() },
                     type = state.mediaType.name,
                     format = resolvedFormat,
@@ -731,11 +774,13 @@ class MediaDetailsViewModel(
                     lastUpdated = now,
                     dateAdded = now,
                     isAdult = state.isAdult,
+                    progressIncreasedAt = if (progressVal > 0 || ((state.parsedSecondaryProgress ?: 0.0) > 0.0)) now else null
                 )
-            }
-
-            if (!state.bannerImage.isNullOrBlank()) {
-                item = item.withExtra("banner_image", state.bannerImage!!)
+                if (!state.bannerImage.isNullOrBlank()) {
+                    newItem.withExtra("banner_image", state.bannerImage!!)
+                } else {
+                    newItem
+                }
             }
 
             try {

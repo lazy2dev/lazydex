@@ -8,6 +8,7 @@ import app.lazydex.data.local.dao.StatusCount
 import app.lazydex.data.local.entity.ActiveMediaItemView
 import app.lazydex.data.local.entity.MediaItemEntity
 import app.lazydex.data.local.entity.MediaLinkEntity
+import app.lazydex.data.local.entity.UserDataEntity
 import app.lazydex.data.tracker.anilist.AnilistApi
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.anilist.TokenBucketLimiter
@@ -211,12 +212,13 @@ class AnilistSyncEngineTest {
         assertEquals("One Piece", item.title)
         assertEquals("MANGA", item.type)
         assertEquals("MANGA", item.format)
-        assertEquals("IN_PROGRESS", item.userStatus)
-        assertEquals(25.0, item.progress, 0.001)
+        val userData = fakeMediaItemDao.userData[item.id]!!
+        assertEquals("IN_PROGRESS", userData.userStatus)
+        assertEquals(25.0, userData.progress, 0.001)
         assertEquals(100.0, item.progressTotal!!, 0.001)
-        assertEquals(3.0, item.secondaryProgress, 0.001)
+        assertEquals(3.0, userData.secondaryProgress, 0.001)
         assertEquals(10.0, item.secondaryProgressTotal!!, 0.001)
-        assertEquals(85, item.scoreRaw)
+        assertEquals(85, userData.scoreRaw)
         assertEquals("https://img.anilist.co/cover1.jpg", item.coverImageUrl)
         assertEquals("https://img.anilist.co/banner1.jpg", item.bannerImage)
 
@@ -249,24 +251,11 @@ class AnilistSyncEngineTest {
             bannerImage = null,
             description = "Local added manga",
             author = "",
-            userStatus = "IN_PROGRESS",
-            progress = 10.0,
             progressTotal = null,
-            secondaryProgress = 0.0,
             secondaryProgressTotal = null,
-            scoreRaw = null,
-            repeat = 0,
-            notes = "",
             genres = "[]",
             tags = "[]",
-            isPrivate = false,
             isAdult = false,
-            startYear = null,
-            startMonth = null,
-            startDay = null,
-            endYear = null,
-            endMonth = null,
-            endDay = null,
             durationMinutes = null,
             avgChapterLength = null,
             lengthUnitOverride = null,
@@ -276,6 +265,17 @@ class AnilistSyncEngineTest {
             deletedAt = null
         )
         fakeMediaItemDao.items[existingItem.id] = existingItem
+        fakeMediaItemDao.userData[existingItem.id] = UserDataEntity(
+            mediaId = existingItem.id,
+            userStatus = "IN_PROGRESS",
+            progress = 10.0,
+            secondaryProgress = 0.0,
+            scoreRaw = null,
+            repeat = 0,
+            notes = "",
+            isPrivate = false,
+            updatedAt = 1700000000
+        )
 
         val existingLink = MediaLinkEntity(
             id = "link_frieren",
@@ -353,10 +353,10 @@ class AnilistSyncEngineTest {
         assertEquals(1, fakeMediaItemDao.items.size)
         assertTrue(fakeMediaItemDao.items.containsKey("local_frieren"))
 
-        val updatedItem = fakeMediaItemDao.items["local_frieren"]!!
+        val updatedUserData = fakeMediaItemDao.userData["local_frieren"]!!
         // 2. Monotonic progress: advanced from 10.0 to 15.0
-        assertEquals(15.0, updatedItem.progress, 0.001)
-        assertEquals("IN_PROGRESS", updatedItem.userStatus)
+        assertEquals(15.0, updatedUserData.progress, 0.001)
+        assertEquals("IN_PROGRESS", updatedUserData.userStatus)
 
         // 3. Link remains LINKED
         assertEquals(1, fakeMediaLinkDao.links.size)
@@ -383,24 +383,11 @@ class AnilistSyncEngineTest {
             bannerImage = null,
             description = "Local added manga",
             author = "",
-            userStatus = "IN_PROGRESS",
-            progress = 10.0,
             progressTotal = null,
-            secondaryProgress = 2.0,
             secondaryProgressTotal = null,
-            scoreRaw = null,
-            repeat = 0,
-            notes = "",
             genres = "[]",
             tags = "[]",
-            isPrivate = false,
             isAdult = false,
-            startYear = null,
-            startMonth = null,
-            startDay = null,
-            endYear = null,
-            endMonth = null,
-            endDay = null,
             durationMinutes = null,
             avgChapterLength = null,
             lengthUnitOverride = null,
@@ -410,6 +397,17 @@ class AnilistSyncEngineTest {
             deletedAt = null
         )
         fakeMediaItemDao.items[existingItem.id] = existingItem
+        fakeMediaItemDao.userData[existingItem.id] = UserDataEntity(
+            mediaId = existingItem.id,
+            userStatus = "IN_PROGRESS",
+            progress = 10.0,
+            secondaryProgress = 2.0,
+            scoreRaw = null,
+            repeat = 0,
+            notes = "",
+            isPrivate = false,
+            updatedAt = 1700000000
+        )
 
         val existingLink = MediaLinkEntity(
             id = "link_frieren",
@@ -475,10 +473,10 @@ class AnilistSyncEngineTest {
         val result = engine.syncAll()
         assertTrue(result is SyncResult.Success)
 
-        val updatedItem = fakeMediaItemDao.items["local_frieren"]!!
+        val updatedUserData = fakeMediaItemDao.userData["local_frieren"]!!
         // Local progress must remain preserved because autoSyncProgressFromTrackers = false
-        assertEquals(10.0, updatedItem.progress, 0.001)
-        assertEquals(2.0, updatedItem.secondaryProgress, 0.001)
+        assertEquals(10.0, updatedUserData.progress, 0.001)
+        assertEquals(2.0, updatedUserData.secondaryProgress, 0.001)
     }
 
     @Test
@@ -664,13 +662,17 @@ class AnilistSyncEngineTest {
             type = "MANGA",
             format = "MANGA",
             title = "Chainsaw Man",
-            userStatus = "IN_PROGRESS",
-            progress = 12.5,
             progressTotal = 150.0,
             createdAt = 1_600_000_000_000L,
             updatedAt = 1_600_000_010_000L
         )
         fakeMediaItemDao.items[localItem.id] = localItem
+        fakeMediaItemDao.userData[localItem.id] = UserDataEntity(
+            mediaId = localItem.id,
+            userStatus = "IN_PROGRESS",
+            progress = 12.5,
+            updatedAt = 1_600_000_010_000L
+        )
 
         val snapshot = SyncSnapshot(
             remoteUpdatedAt = 1600000010L,
@@ -734,7 +736,7 @@ class AnilistSyncEngineTest {
 
         engine.syncAll()
 
-        val updated = fakeMediaItemDao.items[localItem.id]!!
+        val updated = fakeMediaItemDao.userData[localItem.id]!!
         assertEquals(12.5, updated.progress, 0.001)
     }
 
@@ -745,12 +747,16 @@ class AnilistSyncEngineTest {
             type = "MANGA",
             format = "MANGA",
             title = "Jujutsu Kaisen",
-            userStatus = "IN_PROGRESS",
-            progress = 10.0,
             createdAt = 1_000_000L,
             updatedAt = 1_000_000L
         )
         fakeMediaItemDao.items[localItem.id] = localItem
+        fakeMediaItemDao.userData[localItem.id] = UserDataEntity(
+            mediaId = localItem.id,
+            userStatus = "IN_PROGRESS",
+            progress = 10.0,
+            updatedAt = 1_000_000L
+        )
 
         val link = MediaLinkEntity(
             id = "link-race",
@@ -784,7 +790,7 @@ class AnilistSyncEngineTest {
         // When mutation request arrives, simulate concurrent user tap advancing progress to 11.0
         responseHandler = { _, _ ->
             // User taps +1 while mutation is in flight!
-            fakeMediaItemDao.items[localItem.id] = localItem.copy(
+            fakeMediaItemDao.userData[localItem.id] = fakeMediaItemDao.userData[localItem.id]!!.copy(
                 progress = 11.0,
                 updatedAt = virtualTimeMs + 500L
             )
@@ -795,8 +801,8 @@ class AnilistSyncEngineTest {
         assertTrue(success)
 
         // Item progress should remain 11.0 (not clobbered by 10)
-        val currentItem = fakeMediaItemDao.items[localItem.id]!!
-        assertEquals(11.0, currentItem.progress, 0.001)
+        val currentUserData = fakeMediaItemDao.userData[localItem.id]!!
+        assertEquals(11.0, currentUserData.progress, 0.001)
 
         // Link must remain DIRTY_LOCAL because it still has pending unpushed progress (11.0)
         val currentLink = fakeMediaLinkDao.links[link.id]!!
@@ -811,12 +817,16 @@ class AnilistSyncEngineTest {
             type = "MANGA",
             format = "MANGA",
             title = "Dorohedoro",
-            userStatus = "IN_PROGRESS",
-            progress = 50.0,
             createdAt = 1_000_000L,
             updatedAt = 1_000_000L
         )
         fakeMediaItemDao.items[localItem.id] = localItem
+        fakeMediaItemDao.userData[localItem.id] = UserDataEntity(
+            mediaId = localItem.id,
+            userStatus = "IN_PROGRESS",
+            progress = 50.0,
+            updatedAt = 1_000_000L
+        )
 
         val link = MediaLinkEntity(
             id = "link-1",
@@ -867,13 +877,17 @@ class AnilistSyncEngineTest {
             type = "MANGA",
             format = "MANGA",
             title = "Old Manga Deleted On AniList",
-            notes = "My precious private notes",
-            userStatus = "COMPLETED",
-            progress = 100.0,
             createdAt = 1_000_000L,
             updatedAt = 1_000_000L
         )
         fakeMediaItemDao.items[localItem.id] = localItem
+        fakeMediaItemDao.userData[localItem.id] = UserDataEntity(
+            mediaId = localItem.id,
+            userStatus = "COMPLETED",
+            progress = 100.0,
+            notes = "My precious private notes",
+            updatedAt = 1_000_000L
+        )
 
         val link = MediaLinkEntity(
             id = "link-deleted-on-remote",
@@ -916,9 +930,11 @@ class AnilistSyncEngineTest {
         // Local media item, notes, and progress are NEVER deleted
         val localItemAfterSync = fakeMediaItemDao.items[localItem.id]
         assertNotNull(localItemAfterSync)
-        assertEquals("My precious private notes", localItemAfterSync!!.notes)
-        assertEquals(100.0, localItemAfterSync.progress, 0.001)
-        assertNull(localItemAfterSync.deletedAt)
+        assertNull(localItemAfterSync!!.deletedAt)
+        val localUserDataAfterSync = fakeMediaItemDao.userData[localItem.id]
+        assertNotNull(localUserDataAfterSync)
+        assertEquals("My precious private notes", localUserDataAfterSync!!.notes)
+        assertEquals(100.0, localUserDataAfterSync.progress, 0.001)
     }
 
     @Test
@@ -980,12 +996,16 @@ class AnilistSyncEngineTest {
             type = "MANGA",
             format = "MANGA",
             title = "Bleach",
-            userStatus = "IN_PROGRESS",
-            progress = 25.0,
             createdAt = 1_000_000L,
             updatedAt = 1_700_000_000_000L
         )
         fakeMediaItemDao.items[localItem.id] = localItem
+        fakeMediaItemDao.userData[localItem.id] = UserDataEntity(
+            mediaId = localItem.id,
+            userStatus = "IN_PROGRESS",
+            progress = 25.0,
+            updatedAt = 1_700_000_000_000L
+        )
 
         val snapshot = SyncSnapshot(
             remoteUpdatedAt = 1690000000L,
@@ -1067,8 +1087,8 @@ class AnilistSyncEngineTest {
         val result = engine.syncAll()
         assertTrue(result is SyncResult.Success)
 
-        val updatedItem = fakeMediaItemDao.items[localItem.id]!!
-        assertEquals(25.0, updatedItem.progress, 0.001)
+        val updatedUserData = fakeMediaItemDao.userData[localItem.id]!!
+        assertEquals(25.0, updatedUserData.progress, 0.001)
 
         // Pushed back to AniList and marked SYNCED
         val updatedLink = fakeMediaLinkDao.links[link.id]!!
@@ -1148,17 +1168,218 @@ class AnilistSyncEngineTest {
         assertEquals("A veteran returns.\n\nEnlistment day awaits.", insertedItem.description)
         assertTrue(insertedItem.tags.contains("Military"))
         assertTrue(insertedItem.tags.contains("Reincarnation"))
-        assertEquals(2024, insertedItem.startYear)
-        assertEquals(1, insertedItem.startMonth)
-        assertEquals(15, insertedItem.startDay)
+        val insertedUserData = fakeMediaItemDao.userData[insertedItem.id]!!
+        assertEquals(2024, insertedUserData.startYear)
+        assertEquals(1, insertedUserData.startMonth)
+        assertEquals(15, insertedUserData.startDay)
+    }
+
+    @Test
+    fun `pushDirtyItem for Anime omits progressVolumes even if secondaryProgress is set`() = runTest(testDispatcher) {
+        val animeItem = MediaItemEntity(
+            id = "anime-push-test",
+            type = "ANIME",
+            format = "TV",
+            title = "Attack on Titan",
+            createdAt = 1_000_000L,
+            updatedAt = 1_000_000L
+        )
+        fakeMediaItemDao.items[animeItem.id] = animeItem
+        fakeMediaItemDao.userData[animeItem.id] = UserDataEntity(
+            mediaId = animeItem.id,
+            userStatus = "IN_PROGRESS",
+            progress = 12.0,
+            secondaryProgress = 2.0,
+            updatedAt = 1_000_000L
+        )
+
+        val link = MediaLinkEntity(
+            id = "link-anime-push",
+            mediaId = animeItem.id,
+            kind = "TRACKER",
+            providerId = "anilist",
+            remoteId = "16498",
+            remoteMediaListId = "99901",
+            url = "https://anilist.co/anime/16498",
+            state = "LINKED",
+            syncStatus = "DIRTY_LOCAL",
+            createdAt = 1_000_000L,
+            updatedAt = 1_000_000L
+        )
+        fakeMediaLinkDao.links[link.id] = link
+
+        val saveResponseJson = """
+        {
+          "data": {
+            "SaveMediaListEntry": {
+              "id": 99901,
+              "mediaId": 16498,
+              "status": "CURRENT",
+              "progress": 12,
+              "updatedAt": 1700000020
+            }
+          }
+        }
+        """.trimIndent()
+
+        responseHandler = { _, _ -> createResponse(200, saveResponseJson) }
+
+        val success = engine.pushDirtyItem(animeItem.id)
+        assertTrue(success)
+
+        val lastPayload = recordedBodies.last()
+        assertTrue("GraphQL mutation variables must NOT contain progressVolumes for Anime",
+            !lastPayload.contains("\"progressVolumes\":2")
+        )
+    }
+
+    @Test
+    fun `pushDirtyItem for Manga includes progressVolumes when secondaryProgress is present`() = runTest(testDispatcher) {
+        val mangaItem = MediaItemEntity(
+            id = "manga-push-test",
+            type = "MANGA",
+            format = "MANGA",
+            title = "Berserk",
+            createdAt = 1_000_000L,
+            updatedAt = 1_000_000L
+        )
+        fakeMediaItemDao.items[mangaItem.id] = mangaItem
+        fakeMediaItemDao.userData[mangaItem.id] = UserDataEntity(
+            mediaId = mangaItem.id,
+            userStatus = "IN_PROGRESS",
+            progress = 40.0,
+            secondaryProgress = 5.0,
+            updatedAt = 1_000_000L
+        )
+
+        val link = MediaLinkEntity(
+            id = "link-manga-push",
+            mediaId = mangaItem.id,
+            kind = "TRACKER",
+            providerId = "anilist",
+            remoteId = "30002",
+            remoteMediaListId = "99902",
+            url = "https://anilist.co/manga/30002",
+            state = "LINKED",
+            syncStatus = "DIRTY_LOCAL",
+            createdAt = 1_000_000L,
+            updatedAt = 1_000_000L
+        )
+        fakeMediaLinkDao.links[link.id] = link
+
+        val saveResponseJson = """
+        {
+          "data": {
+            "SaveMediaListEntry": {
+              "id": 99902,
+              "mediaId": 30002,
+              "status": "CURRENT",
+              "progress": 40,
+              "updatedAt": 1700000020
+            }
+          }
+        }
+        """.trimIndent()
+
+        responseHandler = { _, _ -> createResponse(200, saveResponseJson) }
+
+        val success = engine.pushDirtyItem(mangaItem.id)
+        assertTrue(success)
+
+        val lastPayload = recordedBodies.last()
+        assertTrue("GraphQL mutation variables must contain progressVolumes for Manga",
+            lastPayload.contains("\"progressVolumes\":5")
+        )
+    }
+
+    @Test
+    fun `re-syncing AniList item with unchanged progress preserves local progressIncreasedAt`() = runTest(testDispatcher) {
+        val mangaItem = MediaItemEntity(
+            id = "resync-history-test",
+            type = "MANGA",
+            format = "MANGA",
+            title = "Vagabond",
+            createdAt = 1_000_000L,
+            updatedAt = 1_000_000L
+        )
+        fakeMediaItemDao.items[mangaItem.id] = mangaItem
+        val originalHistoryTimestamp = 1_650_000_000_000L
+        fakeMediaItemDao.userData[mangaItem.id] = UserDataEntity(
+            mediaId = mangaItem.id,
+            userStatus = "IN_PROGRESS",
+            progress = 50.0,
+            updatedAt = 1_000_000L,
+            progressIncreasedAt = originalHistoryTimestamp
+        )
+
+        val link = MediaLinkEntity(
+            id = "link-resync-test",
+            mediaId = mangaItem.id,
+            kind = "TRACKER",
+            providerId = "anilist",
+            remoteId = "30656",
+            remoteMediaListId = "88888",
+            url = "https://anilist.co/manga/30656",
+            state = "LINKED",
+            syncStatus = "SYNCED",
+            createdAt = 1_000_000L,
+            updatedAt = 1_000_000L
+        )
+        fakeMediaLinkDao.links[link.id] = link
+
+        val mangaJson = """
+        {
+          "data": {
+            "MediaListCollection": {
+              "hasNextChunk": false,
+              "lists": [
+                {
+                  "name": "Reading",
+                  "isCustomList": false,
+                  "status": "CURRENT",
+                  "entries": [
+                    {
+                      "id": 88888,
+                      "mediaId": 30656,
+                      "status": "CURRENT",
+                      "progress": 50,
+                      "updatedAt": 1700000088,
+                      "media": {
+                        "id": 30656,
+                        "format": "MANGA",
+                        "title": { "userPreferred": "Vagabond" }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+        """.trimIndent()
+
+        responseHandler = { _, body ->
+            if (body.contains("\"type\":\"MANGA\"")) createResponse(200, mangaJson)
+            else createResponse(200, """{"data":{"MediaListCollection":{"hasNextChunk":false,"lists":[]}}}""")
+        }
+
+        val result = engine.syncAll()
+        assertTrue(result is SyncResult.Success)
+
+        val userDataAfterSync = fakeMediaItemDao.userData[mangaItem.id]!!
+        assertEquals(50.0, userDataAfterSync.progress, 0.001)
+        // History timestamp must be completely preserved - not updated to remoteUpdatedMs or now
+        assertEquals(originalHistoryTimestamp, userDataAfterSync.progressIncreasedAt)
     }
 
     // --- Fakes ---
 
     class FakeMediaItemDao : MediaItemDao {
         val items = mutableMapOf<String, MediaItemEntity>()
+        val userData = mutableMapOf<String, UserDataEntity>()
 
         override fun observeAll(): Flow<List<ActiveMediaItemView>> = emptyFlow()
+        override fun observeHistory(): Flow<List<ActiveMediaItemView>> = emptyFlow()
         override fun observeByType(type: String): Flow<List<ActiveMediaItemView>> = emptyFlow()
         override fun observeTypeCounts(): Flow<List<TypeCount>> = emptyFlow()
         override fun observeStatusCounts(type: String?): Flow<List<StatusCount>> = emptyFlow()
@@ -1167,7 +1388,54 @@ class AnilistSyncEngineTest {
         override fun observeCount(): Flow<Int> = emptyFlow()
         override fun observeById(id: String): Flow<ActiveMediaItemView?> = emptyFlow()
         override suspend fun getById(id: String): MediaItemEntity? = items[id]
-        override suspend fun getActiveById(id: String): ActiveMediaItemView? = null
+        override suspend fun getUserData(mediaId: String): UserDataEntity? = userData[mediaId]
+        override suspend fun upsertUserData(userData: UserDataEntity) { this.userData[userData.mediaId] = userData }
+        override suspend fun upsertUserDataAll(items: List<UserDataEntity>) { items.forEach { this.userData[it.mediaId] = it } }
+        override suspend fun getActiveById(id: String): ActiveMediaItemView? = items[id]?.let { e ->
+            val u = userData[id]
+            ActiveMediaItemView(
+                id = e.id,
+                type = e.type,
+                format = e.format,
+                countryOfOrigin = e.countryOfOrigin,
+                title = e.title,
+                titleEnglish = e.titleEnglish,
+                titleRomaji = e.titleRomaji,
+                titleNative = e.titleNative,
+                coverImagePath = e.coverImagePath,
+                coverImageUrl = e.coverImageUrl,
+                bannerImage = e.bannerImage,
+                description = e.description,
+                author = e.author,
+                userStatus = u?.userStatus ?: "PLAN_TO",
+                progress = u?.progress ?: 0.0,
+                progressTotal = e.progressTotal,
+                secondaryProgress = u?.secondaryProgress ?: 0.0,
+                secondaryProgressTotal = e.secondaryProgressTotal,
+                scoreRaw = u?.scoreRaw,
+                repeat = u?.repeat ?: 0,
+                notes = u?.notes ?: "",
+                genres = e.genres,
+                tags = e.tags,
+                isPrivate = u?.isPrivate ?: false,
+                isAdult = e.isAdult,
+                startYear = u?.startYear,
+                startMonth = u?.startMonth,
+                startDay = u?.startDay,
+                endYear = u?.endYear,
+                endMonth = u?.endMonth,
+                endDay = u?.endDay,
+                durationMinutes = e.durationMinutes,
+                avgChapterLength = e.avgChapterLength,
+                lengthUnitOverride = e.lengthUnitOverride,
+                playbackSpeed = e.playbackSpeed,
+                createdAt = e.createdAt,
+                catalogUpdatedAt = e.updatedAt,
+                userUpdatedAt = u?.updatedAt,
+                progressIncreasedAt = u?.progressIncreasedAt,
+                deletedAt = e.deletedAt
+            )
+        }
         override suspend fun getAll(): List<ActiveMediaItemView> = emptyList()
         override suspend fun getActiveByType(type: String): List<MediaItemEntity> = items.values.filter { it.type == type && it.deletedAt == null }
         override suspend fun upsert(item: MediaItemEntity) { items[item.id] = item }
@@ -1175,8 +1443,8 @@ class AnilistSyncEngineTest {
         override suspend fun atomicIncrementProgress(id: String, delta: Double, now: Long): Int = 1
         override suspend fun softDelete(id: String, now: Long) {}
         override suspend fun restore(id: String, now: Long) {}
-        override suspend fun hardDelete(id: String) { items.remove(id) }
-        override suspend fun deleteAll() { items.clear() }
+        override suspend fun hardDelete(id: String) { items.remove(id); userData.remove(id) }
+        override suspend fun deleteAll() { items.clear(); userData.clear() }
         override fun getStats(): Flow<MediaStats> = emptyFlow()
     }
 

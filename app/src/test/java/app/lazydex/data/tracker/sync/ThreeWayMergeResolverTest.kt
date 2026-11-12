@@ -1,6 +1,7 @@
 package app.lazydex.data.tracker.sync
 
 import app.lazydex.data.local.entity.MediaItemEntity
+import app.lazydex.data.local.entity.UserDataEntity
 import app.lazydex.data.tracker.anilist.dto.AniListMedia
 import app.lazydex.data.tracker.anilist.dto.AniListMediaListEntry
 import org.junit.Assert.assertEquals
@@ -449,6 +450,11 @@ class ThreeWayMergeResolverTest {
             type = "MANGA",
             format = "MANGA",
             title = "Test Manga",
+            createdAt = 1000L,
+            updatedAt = 2000L
+        )
+        val userData = UserDataEntity(
+            mediaId = "media-1",
             userStatus = "COMPLETED",
             progress = 55.0,
             secondaryProgress = 5.0,
@@ -456,10 +462,9 @@ class ThreeWayMergeResolverTest {
             repeat = 1,
             notes = "Great read",
             isPrivate = false,
-            createdAt = 1000L,
             updatedAt = 2000L
         )
-        val localState = LocalState.from(entity)
+        val localState = LocalState.from(entity, userData)
         assertEquals("media-1", localState.id)
         assertEquals("COMPLETED", localState.userStatus)
         assertEquals(55.0, localState.progress, 0.001)
