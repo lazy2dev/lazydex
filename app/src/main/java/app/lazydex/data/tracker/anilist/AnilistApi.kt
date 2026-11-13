@@ -104,6 +104,8 @@ mutation (
   ${'$'}progress: Int,
   ${'$'}progressVolumes: Int,
   ${'$'}scoreRaw: Int,
+  ${'$'}repeat: Int,
+  ${'$'}notes: String,
   ${'$'}private: Boolean,
   ${'$'}startedAt: FuzzyDateInput,
   ${'$'}completedAt: FuzzyDateInput
@@ -115,6 +117,8 @@ mutation (
     progress: ${'$'}progress,
     progressVolumes: ${'$'}progressVolumes,
     scoreRaw: ${'$'}scoreRaw,
+    repeat: ${'$'}repeat,
+    notes: ${'$'}notes,
     private: ${'$'}private,
     startedAt: ${'$'}startedAt,
     completedAt: ${'$'}completedAt
@@ -125,6 +129,8 @@ mutation (
     score
     progress
     progressVolumes
+    repeat
+    notes
     updatedAt
   }
 }
@@ -212,6 +218,8 @@ query (${'$'}search: String, ${'$'}type: MediaType, ${'$'}perPage: Int) {
         val progress: Int? = null,
         val progressVolumes: Int? = null,
         val scoreRaw: Int? = null,
+        val repeat: Int? = null,
+        val notes: String? = null,
         val isPrivate: Boolean? = null,
         val startedAt: AniListFuzzyDateInput? = null,
         val completedAt: AniListFuzzyDateInput? = null
@@ -232,6 +240,8 @@ query (${'$'}search: String, ${'$'}type: MediaType, ${'$'}perPage: Int) {
             params.progress?.let { put("progress", it) }
             params.progressVolumes?.let { put("progressVolumes", it) }
             params.scoreRaw?.let { put("scoreRaw", it) }
+            params.repeat?.let { put("repeat", it) }
+            params.notes?.let { put("notes", it) }
             params.isPrivate?.let { put("private", it) }
             params.startedAt?.let { date ->
                 putJsonObject("startedAt") {
@@ -272,6 +282,8 @@ query (${'$'}search: String, ${'$'}type: MediaType, ${'$'}perPage: Int) {
         progress: Int? = null,
         progressVolumes: Int? = null,
         scoreRaw: Int? = null,
+        repeat: Int? = null,
+        notes: String? = null,
         isPrivate: Boolean? = null,
         startedAt: AniListFuzzyDateInput? = null,
         completedAt: AniListFuzzyDateInput? = null,
@@ -284,6 +296,8 @@ query (${'$'}search: String, ${'$'}type: MediaType, ${'$'}perPage: Int) {
             progress = progress,
             progressVolumes = progressVolumes,
             scoreRaw = scoreRaw,
+            repeat = repeat,
+            notes = notes,
             isPrivate = isPrivate,
             startedAt = startedAt,
             completedAt = completedAt

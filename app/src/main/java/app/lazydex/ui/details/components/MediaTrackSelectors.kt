@@ -108,112 +108,19 @@ fun TrackStatusSelector(
 }
 
 @Composable
-fun TrackRepeatSelector(
-    repeatCount: Int,
-    onRepeatConfirmed: (Int) -> Unit,
-    onDismissRequest: () -> Unit
-) {
-    var count by remember { mutableIntStateOf(repeatCount.coerceAtLeast(0)) }
-    var textValue by remember { mutableStateOf(count.toString()) }
-
-    BaseSelector(
-        title = "Total Rewatches / Rereads",
-        content = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "$count",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FilledTonalButton(
-                        onClick = {
-                            val next = (count - 5).coerceAtLeast(0)
-                            count = next
-                            textValue = next.toString()
-                        }
-                    ) {
-                        Text("-5")
-                    }
-
-                    FilledTonalIconButton(
-                        onClick = {
-                            val next = (count - 1).coerceAtLeast(0)
-                            count = next
-                            textValue = next.toString()
-                        }
-                    ) {
-                        Icon(imageVector = Icons.Default.Remove, contentDescription = "Decrease 1")
-                    }
-
-                    FilledTonalIconButton(
-                        onClick = {
-                            val next = count + 1
-                            count = next
-                            textValue = next.toString()
-                        }
-                    ) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = "Increase 1")
-                    }
-
-                    FilledTonalButton(
-                        onClick = {
-                            val next = count + 5
-                            count = next
-                            textValue = next.toString()
-                        }
-                    ) {
-                        Text("+5")
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                OutlinedTextField(
-                    value = textValue,
-                    onValueChange = { input ->
-                        val digits = input.filter { it.isDigit() }
-                        textValue = digits
-                        digits.toIntOrNull()?.let { count = it }
-                    },
-                    label = { Text("Count") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(0.6f)
-                )
-            }
-        },
-        onConfirm = {
-            onRepeatConfirmed(count)
-            onDismissRequest()
-        },
-        onDismissRequest = onDismissRequest
-    )
-}
-
-@Composable
 fun TrackProgressSelector(
     title: String,
     currentProgress: Int,
     total: Int?,
-    onProgressConfirmed: (Int) -> Unit,
+    repeatCount: Int = 0,
+    repeatLabel: String = "Rewatches",
+    onConfirmed: (progress: Int, total: Int?, repeat: Int) -> Unit,
     onDismissRequest: () -> Unit
 ) {
     var progress by remember { mutableIntStateOf(currentProgress.coerceAtLeast(0)) }
     var textValue by remember { mutableStateOf(progress.toString()) }
+    var totalTextValue by remember { mutableStateOf(total?.toString() ?: "") }
+    var count by remember { mutableIntStateOf(repeatCount.coerceAtLeast(0)) }
 
     BaseSelector(
         title = title,
@@ -221,17 +128,18 @@ fun TrackProgressSelector(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
+                    .padding(vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                val parsedTotal = totalTextValue.trim().toIntOrNull()
                 Text(
-                    text = if (total != null && total > 0) "$progress / $total" else "$progress",
+                    text = if (parsedTotal != null && parsedTotal > 0) "$progress / $parsedTotal" else "$progress",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -260,7 +168,7 @@ fun TrackProgressSelector(
 
                     FilledTonalIconButton(
                         onClick = {
-                            val max = total ?: Int.MAX_VALUE
+                            val max = parsedTotal ?: Int.MAX_VALUE
                             val next = (progress + 1).coerceAtMost(max)
                             progress = next
                             textValue = next.toString()
@@ -271,7 +179,7 @@ fun TrackProgressSelector(
 
                     FilledTonalButton(
                         onClick = {
-                            val max = total ?: Int.MAX_VALUE
+                            val max = parsedTotal ?: Int.MAX_VALUE
                             val next = (progress + 5).coerceAtMost(max)
                             progress = next
                             textValue = next.toString()
@@ -281,28 +189,231 @@ fun TrackProgressSelector(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                OutlinedTextField(
-                    value = textValue,
-                    onValueChange = { input ->
-                        val filtered = input.filter { it.isDigit() }
-                        textValue = filtered
-                        val parsed = filtered.toIntOrNull()
-                        if (parsed != null) {
-                            val max = total ?: Int.MAX_VALUE
-                            progress = parsed.coerceIn(0, max)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = textValue,
+                        onValueChange = { input ->
+                            val filtered = input.filter { it.isDigit() }
+                            textValue = filtered
+                            val parsed = filtered.toIntOrNull()
+                            if (parsed != null) {
+                                val max = parsedTotal ?: Int.MAX_VALUE
+                                progress = parsed.coerceIn(0, max)
+                            }
+                        },
+                        label = { Text("Exact Progress") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    OutlinedTextField(
+                        value = totalTextValue,
+                        onValueChange = { input ->
+                            val filtered = input.filter { it.isDigit() }
+                            totalTextValue = filtered
+                        },
+                        label = { Text("Total Units") },
+                        placeholder = { Text("—") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = repeatLabel,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "Completed repeat cycles",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilledTonalIconButton(
+                            onClick = {
+                                val next = (count - 1).coerceAtLeast(0)
+                                count = next
+                            }
+                        ) {
+                            Icon(imageVector = Icons.Default.Remove, contentDescription = "Decrease repeat")
                         }
-                    },
-                    label = { Text("Exact Progress") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+
+                        Text(
+                            text = "$count",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+
+                        FilledTonalIconButton(
+                            onClick = {
+                                val next = count + 1
+                                count = next
+                            }
+                        ) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = "Increase repeat")
+                        }
+                    }
+                }
             }
         },
         onConfirm = {
-            onProgressConfirmed(progress)
+            onConfirmed(progress, totalTextValue.trim().toIntOrNull(), count)
+            onDismissRequest()
+        },
+        onDismissRequest = onDismissRequest
+    )
+}
+
+@Composable
+fun TrackVolumeSelector(
+    title: String = "Volume Progress",
+    currentVolume: Double,
+    totalVolumes: Double?,
+    onConfirmed: (volume: Double, total: Double?) -> Unit,
+    onDismissRequest: () -> Unit
+) {
+    var volume by remember { mutableDoubleStateOf(currentVolume.coerceAtLeast(0.0)) }
+    var textValue by remember {
+        mutableStateOf(if (volume % 1.0 == 0.0) volume.toInt().toString() else volume.toString())
+    }
+    var totalTextValue by remember {
+        mutableStateOf(totalVolumes?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() } ?: "")
+    }
+
+    BaseSelector(
+        title = title,
+        content = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                val parsedTotal = totalTextValue.trim().toDoubleOrNull()
+                val displayVol = if (volume % 1.0 == 0.0) volume.toInt().toString() else volume.toString()
+                val displayTotal = parsedTotal?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() }
+
+                Text(
+                    text = if (displayTotal != null) "Vol $displayVol / $displayTotal" else "Vol $displayVol",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            val next = (volume - 5.0).coerceAtLeast(0.0)
+                            volume = next
+                            textValue = if (next % 1.0 == 0.0) next.toInt().toString() else next.toString()
+                        }
+                    ) {
+                        Text("-5")
+                    }
+
+                    FilledTonalIconButton(
+                        onClick = {
+                            val next = (volume - 1.0).coerceAtLeast(0.0)
+                            volume = next
+                            textValue = if (next % 1.0 == 0.0) next.toInt().toString() else next.toString()
+                        }
+                    ) {
+                        Icon(imageVector = Icons.Default.Remove, contentDescription = "Decrease 1")
+                    }
+
+                    FilledTonalIconButton(
+                        onClick = {
+                            val max = parsedTotal ?: Double.MAX_VALUE
+                            val next = (volume + 1.0).coerceAtMost(max)
+                            volume = next
+                            textValue = if (next % 1.0 == 0.0) next.toInt().toString() else next.toString()
+                        }
+                    ) {
+                        Icon(imageVector = Icons.Default.Add, contentDescription = "Increase 1")
+                    }
+
+                    FilledTonalButton(
+                        onClick = {
+                            val max = parsedTotal ?: Double.MAX_VALUE
+                            val next = (volume + 5.0).coerceAtMost(max)
+                            volume = next
+                            textValue = if (next % 1.0 == 0.0) next.toInt().toString() else next.toString()
+                        }
+                    ) {
+                        Text("+5")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = textValue,
+                        onValueChange = { input ->
+                            val filtered = input.filter { it.isDigit() || it == '.' }
+                            textValue = filtered
+                            val parsed = filtered.toDoubleOrNull()
+                            if (parsed != null) {
+                                val max = parsedTotal ?: Double.MAX_VALUE
+                                volume = parsed.coerceIn(0.0, max)
+                            }
+                        },
+                        label = { Text("Exact Volume") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    OutlinedTextField(
+                        value = totalTextValue,
+                        onValueChange = { input ->
+                            val filtered = input.filter { it.isDigit() || it == '.' }
+                            totalTextValue = filtered
+                        },
+                        label = { Text("Total Volumes") },
+                        placeholder = { Text("—") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        },
+        onConfirm = {
+            onConfirmed(volume, totalTextValue.trim().toDoubleOrNull())
             onDismissRequest()
         },
         onDismissRequest = onDismissRequest

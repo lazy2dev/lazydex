@@ -485,6 +485,10 @@ class MediaDetailsViewModel(
         _uiState.value = _uiState.value.copy(secondaryProgress = progress)
     }
 
+    fun updateSecondaryProgressTotal(total: String) {
+        _uiState.value = _uiState.value.copy(secondaryProgressTotal = total, errorMsg = null)
+    }
+
     fun updateUserStatus(status: UserStatus) {
         _uiState.value = _uiState.value.copy(userStatus = status)
     }
@@ -598,6 +602,7 @@ class MediaDetailsViewModel(
         totalItems: String,
         description: String,
         isAdult: Boolean = _uiState.value.isAdult,
+        secondaryProgressTotal: String = _uiState.value.secondaryProgressTotal,
     ): Boolean {
         val current = _uiState.value
         if (current.isScraping || current.isSaving) return false
@@ -608,6 +613,7 @@ class MediaDetailsViewModel(
             current.title.trim() == title.trim() &&
             current.author.trim() == author.trim() &&
             current.totalItems.trim() == totalItems.trim() &&
+            current.secondaryProgressTotal.trim() == secondaryProgressTotal.trim() &&
             current.description.trim() == description.trim() &&
             current.isAdult == isAdult
         if (unchanged) return true
@@ -619,6 +625,7 @@ class MediaDetailsViewModel(
             title = title,
             author = author,
             totalItems = totalItems,
+            secondaryProgressTotal = secondaryProgressTotal,
             description = description,
             isAdult = isAdult,
             errorMsg = null,
@@ -813,6 +820,12 @@ class MediaDetailsViewModel(
                 }
                 if (wasNew && tokenStore?.isLoggedIn == true && tokenStore.trackOnAdd && savedItem.title.isNotBlank()) {
                     autoTrackMedia(savedItem.id, savedItem.title, savedItem.mediaType)
+                } else if (!wasNew && tokenStore?.isLoggedIn == true && tokenStore.autoUpdateAfterReading) {
+                    syncEngine?.let { engine ->
+                        viewModelScope.launch {
+                            runCatching { engine.pushDirtyItem(savedItem.id) }
+                        }
+                    }
                 }
             } catch (e: DuplicateUrlException) {
                 _uiState.value = _uiState.value.copy(

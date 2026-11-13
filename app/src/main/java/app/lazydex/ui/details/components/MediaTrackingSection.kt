@@ -3,6 +3,7 @@ package app.lazydex.ui.details.components
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -15,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -35,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.UserStatus
 import java.text.SimpleDateFormat
@@ -61,7 +64,7 @@ fun MediaTrackingSection(
     onScoreClick: () -> Unit,
     onStartDateClick: () -> Unit,
     onEndDateClick: () -> Unit,
-    onRepeatClick: () -> Unit = {},
+    onSecondaryClick: () -> Unit = {},
     onSecondaryStep: (Double) -> Unit,
     onNotesChange: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -71,12 +74,6 @@ fun MediaTrackingSection(
         MediaType.ANIME, MediaType.TV -> "Ep."
         MediaType.GAME -> "Hrs"
         MediaType.MOVIE -> "Part"
-    }
-
-    val repeatLabel = when (mediaType) {
-        MediaType.ANIME, MediaType.TV, MediaType.MOVIE -> "REWATCHES"
-        MediaType.GAME -> "REPLAYS"
-        else -> "REREADS"
     }
 
     val progressDisplay = if (totalItems != null && totalItems > 0) {
@@ -107,7 +104,7 @@ fun MediaTrackingSection(
             )
         }
 
-        // 3x2 Matrix Card (Komikku TrackInfoDialogHome style)
+        // 3:2 Matrix Card (Komikku TrackInfoDialogHome style)
         Surface(
             shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -130,6 +127,32 @@ fun MediaTrackingSection(
                         value = progressDisplay,
                         onClick = onProgressClick,
                         modifier = Modifier.weight(1f),
+                        badge = if (repeatCount > 0) {
+                            {
+                                Row(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(end = 4.dp, top = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(1.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Repeat,
+                                        contentDescription = "Repeated $repeatCount times",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(11.dp),
+                                    )
+                                    if (repeatCount > 1) {
+                                        Text(
+                                            text = "${repeatCount}x",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                }
+                            }
+                        } else null,
                     )
                     VerticalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                     TrackMatrixCell(
@@ -143,7 +166,7 @@ fun MediaTrackingSection(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
 
-                // Row 2: Started date | Finished date | Repeat count
+                // Row 2: Started date | Finished date (50% / 50% restored)
                 Row(modifier = Modifier.height(IntrinsicSize.Min)) {
                     TrackMatrixCell(
                         label = "STARTED",
@@ -158,13 +181,6 @@ fun MediaTrackingSection(
                         value = endDate?.let { formatTrackDate(it) },
                         placeholder = "—",
                         onClick = onEndDateClick,
-                        modifier = Modifier.weight(1f),
-                    )
-                    VerticalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-                    TrackMatrixCell(
-                        label = repeatLabel,
-                        value = repeatCount.toString(),
-                        onClick = onRepeatClick,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -204,11 +220,19 @@ fun MediaTrackingSection(
                             Icon(Icons.Default.Remove, contentDescription = "Decrement", modifier = Modifier.size(16.dp))
                         }
 
-                        Text(
-                            text = "${secondaryProgress.ifEmpty { "0" }} / ${secondaryProgressTotal.ifEmpty { "—" }}",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable(onClick = onSecondaryClick)
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = "${secondaryProgress.ifEmpty { "0" }} / ${secondaryProgressTotal.ifEmpty { "—" }}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
 
                         FilledTonalIconButton(
                             onClick = { onSecondaryStep(1.0) },
@@ -264,6 +288,7 @@ fun TrackMatrixCell(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String = "—",
+    badge: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     Box(
         modifier = modifier
@@ -293,6 +318,9 @@ fun TrackMatrixCell(
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
             )
+        }
+        if (badge != null) {
+            badge()
         }
     }
 }

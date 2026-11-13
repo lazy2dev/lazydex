@@ -89,9 +89,9 @@ import app.lazydex.ui.details.components.MediaTrackerSyncDialog
 import app.lazydex.ui.details.components.MediaTrackingSection
 import app.lazydex.ui.details.components.TrackDateSelector
 import app.lazydex.ui.details.components.TrackProgressSelector
-import app.lazydex.ui.details.components.TrackRepeatSelector
 import app.lazydex.ui.details.components.TrackScoreSelector
 import app.lazydex.ui.details.components.TrackStatusSelector
+import app.lazydex.ui.details.components.TrackVolumeSelector
 import app.lazydex.ui.theme.coverColorScheme
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
@@ -102,7 +102,7 @@ private sealed interface ActiveDialog {
     data object Score : ActiveDialog
     data object StartDate : ActiveDialog
     data object FinishDate : ActiveDialog
-    data object Repeat : ActiveDialog
+    data object Volume : ActiveDialog
     data object Cover : ActiveDialog
     data object Metadata : ActiveDialog
     data object Sync : ActiveDialog
@@ -363,7 +363,7 @@ fun MediaDetailsScreen(
                     onScoreClick = { activeDialog = ActiveDialog.Score },
                     onStartDateClick = { activeDialog = ActiveDialog.StartDate },
                     onEndDateClick = { activeDialog = ActiveDialog.FinishDate },
-                    onRepeatClick = { activeDialog = ActiveDialog.Repeat },
+                    onSecondaryClick = { activeDialog = ActiveDialog.Volume },
                     onSecondaryStep = { step ->
                         val cur = state.parsedSecondaryProgress ?: 0.0
                         val next = (cur + step).coerceAtLeast(0.0)
@@ -399,6 +399,11 @@ fun MediaDetailsScreen(
             )
         }
         ActiveDialog.Progress -> {
+            val repeatLabel = when (state.mediaType) {
+                MediaType.ANIME, MediaType.TV, MediaType.MOVIE -> "Rewatches"
+                MediaType.GAME -> "Replays"
+                else -> "Rereads"
+            }
             TrackProgressSelector(
                 title = when (state.mediaType) {
                     MediaType.MANGA, MediaType.NOVEL -> "Chapters Read"
@@ -408,9 +413,25 @@ fun MediaDetailsScreen(
                 },
                 currentProgress = state.parsedProgress ?: 0,
                 total = state.parsedTotal,
-                onProgressConfirmed = { progress ->
+                repeatCount = state.repeat,
+                repeatLabel = repeatLabel,
+                onConfirmed = { progress, total, repeat ->
+                    var changed = false
                     if (progress != (state.parsedProgress ?: 0)) {
                         viewModel.updateCurrentProgress(progress.toString())
+                        changed = true
+                    }
+                    val currentTotalStr = state.totalItems.trim()
+                    val newTotalStr = total?.toString() ?: ""
+                    if (newTotalStr != currentTotalStr) {
+                        viewModel.updateTotalItems(newTotalStr)
+                        changed = true
+                    }
+                    if (repeat != state.repeat) {
+                        viewModel.updateRepeat(repeat)
+                        changed = true
+                    }
+                    if (changed) {
                         viewModel.autoSave()
                     }
                 },
@@ -455,12 +476,25 @@ fun MediaDetailsScreen(
                 onDismissRequest = { activeDialog = null }
             )
         }
-        ActiveDialog.Repeat -> {
-            TrackRepeatSelector(
-                repeatCount = state.repeat,
-                onRepeatConfirmed = { count ->
-                    if (count != state.repeat) {
-                        viewModel.updateRepeat(count)
+        ActiveDialog.Volume -> {
+            TrackVolumeSelector(
+                title = "${state.resolvedConfig?.secondaryUnitName ?: "Volume"} Progress",
+                currentVolume = state.parsedSecondaryProgress ?: 0.0,
+                totalVolumes = state.parsedSecondaryTotal,
+                onConfirmed = { volume, totalVol ->
+                    var changed = false
+                    val curVol = state.parsedSecondaryProgress ?: 0.0
+                    if (kotlin.math.abs(volume - curVol) > 1e-6) {
+                        viewModel.updateSecondaryProgress(if (volume % 1.0 == 0.0) volume.toInt().toString() else volume.toString())
+                        changed = true
+                    }
+                    val currentTotalVol = state.secondaryProgressTotal.trim()
+                    val newTotalVol = totalVol?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() } ?: ""
+                    if (newTotalVol != currentTotalVol) {
+                        viewModel.updateSecondaryProgressTotal(newTotalVol)
+                        changed = true
+                    }
+                    if (changed) {
                         viewModel.autoSave()
                     }
                 },
@@ -611,6 +645,7 @@ private fun EditMetadataModalSheet(
     var title by remember { mutableStateOf(state.title) }
     var author by remember { mutableStateOf(state.author) }
     var totalItems by remember { mutableStateOf(state.totalItems) }
+    var secondaryProgressTotal by remember { mutableStateOf(state.secondaryProgressTotal) }
     var description by remember { mutableStateOf(state.description) }
     var isAdult by remember { mutableStateOf(state.isAdult) }
     var localError by remember { mutableStateOf<String?>(null) }
@@ -624,6 +659,7 @@ private fun EditMetadataModalSheet(
             selectedFormatId = state.formatId
             title = state.title
             author = state.author
+            secondaryProgressTotal = state.secondaryProgressTotal
             description = state.description
             isAdult = state.isAdult
             localError = null
@@ -670,6 +706,7 @@ private fun EditMetadataModalSheet(
             totalItems = totalItems,
             description = description,
             isAdult = isAdult,
+            secondaryProgressTotal = secondaryProgressTotal,
         )
         if (!ok) {
             localError = viewModel.uiState.value.errorMsg ?: "Unable to save changes"
@@ -959,6 +996,23 @@ private fun EditMetadataModalSheet(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+
+            val showVolumeTotal = state.hasSecondaryProgress ||
+                selectedType == MediaType.MANGA ||
+                selectedType == MediaType.NOVEL
+            if (showVolumeTotal) {
+                OutlinedTextField(
+                    value = secondaryProgressTotal,
+                    onValueChange = {
+                        secondaryProgressTotal = it.filter { ch -> ch.isDigit() || ch == '.' }
+                    },
+                    label = { Text("Total Volumes") },
+                    placeholder = { Text("—") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
             OutlinedTextField(
                 value = description,

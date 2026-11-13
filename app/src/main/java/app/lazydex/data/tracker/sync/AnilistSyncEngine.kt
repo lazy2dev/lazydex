@@ -270,8 +270,9 @@ open class AnilistSyncEngine(
         val dispatchedAt = timeProvider()
         recordInFlight(localMedia.id, link.remoteId, dispatchedAt)
 
-        val isManga = localMedia.type == "MANGA"
-        val progressVolumesToSend = if (isManga) localUserData.secondaryProgress.toInt() else null
+        val isMangaOrNovelWithVolumes = localMedia.type == "MANGA" ||
+            (localMedia.type == "NOVEL" && (localMedia.format.equals("LIGHT_NOVEL", ignoreCase = true) || localUserData.secondaryProgress > 0))
+        val progressVolumesToSend = if (isMangaOrNovelWithVolumes) localUserData.secondaryProgress.toInt() else null
 
         try {
             val params = AnilistApi.SaveMediaListEntryParams(
@@ -281,6 +282,8 @@ open class AnilistSyncEngine(
                 progress = localUserData.progress.toInt(), // Section 6.3: Outbound truncates to integer
                 progressVolumes = progressVolumesToSend,
                 scoreRaw = localUserData.scoreRaw,
+                repeat = localUserData.repeat,
+                notes = localUserData.notes.ifBlank { null },
                 isPrivate = localUserData.isPrivate,
                 startedAt = if (localUserData.startYear != null) {
                     AniListFuzzyDateInput(localUserData.startYear, localUserData.startMonth, localUserData.startDay)

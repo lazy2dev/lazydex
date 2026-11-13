@@ -168,6 +168,8 @@ data class AniListSavedEntry(
     val score: Double? = null,
     val progress: Int? = null,
     val progressVolumes: Int? = null,
+    val repeat: Int? = null,
+    val notes: String? = null,
     val updatedAt: Long? = null
 )
 

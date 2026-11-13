@@ -1293,6 +1293,127 @@ class AnilistSyncEngineTest {
     }
 
     @Test
+    fun `pushDirtyItem sends repeat and notes when present`() = runTest(testDispatcher) {
+        val mangaItem = MediaItemEntity(
+            id = "manga-repeat-test",
+            type = "MANGA",
+            format = "MANGA",
+            title = "Berserk Repeat",
+            createdAt = 1_000_000L,
+            updatedAt = 1_000_000L
+        )
+        fakeMediaItemDao.items[mangaItem.id] = mangaItem
+        fakeMediaItemDao.userData[mangaItem.id] = UserDataEntity(
+            mediaId = mangaItem.id,
+            userStatus = "CURRENT",
+            progress = 10.0,
+            repeat = 3,
+            notes = "Masterpiece re-read",
+            updatedAt = 1_000_000L
+        )
+
+        val link = MediaLinkEntity(
+            id = "link-manga-repeat",
+            mediaId = mangaItem.id,
+            kind = "TRACKER",
+            providerId = "anilist",
+            remoteId = "30005",
+            remoteMediaListId = "99905",
+            url = "https://anilist.co/manga/30005",
+            state = "LINKED",
+            syncStatus = "DIRTY_LOCAL",
+            createdAt = 1_000_000L,
+            updatedAt = 1_000_000L
+        )
+        fakeMediaLinkDao.links[link.id] = link
+
+        val saveResponseJson = """
+        {
+          "data": {
+            "SaveMediaListEntry": {
+              "id": 99905,
+              "mediaId": 30005,
+              "status": "CURRENT",
+              "progress": 10,
+              "repeat": 3,
+              "notes": "Masterpiece re-read",
+              "updatedAt": 1700000030
+            }
+          }
+        }
+        """.trimIndent()
+
+        responseHandler = { _, _ -> createResponse(200, saveResponseJson) }
+
+        val success = engine.pushDirtyItem(mangaItem.id)
+        assertTrue(success)
+
+        val lastPayload = recordedBodies.last()
+        assertTrue("GraphQL mutation variables must contain repeat", lastPayload.contains("\"repeat\":3"))
+        assertTrue("GraphQL mutation variables must contain notes", lastPayload.contains("\"notes\":\"Masterpiece re-read\""))
+    }
+
+    @Test
+    fun `pushDirtyItem for Light Novel includes progressVolumes when secondaryProgress is present`() = runTest(testDispatcher) {
+        val novelItem = MediaItemEntity(
+            id = "novel-push-test",
+            type = "NOVEL",
+            format = "LIGHT_NOVEL",
+            title = "Sword Art Online",
+            createdAt = 1_000_000L,
+            updatedAt = 1_000_000L
+        )
+        fakeMediaItemDao.items[novelItem.id] = novelItem
+        fakeMediaItemDao.userData[novelItem.id] = UserDataEntity(
+            mediaId = novelItem.id,
+            userStatus = "CURRENT",
+            progress = 15.0,
+            secondaryProgress = 2.0,
+            updatedAt = 1_000_000L
+        )
+
+        val link = MediaLinkEntity(
+            id = "link-novel-push",
+            mediaId = novelItem.id,
+            kind = "TRACKER",
+            providerId = "anilist",
+            remoteId = "30010",
+            remoteMediaListId = "99910",
+            url = "https://anilist.co/manga/30010",
+            state = "LINKED",
+            syncStatus = "DIRTY_LOCAL",
+            createdAt = 1_000_000L,
+            updatedAt = 1_000_000L
+        )
+        fakeMediaLinkDao.links[link.id] = link
+
+        val saveResponseJson = """
+        {
+          "data": {
+            "SaveMediaListEntry": {
+              "id": 99910,
+              "mediaId": 30010,
+              "status": "CURRENT",
+              "progress": 15,
+              "progressVolumes": 2,
+              "updatedAt": 1700000040
+            }
+          }
+        }
+        """.trimIndent()
+
+        responseHandler = { _, _ -> createResponse(200, saveResponseJson) }
+
+        val success = engine.pushDirtyItem(novelItem.id)
+        assertTrue(success)
+
+        val lastPayload = recordedBodies.last()
+        assertTrue("GraphQL mutation variables must contain progressVolumes for Light Novel",
+            lastPayload.contains("\"progressVolumes\":2")
+        )
+    }
+
+    @Test
     fun `re-syncing AniList item with unchanged progress preserves local progressIncreasedAt`() = runTest(testDispatcher) {
         val mangaItem = MediaItemEntity(
             id = "resync-history-test",
