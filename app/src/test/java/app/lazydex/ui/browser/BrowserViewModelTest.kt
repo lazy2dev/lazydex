@@ -192,7 +192,7 @@ class BrowserViewModelTest {
                 sourceUrl = "https://manga.example.com/title/123",
                 currentProgress = 100,
                 totalItems = 1100,
-                userStatus = UserStatus.READING,
+                userStatus = UserStatus.CURRENT,
                 lastUpdated = 1000L,
                 dateAdded = 1000L
             )

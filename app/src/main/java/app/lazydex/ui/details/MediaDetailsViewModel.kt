@@ -73,8 +73,9 @@ data class MediaDetailsUiState(
     val avgChapterLength: String = "",
     val resolvedConfig: ResolvedTypeConfig? = null,
     val timeStats: Pair<Double, Double> = Pair(0.0, 0.0),
-    val userStatus: UserStatus = UserStatus.READING,
+    val userStatus: UserStatus = UserStatus.PLANNING,
     val rating: Double? = null,
+    val repeat: Int = 0,
     val notes: String = "",
     val genres: List<String> = emptyList(),
     val tags: List<String> = emptyList(),
@@ -329,6 +330,7 @@ class MediaDetailsViewModel(
                         timeStats = timeSpent,
                         userStatus = item.userStatus,
                         rating = item.rating,
+                        repeat = item.repeat,
                         notes = item.notes,
                         genres = item.genres,
                         tags = item.tags,
@@ -489,6 +491,10 @@ class MediaDetailsViewModel(
 
     fun updateRating(rating: Double?) {
         _uiState.value = _uiState.value.copy(rating = rating)
+    }
+
+    fun updateRepeat(repeat: Int) {
+        _uiState.value = _uiState.value.copy(repeat = repeat.coerceAtLeast(0))
     }
 
     fun updateNotes(notes: String) {
@@ -709,6 +715,7 @@ class MediaDetailsViewModel(
                     avgChapterLength = state.avgChapterLength.toIntOrNull(),
                     userStatus = state.userStatus,
                     rating = state.rating,
+                    repeat = state.repeat,
                     notes = state.notes,
                     genres = state.genres,
                     tags = state.tags,
@@ -767,6 +774,7 @@ class MediaDetailsViewModel(
                     avgChapterLength = state.avgChapterLength.toIntOrNull(),
                     userStatus = state.userStatus,
                     rating = state.rating,
+                    repeat = state.repeat,
                     notes = state.notes,
                     genres = state.genres,
                     tags = state.tags,

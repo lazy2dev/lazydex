@@ -112,15 +112,8 @@ class MediaRepositoryImpl(
     }
 
     override fun observeFiltered(type: String?, format: String?, statusFilter: StatusFilter): Flow<List<MediaItem>> {
-        val (filterType, exactStatus) = when (statusFilter) {
-            StatusFilter.ALL -> "ALL" to null
-            StatusFilter.IN_PROGRESS -> "IN_PROGRESS" to null
-            StatusFilter.COMPLETED -> "EXACT" to UserStatus.COMPLETED.name
-            StatusFilter.ON_HOLD -> "EXACT" to UserStatus.ON_HOLD.name
-            StatusFilter.DROPPED -> "EXACT" to UserStatus.DROPPED.name
-            StatusFilter.PLAN_TO -> "EXACT" to UserStatus.PLAN_TO.name
-        }
-        return dao.observeFiltered(type, format, filterType, exactStatus)
+        val filterType = if (statusFilter == StatusFilter.ALL) "ALL" else statusFilter.name
+        return dao.observeFiltered(type, format, filterType)
             .map { list -> list.map { it.toDomain() } }
             .distinctUntilChanged()
     }
@@ -159,14 +152,21 @@ class MediaRepositoryImpl(
         return dao.observeStatusCounts(type)
             .map { list ->
                 val raw = list.associate { it.userStatus to it.count }
-                val inProgress = (raw["READING"] ?: 0) + (raw["WATCHING"] ?: 0) + (raw["PLAYING"] ?: 0) + (raw["IN_PROGRESS"] ?: 0)
+                val current = (raw["CURRENT"] ?: 0) + (raw["READING"] ?: 0) + (raw["WATCHING"] ?: 0) + (raw["PLAYING"] ?: 0) + (raw["IN_PROGRESS"] ?: 0)
+                val planning = (raw["PLANNING"] ?: 0) + (raw["PLAN_TO"] ?: 0)
+                val paused = (raw["PAUSED"] ?: 0) + (raw["ON_HOLD"] ?: 0)
+                val completed = raw["COMPLETED"] ?: 0
+                val dropped = raw["DROPPED"] ?: 0
+                val repeating = raw["REPEATING"] ?: 0
+                val allCount = current + planning + paused + completed + dropped + repeating
                 mapOf(
-                    StatusFilter.ALL to raw.values.sum(),
-                    StatusFilter.IN_PROGRESS to inProgress,
-                    StatusFilter.COMPLETED to (raw["COMPLETED"] ?: 0),
-                    StatusFilter.ON_HOLD to (raw["ON_HOLD"] ?: 0),
-                    StatusFilter.DROPPED to (raw["DROPPED"] ?: 0),
-                    StatusFilter.PLAN_TO to (raw["PLAN_TO"] ?: 0)
+                    StatusFilter.ALL to allCount,
+                    StatusFilter.CURRENT to current,
+                    StatusFilter.PLANNING to planning,
+                    StatusFilter.COMPLETED to completed,
+                    StatusFilter.PAUSED to paused,
+                    StatusFilter.DROPPED to dropped,
+                    StatusFilter.REPEATING to repeating
                 )
             }
             .flowOn(Dispatchers.IO)
@@ -489,6 +489,117 @@ class MediaRepositoryImpl(
         dao.softDelete(id, now)
     }
 
+    override suspend fun updateStatus(ids: Collection<String>, status: UserStatus) {
+        withContext(Dispatchers.IO) {
+            if (ids.isEmpty()) return@withContext
+            val now = System.currentTimeMillis()
+            val delayedStore = context?.let { app.lazydex.data.tracker.service.DelayedTrackingStore(it) }
+
+            runInTransaction {
+                ids.forEach { id ->
+                    val existingActive = dao.getActiveById(id) ?: return@forEach
+                    val currentDomain = existingActive.toDomain()
+                    val targetStatus = status
+
+                    if (currentDomain.userStatus == targetStatus) return@forEach
+
+                    val currentUserData = dao.getUserData(id)
+                    val updated = currentDomain.copy(userStatus = targetStatus)
+                    val updatedUserData = updated.toUserDataEntity(
+                        updatedAtOverride = now,
+                        progressIncreasedAtOverride = currentDomain.progressIncreasedAt,
+                        existing = currentUserData
+                    )
+                    dao.upsertUserData(updatedUserData)
+                    linkDao.updateSyncStatusByMediaId(id, "DIRTY_LOCAL", now)
+
+                    activityDao.upsert(
+                        ActivityEntity(
+                            id = UUID.randomUUID().toString(),
+                            mediaId = id,
+                            type = "STATUS_CHANGE",
+                            oldValue = currentDomain.userStatus.name,
+                            newValue = targetStatus.name,
+                            counted = 0,
+                            timestamp = now
+                        )
+                    )
+
+                    outboxDao.insert(
+                        SyncOutboxEntity(
+                            id = UUID.randomUUID().toString(),
+                            mediaId = id,
+                            action = "UPDATE",
+                            payload = """{"userStatus":"${targetStatus.name}"}""",
+                            createdAt = now
+                        )
+                    )
+
+                    delayedStore?.addStatus(id, targetStatus.name)
+                }
+            }
+
+            context?.let { ctx ->
+                DelayedTrackingUpdateJob.setupTask(ctx)
+            }
+
+            syncEngine?.let { engine ->
+                syncScope.launch {
+                    ids.forEach { id ->
+                        runCatching { engine.pushDirtyItem(id) }
+                    }
+                }
+            }
+        }
+    }
+
+    override suspend fun updateRepeat(id: String, repeat: Int) {
+        withContext(Dispatchers.IO) {
+            val safeRepeat = repeat.coerceAtLeast(0)
+            val now = System.currentTimeMillis()
+            var shouldPush = false
+            runInTransaction {
+                val existingUser = dao.getUserData(id) ?: return@runInTransaction
+                if (existingUser.repeat == safeRepeat) return@runInTransaction
+
+                val updatedUser = existingUser.copy(repeat = safeRepeat, updatedAt = now)
+                dao.upsertUserData(updatedUser)
+                val dirtyRows = linkDao.updateSyncStatusByMediaId(id, "DIRTY_LOCAL", now)
+                if (dirtyRows > 0) {
+                    shouldPush = true
+                }
+                outboxDao.insert(
+                    SyncOutboxEntity(
+                        id = UUID.randomUUID().toString(),
+                        mediaId = id,
+                        action = "UPDATE",
+                        payload = """{"repeat":$safeRepeat}""",
+                        createdAt = now
+                    )
+                )
+            }
+            if (shouldPush) {
+                syncEngine?.let { engine ->
+                    syncScope.launch {
+                        runCatching { engine.pushDirtyItem(id) }
+                    }
+                }
+            }
+        }
+    }
+
+    override suspend fun deleteItems(ids: Collection<String>) {
+        withContext(Dispatchers.IO) {
+            if (ids.isEmpty()) return@withContext
+            val now = System.currentTimeMillis()
+            runInTransaction {
+                ids.forEach { id ->
+                    dao.softDelete(id, now)
+                }
+            }
+        }
+    }
+
     override suspend fun incrementProgress(
         id: String,
         delta: Double,
@@ -528,16 +639,20 @@ class MediaRepositoryImpl(
             }
 
             var newStatus = existingUser.userStatus
+            var newRepeat = existingUser.repeat
             if ((existingUser.userStatus == "PLANNING" || existingUser.userStatus == "PLAN_TO") && clampedProgress > 0.0) {
-                newStatus = "IN_PROGRESS"
+                newStatus = "CURRENT"
             }
             if (maxProgress != null && clampedProgress >= maxProgress && existingUser.userStatus != "COMPLETED") {
+                if (existingUser.userStatus == "REPEATING") {
+                    newRepeat = existingUser.repeat + 1
+                }
                 newStatus = "COMPLETED"
             } else if (existingUser.userStatus == "COMPLETED" && maxProgress != null && clampedProgress < maxProgress) {
-                newStatus = "IN_PROGRESS"
+                newStatus = "CURRENT"
             }
 
-            val progressChanged = abs(clampedProgress - existingUser.progress) > 1e-6 || newStatus != existingUser.userStatus
+            val progressChanged = abs(clampedProgress - existingUser.progress) > 1e-6 || newStatus != existingUser.userStatus || newRepeat != existingUser.repeat
             if (!progressChanged) {
                 return@runInTransaction activeView.toDomain()
             }
@@ -548,6 +663,7 @@ class MediaRepositoryImpl(
             val updatedUser = existingUser.copy(
                 progress = clampedProgress,
                 userStatus = newStatus,
+                repeat = newRepeat,
                 updatedAt = now,
                 progressIncreasedAt = newProgressIncreasedAt
             )
@@ -596,7 +712,7 @@ class MediaRepositoryImpl(
                     id = UUID.randomUUID().toString(),
                     mediaId = id,
                     action = "UPDATE",
-                    payload = """{"progress":$clampedProgress,"userStatus":"$newStatus"}""",
+                    payload = """{"progress":$clampedProgress,"userStatus":"$newStatus","repeat":$newRepeat}""",
                     createdAt = now
                 )
             )
@@ -717,7 +833,7 @@ class MediaRepositoryImpl(
         val altTitles = listOfNotNull(titleRomaji, titleEnglish, titleNative)
         val genresList = converters.toList(genres)
         val tagsList = converters.toList(tags)
-        val stat = UserStatus.fromString(userStatus) ?: UserStatus.PLAN_TO
+        val stat = UserStatus.fromString(userStatus) ?: UserStatus.PLANNING
         val calcRating = scoreRaw?.let { it / 20.0 }
         return MediaItem(
             id = id,
@@ -763,7 +879,7 @@ class MediaRepositoryImpl(
         val altTitles = listOfNotNull(titleRomaji, titleEnglish, titleNative)
         val genresList = converters.toList(genres)
         val tagsList = converters.toList(tags)
-        val stat = userData?.userStatus?.let { UserStatus.fromString(it) } ?: UserStatus.PLAN_TO
+        val stat = UserStatus.fromString(userData?.userStatus) ?: UserStatus.PLANNING
         val calcRating = userData?.scoreRaw?.let { it / 20.0 }
         val userProg = userData?.progress ?: 0.0
         return MediaItem(

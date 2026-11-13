@@ -36,6 +36,11 @@ class LazyDexApp : Application(), SingletonImageLoader.Factory {
 
         // Eagerly resolve ExtensionRepository so installed sources are loaded and registered immediately
         koinApp.koin.get<ExtensionRepository>()
+
+        val delayedStore = koinApp.koin.get<app.lazydex.data.tracker.service.DelayedTrackingStore>()
+        if (delayedStore.getItems().isNotEmpty()) {
+            app.lazydex.data.tracker.service.DelayedTrackingUpdateJob.setupTask(this)
+        }
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {

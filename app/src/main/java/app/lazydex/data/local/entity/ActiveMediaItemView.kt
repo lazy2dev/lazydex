@@ -19,7 +19,7 @@ import androidx.room.DatabaseView
             m.bannerImage,
             m.description,
             m.author,
-            COALESCE(u.userStatus, 'PLAN_TO') AS userStatus,
+            COALESCE(u.userStatus, 'PLANNING') AS userStatus,
             COALESCE(u.progress, 0.0) AS progress,
             m.progressTotal,
             COALESCE(u.secondaryProgress, 0.0) AS secondaryProgress,

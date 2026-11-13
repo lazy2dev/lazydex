@@ -1,7 +1,11 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package app.lazydex.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,7 +67,7 @@ data class MediaCardUiState(
     val hasSecondaryProgress: Boolean,
     val isDirtyLocal: Boolean = false,
     val scoreRaw: Int? = null,
-    val userStatus: UserStatus = UserStatus.PLAN_TO,
+    val userStatus: UserStatus = UserStatus.PLANNING,
     val lastUpdated: Long = 0L,
     val mediaType: MediaType = MediaType.NOVEL,
 )
@@ -259,6 +265,8 @@ fun MediaCard(
     uiState: MediaCardUiState,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
+    isSelected: Boolean = false,
     displayMode: LibraryDisplayMode? = null,
     isGridView: Boolean = true,
     showProgressBadge: Boolean = true,
@@ -270,6 +278,8 @@ fun MediaCard(
         item = uiState.toMediaItem(),
         onClick = onClick,
         modifier = modifier,
+        onLongClick = onLongClick,
+        isSelected = isSelected,
         displayMode = displayMode,
         isGridView = isGridView,
         showProgressBadge = showProgressBadge,
@@ -287,6 +297,8 @@ fun MediaCard(
     item: MediaItem,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
+    isSelected: Boolean = false,
     displayMode: LibraryDisplayMode? = null,
     isGridView: Boolean = true,
     showProgressBadge: Boolean = true,
@@ -300,13 +312,7 @@ fun MediaCard(
     val effectiveMode = displayMode ?: if (isGridView) LibraryDisplayMode.COMPACT_GRID else LibraryDisplayMode.LIST
     val isAdultObscured = item.isAdult && blurAdultCovers
 
-    val statusColor = when (item.userStatus) {
-        UserStatus.READING, UserStatus.WATCHING, UserStatus.PLAYING -> StatusInProgress
-        UserStatus.COMPLETED -> StatusCompleted
-        UserStatus.ON_HOLD -> StatusOnHold
-        UserStatus.DROPPED -> StatusDropped
-        UserStatus.PLAN_TO -> StatusPlanTo
-    }
+    val statusColor = item.userStatus.color()
 
     when (effectiveMode) {
         LibraryDisplayMode.LIST -> {
@@ -335,18 +341,41 @@ fun MediaCard(
                 modifier = modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onClick)
+                    .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else Color.Transparent)
+                    .combinedClickable(onClick = onClick, onLongClick = onLongClick)
                     .padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                CoverImage(
-                    coverImagePath = item.coverImagePath,
-                    title = item.title,
-                    coverImageUrl = item.coverImageUrl,
-                    shape = RoundedCornerShape(4.dp),
-                    isObscured = isAdultObscured,
-                    modifier = Modifier.size(width = 54.dp, height = 78.dp)
-                )
+                Box(contentAlignment = Alignment.TopEnd) {
+                    CoverImage(
+                        coverImagePath = item.coverImagePath,
+                        title = item.title,
+                        coverImageUrl = item.coverImageUrl,
+                        shape = RoundedCornerShape(4.dp),
+                        isObscured = isAdultObscured,
+                        modifier = Modifier
+                            .size(width = 54.dp, height = 78.dp)
+                            .graphicsLayer {
+                                if (isSelected) alpha = 0.76f
+                            }
+                    )
+                    if (isSelected) {
+                        Box(
+                            modifier = Modifier
+                                .padding(2.dp)
+                                .size(18.dp)
+                                .background(MaterialTheme.colorScheme.primary, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Selected",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.width(12.dp))
 
@@ -455,7 +484,11 @@ fun MediaCard(
             Box(
                 modifier = modifier
                     .clip(RoundedCornerShape(4.dp))
-                    .clickable(onClick = onClick)
+                    .then(
+                        if (isSelected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
+                        else Modifier
+                    )
+                    .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             ) {
                 Box(
                     modifier = Modifier
@@ -468,7 +501,11 @@ fun MediaCard(
                         coverImageUrl = item.coverImageUrl,
                         shape = RoundedCornerShape(4.dp),
                         isObscured = isAdultObscured,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                if (isSelected) alpha = 0.76f
+                            }
                     )
 
                     if (showTitle) {
@@ -510,11 +547,29 @@ fun MediaCard(
                         modifier = Modifier.align(Alignment.TopStart),
                     )
 
-                    CardEndBadges(
-                        statusColor = statusColor,
-                        showStatusBadge = showStatusBadge,
-                        modifier = Modifier.align(Alignment.TopEnd),
-                    )
+                    if (isSelected) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(6.dp)
+                                .size(20.dp)
+                                .background(MaterialTheme.colorScheme.primary, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Selected",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    } else {
+                        CardEndBadges(
+                            statusColor = statusColor,
+                            showStatusBadge = showStatusBadge,
+                            modifier = Modifier.align(Alignment.TopEnd),
+                        )
+                    }
                 }
             }
         }
@@ -526,7 +581,11 @@ fun MediaCard(
             Column(
                 modifier = modifier
                     .clip(RoundedCornerShape(4.dp))
-                    .clickable(onClick = onClick)
+                    .then(
+                        if (isSelected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
+                        else Modifier
+                    )
+                    .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             ) {
                 Box(
                     modifier = Modifier
@@ -539,7 +598,11 @@ fun MediaCard(
                         coverImageUrl = item.coverImageUrl,
                         shape = RoundedCornerShape(4.dp),
                         isObscured = isAdultObscured,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                if (isSelected) alpha = 0.76f
+                            }
                     )
 
                     CardStartBadges(
@@ -548,11 +611,29 @@ fun MediaCard(
                         modifier = Modifier.align(Alignment.TopStart),
                     )
 
-                    CardEndBadges(
-                        statusColor = statusColor,
-                        showStatusBadge = showStatusBadge,
-                        modifier = Modifier.align(Alignment.TopEnd),
-                    )
+                    if (isSelected) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(6.dp)
+                                .size(20.dp)
+                                .background(MaterialTheme.colorScheme.primary, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Selected",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    } else {
+                        CardEndBadges(
+                            statusColor = statusColor,
+                            showStatusBadge = showStatusBadge,
+                            modifier = Modifier.align(Alignment.TopEnd),
+                        )
+                    }
                 }
 
                 Text(

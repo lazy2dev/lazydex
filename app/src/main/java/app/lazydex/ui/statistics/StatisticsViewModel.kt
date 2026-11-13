@@ -145,11 +145,9 @@ class StatisticsViewModel(
         val activeTotal = activeItems.size
 
         val completedCount = activeItems.count { it.userStatus == UserStatus.COMPLETED }
-        val inProgressCount = activeItems.count {
-            it.userStatus in setOf(UserStatus.READING, UserStatus.WATCHING, UserStatus.PLAYING)
-        }
-        val planToCount = activeItems.count { it.userStatus == UserStatus.PLAN_TO }
-        val onHoldCount = activeItems.count { it.userStatus == UserStatus.ON_HOLD }
+        val inProgressCount = activeItems.count { it.userStatus == UserStatus.CURRENT || it.userStatus == UserStatus.REPEATING }
+        val planToCount = activeItems.count { it.userStatus == UserStatus.PLANNING }
+        val onHoldCount = activeItems.count { it.userStatus == UserStatus.PAUSED }
         val droppedCount = activeItems.count { it.userStatus == UserStatus.DROPPED }
         val totalProgressUnits = activeItems.sumOf {
             maxOf(it.progress, it.currentProgress.toDouble()).roundToInt()

@@ -69,14 +69,14 @@ class ProgressMutationRulesTest {
         var newEndDate = endDate
 
         if (userStatus == "PLANNING" && clampedProgress > 0.0) {
-            newStatus = "IN_PROGRESS"
+            newStatus = "CURRENT"
             if (newStartDate == null) newStartDate = timestamp
         }
         if (progressTotal != null && clampedProgress >= progressTotal && userStatus != "COMPLETED") {
             newStatus = "COMPLETED"
             newEndDate = timestamp
         } else if (userStatus == "COMPLETED" && progressTotal != null && clampedProgress < progressTotal) {
-            newStatus = "IN_PROGRESS"
+            newStatus = "CURRENT"
             newEndDate = null
         }
 
@@ -94,7 +94,7 @@ class ProgressMutationRulesTest {
         val resUnderflow = applyProgressDelta(
             currentProgress = 2.0,
             progressTotal = 100.0,
-            userStatus = "IN_PROGRESS",
+            userStatus = "CURRENT",
             startDate = 1000L,
             endDate = null,
             delta = -5.0,
@@ -106,7 +106,7 @@ class ProgressMutationRulesTest {
         val resOverflow = applyProgressDelta(
             currentProgress = 98.0,
             progressTotal = 100.0,
-            userStatus = "IN_PROGRESS",
+            userStatus = "CURRENT",
             startDate = 1000L,
             endDate = null,
             delta = 10.0,
@@ -129,7 +129,7 @@ class ProgressMutationRulesTest {
             timestamp = 1500L
         )
         assertEquals(1.0, res.newProgress, 0.001)
-        assertEquals("IN_PROGRESS", res.newStatus)
+        assertEquals("CURRENT", res.newStatus)
         assertEquals(1500L, res.startDate)
         assertNull(res.endDate)
     }
@@ -146,7 +146,7 @@ class ProgressMutationRulesTest {
             timestamp = 2500L
         )
         assertEquals(49.0, res.newProgress, 0.001)
-        assertEquals("IN_PROGRESS", res.newStatus)
+        assertEquals("CURRENT", res.newStatus)
         assertNull(res.endDate)
     }
 
@@ -200,7 +200,7 @@ class ProgressMutationRulesTest {
         itemDao.items[localItem.id] = localItem
         itemDao.userData[localItem.id] = UserDataEntity(
             mediaId = "media-1",
-            userStatus = "IN_PROGRESS",
+            userStatus = "CURRENT",
             progress = 10.0,
             updatedAt = 1_000_000L
         )
@@ -226,7 +226,7 @@ class ProgressMutationRulesTest {
 
         val updatedDb = itemDao.getActiveById("media-1")!!
         assertEquals(11.0, updatedDb.progress, 0.001)
-        assertEquals("IN_PROGRESS", updatedDb.userStatus)
+        assertEquals("CURRENT", updatedDb.userStatus)
 
         testScope.advanceUntilIdle()
         assertTrue(syncEngine.pushedMediaIds.contains("media-1"))
@@ -277,7 +277,7 @@ class ProgressMutationRulesTest {
         assertNotNull(updated)
         assertEquals(1.0, updated!!.progress, 0.001)
         val updatedDb = itemDao.getActiveById("media-unlinked")!!
-        assertEquals("IN_PROGRESS", updatedDb.userStatus)
+        assertEquals("CURRENT", updatedDb.userStatus)
 
         testScope.advanceUntilIdle()
         assertTrue(syncEngine.pushedMediaIds.isEmpty())
@@ -319,7 +319,7 @@ class ProgressMutationRulesTest {
         itemDao.items[localItem.id] = localItem
         itemDao.userData[localItem.id] = UserDataEntity(
             mediaId = "media-update",
-            userStatus = "IN_PROGRESS",
+            userStatus = "CURRENT",
             progress = 10.0,
             updatedAt = 1_000_000L
         )
@@ -399,7 +399,7 @@ class ProgressMutationRulesTest {
         itemDao.items[localItem.id] = localItem
         itemDao.userData[localItem.id] = UserDataEntity(
             mediaId = "media-never",
-            userStatus = "IN_PROGRESS",
+            userStatus = "CURRENT",
             progress = 375.0,
             updatedAt = 1_000_000L
         )
@@ -463,7 +463,7 @@ class ProgressMutationRulesTest {
         itemDao.items[localItem.id] = localItem
         itemDao.userData[localItem.id] = UserDataEntity(
             mediaId = "media-manual",
-            userStatus = "READING",
+            userStatus = "CURRENT",
             progress = 10.0,
             updatedAt = 1_000_000L
         )
@@ -473,7 +473,7 @@ class ProgressMutationRulesTest {
             type = "NOVEL",
             format = "NOVEL",
             title = "Lord of the Mysteries",
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             progress = 10.0,
             progressTotal = 1400.0,
             currentProgress = 10,
@@ -614,7 +614,7 @@ class ProgressMutationRulesTest {
         )
         val userData = UserDataEntity(
             mediaId = "catalog-test",
-            userStatus = "IN_PROGRESS",
+            userStatus = "CURRENT",
             progress = 10.0,
             updatedAt = 1_000_000L,
             progressIncreasedAt = 1_000_000L
@@ -691,7 +691,7 @@ class ProgressMutationRulesTest {
         )
         val userData = UserDataEntity(
             mediaId = "userdata-test",
-            userStatus = "IN_PROGRESS",
+            userStatus = "CURRENT",
             progress = 10.0,
             notes = "Old note",
             updatedAt = 1_000_000L,
@@ -746,8 +746,8 @@ class ProgressMutationRulesTest {
         override fun observeByType(type: String): Flow<List<ActiveMediaItemView>> = emptyFlow()
         override fun observeTypeCounts(): Flow<List<TypeCount>> = emptyFlow()
         override fun observeStatusCounts(type: String?): Flow<List<StatusCount>> = emptyFlow()
-        override fun observeFiltered(type: String?, format: String?, filterType: String, exactStatus: String?): Flow<List<ActiveMediaItemView>> = emptyFlow()
-        override fun observeFilteredLegacy(type: String?, filterType: String, exactStatus: String?): Flow<List<ActiveMediaItemView>> = emptyFlow()
+        override fun observeFiltered(type: String?, format: String?, filterType: String): Flow<List<ActiveMediaItemView>> = emptyFlow()
+        override fun observeFilteredLegacy(type: String?, filterType: String): Flow<List<ActiveMediaItemView>> = emptyFlow()
         override fun observeCount(): Flow<Int> = emptyFlow()
         override fun observeById(id: String): Flow<ActiveMediaItemView?> = emptyFlow()
         override suspend fun getById(id: String): MediaItemEntity? = items[id]
@@ -770,7 +770,7 @@ class ProgressMutationRulesTest {
                 bannerImage = e.bannerImage,
                 description = e.description,
                 author = e.author,
-                userStatus = u?.userStatus ?: "PLAN_TO",
+                userStatus = u?.userStatus ?: "PLANNING",
                 progress = u?.progress ?: 0.0,
                 progressTotal = e.progressTotal,
                 secondaryProgress = u?.secondaryProgress ?: 0.0,

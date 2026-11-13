@@ -67,20 +67,7 @@ fun TrackStatusSelector(
     onDismissRequest: () -> Unit
 ) {
     var selected by remember { mutableStateOf(currentStatus) }
-
-    val availableStatuses = remember(mediaType) {
-        val primary = when (mediaType) {
-            MediaType.NOVEL, MediaType.MANGA -> UserStatus.READING
-            MediaType.ANIME, MediaType.TV, MediaType.MOVIE -> UserStatus.WATCHING
-            MediaType.GAME -> UserStatus.PLAYING
-        }
-        val common = listOf(UserStatus.COMPLETED, UserStatus.ON_HOLD, UserStatus.DROPPED, UserStatus.PLAN_TO)
-        if (currentStatus !in listOf(primary) + common) {
-            listOf(currentStatus, primary) + common
-        } else {
-            listOf(primary) + common
-        }
-    }
+    val availableStatuses = remember { UserStatus.entries }
 
     BaseSelector(
         title = "Status",
@@ -88,14 +75,6 @@ fun TrackStatusSelector(
             LazyColumn(modifier = Modifier.fillMaxWidth()) {
                 items(availableStatuses) { status ->
                     val isSelected = status == selected
-                    val statusLabel = when (status) {
-                        UserStatus.PLAN_TO -> when (mediaType) {
-                            MediaType.NOVEL, MediaType.MANGA -> "Plan to Read"
-                            MediaType.ANIME, MediaType.TV, MediaType.MOVIE -> "Plan to Watch"
-                            MediaType.GAME -> "Plan to Play"
-                        }
-                        else -> status.displayName
-                    }
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -111,7 +90,7 @@ fun TrackStatusSelector(
                         )
                         Spacer(modifier = Modifier.width(16.dp))
                         Text(
-                            text = statusLabel,
+                            text = status.displayName,
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                             color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
@@ -122,6 +101,103 @@ fun TrackStatusSelector(
         },
         onConfirm = {
             onStatusSelected(selected)
+            onDismissRequest()
+        },
+        onDismissRequest = onDismissRequest
+    )
+}
+
+@Composable
+fun TrackRepeatSelector(
+    repeatCount: Int,
+    onRepeatConfirmed: (Int) -> Unit,
+    onDismissRequest: () -> Unit
+) {
+    var count by remember { mutableIntStateOf(repeatCount.coerceAtLeast(0)) }
+    var textValue by remember { mutableStateOf(count.toString()) }
+
+    BaseSelector(
+        title = "Total Rewatches / Rereads",
+        content = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "$count",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            val next = (count - 5).coerceAtLeast(0)
+                            count = next
+                            textValue = next.toString()
+                        }
+                    ) {
+                        Text("-5")
+                    }
+
+                    FilledTonalIconButton(
+                        onClick = {
+                            val next = (count - 1).coerceAtLeast(0)
+                            count = next
+                            textValue = next.toString()
+                        }
+                    ) {
+                        Icon(imageVector = Icons.Default.Remove, contentDescription = "Decrease 1")
+                    }
+
+                    FilledTonalIconButton(
+                        onClick = {
+                            val next = count + 1
+                            count = next
+                            textValue = next.toString()
+                        }
+                    ) {
+                        Icon(imageVector = Icons.Default.Add, contentDescription = "Increase 1")
+                    }
+
+                    FilledTonalButton(
+                        onClick = {
+                            val next = count + 5
+                            count = next
+                            textValue = next.toString()
+                        }
+                    ) {
+                        Text("+5")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = textValue,
+                    onValueChange = { input ->
+                        val digits = input.filter { it.isDigit() }
+                        textValue = digits
+                        digits.toIntOrNull()?.let { count = it }
+                    },
+                    label = { Text("Count") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(0.6f)
+                )
+            }
+        },
+        onConfirm = {
+            onRepeatConfirmed(count)
             onDismissRequest()
         },
         onDismissRequest = onDismissRequest

@@ -19,6 +19,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -54,56 +55,59 @@ fun MainShellScreen(
     historyViewModel: HistoryViewModel = koinViewModel()
 ) {
     var currentTab by rememberSaveable { mutableStateOf(ShellTab.DEX) }
+    val dexUiState by dexViewModel.uiState.collectAsState()
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            NavigationBar {
-                // 1. Dex Tab
-                NavigationBarItem(
-                    selected = currentTab == ShellTab.DEX,
-                    onClick = { currentTab = ShellTab.DEX },
-                    icon = { Icon(imageVector = Icons.Default.Bookmark, contentDescription = "Dex") },
-                    label = { Text("Dex") }
-                )
+            if (!dexUiState.isSelectionMode || currentTab != ShellTab.DEX) {
+                NavigationBar {
+                    // 1. Dex Tab
+                    NavigationBarItem(
+                        selected = currentTab == ShellTab.DEX,
+                        onClick = { currentTab = ShellTab.DEX },
+                        icon = { Icon(imageVector = Icons.Default.Bookmark, contentDescription = "Dex") },
+                        label = { Text("Dex") }
+                    )
 
-                // 2. Statistics Tab
-                NavigationBarItem(
-                    selected = currentTab == ShellTab.STATISTICS,
-                    onClick = { currentTab = ShellTab.STATISTICS },
-                    icon = { Icon(imageVector = Icons.Default.BarChart, contentDescription = "Statistics") },
-                    label = { Text("Stats") }
-                )
+                    // 2. Statistics Tab
+                    NavigationBarItem(
+                        selected = currentTab == ShellTab.STATISTICS,
+                        onClick = { currentTab = ShellTab.STATISTICS },
+                        icon = { Icon(imageVector = Icons.Default.BarChart, contentDescription = "Statistics") },
+                        label = { Text("Stats") }
+                    )
 
-                // 3. Browse Tab
-                NavigationBarItem(
-                    selected = currentTab == ShellTab.BROWSE,
-                    onClick = {
-                        if (currentTab == ShellTab.BROWSE) {
-                            browserViewModel.selectSource(null)
-                        } else {
-                            currentTab = ShellTab.BROWSE
-                        }
-                    },
-                    icon = { Icon(imageVector = Icons.Default.Explore, contentDescription = "Browse") },
-                    label = { Text("Browse") }
-                )
+                    // 3. Browse Tab
+                    NavigationBarItem(
+                        selected = currentTab == ShellTab.BROWSE,
+                        onClick = {
+                            if (currentTab == ShellTab.BROWSE) {
+                                browserViewModel.selectSource(null)
+                            } else {
+                                currentTab = ShellTab.BROWSE
+                            }
+                        },
+                        icon = { Icon(imageVector = Icons.Default.Explore, contentDescription = "Browse") },
+                        label = { Text("Browse") }
+                    )
 
-                // 4. History Tab
-                NavigationBarItem(
-                    selected = currentTab == ShellTab.HISTORY,
-                    onClick = { currentTab = ShellTab.HISTORY },
-                    icon = { Icon(imageVector = Icons.Default.History, contentDescription = "History") },
-                    label = { Text("History") }
-                )
+                    // 4. History Tab
+                    NavigationBarItem(
+                        selected = currentTab == ShellTab.HISTORY,
+                        onClick = { currentTab = ShellTab.HISTORY },
+                        icon = { Icon(imageVector = Icons.Default.History, contentDescription = "History") },
+                        label = { Text("History") }
+                    )
 
-                // 5. Settings Tab
-                NavigationBarItem(
-                    selected = currentTab == ShellTab.SETTINGS,
-                    onClick = { currentTab = ShellTab.SETTINGS },
-                    icon = { Icon(imageVector = Icons.Default.Settings, contentDescription = "Settings") },
-                    label = { Text("Settings") }
-                )
+                    // 5. Settings Tab
+                    NavigationBarItem(
+                        selected = currentTab == ShellTab.SETTINGS,
+                        onClick = { currentTab = ShellTab.SETTINGS },
+                        icon = { Icon(imageVector = Icons.Default.Settings, contentDescription = "Settings") },
+                        label = { Text("Settings") }
+                    )
+                }
             }
         },
         modifier = modifier

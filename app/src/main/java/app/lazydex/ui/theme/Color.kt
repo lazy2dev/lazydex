@@ -24,11 +24,15 @@ val LightOnSurface = Color(0xFF212529)
 val LightOutline = Color(0xFFD4DADB)
 
 // Status Colors (Reserved for Status Badges ONLY)
-val StatusInProgress = Color(0xFF5795D9) // Reading/Watching/Playing
+val StatusInProgress = Color(0xFF5795D9) // Reading/Watching/Playing/Current
+val StatusCurrent = StatusInProgress
 val StatusCompleted = Color(0xFF22C55E)
 val StatusOnHold = Color(0xFFEAB308)
+val StatusPaused = StatusOnHold
 val StatusDropped = Color(0xFFEF4444)
 val StatusPlanTo = Color(0xFF6B7280)
+val StatusPlanning = StatusPlanTo
+val StatusRepeating = Color(0xFF06B6D4)
 
 // Type Representation Colors (for badge stroke/icons)
 val TypeNovelColor = Color(0xFF5795D9)

@@ -78,7 +78,7 @@ class MediaItemTest {
             title = "Adult Title",
             currentProgress = 0,
             totalItems = 10,
-            userStatus = UserStatus.PLAN_TO,
+            userStatus = UserStatus.PLANNING,
             lastUpdated = 100L,
             dateAdded = 100L,
             isAdult = true

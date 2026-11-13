@@ -243,7 +243,7 @@ class MediaDetailsViewModelTest {
             title = "Omniscient Reader",
             currentProgress = 100,
             totalItems = 551,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 100L,
             dateAdded = 100L
         )
@@ -328,7 +328,7 @@ class MediaDetailsViewModelTest {
             title = "Solo Leveling",
             currentProgress = 50,
             totalItems = 200,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 100L,
             dateAdded = 100L
         )
@@ -411,7 +411,7 @@ class MediaDetailsViewModelTest {
             mediaType = MediaType.NOVEL,
             title = "Original Title",
             currentProgress = 0,
-            userStatus = UserStatus.PLAN_TO,
+            userStatus = UserStatus.PLANNING,
             lastUpdated = 100L,
             dateAdded = 100L
         )
@@ -441,7 +441,7 @@ class MediaDetailsViewModelTest {
             mediaType = MediaType.NOVEL,
             title = "Notes Test",
             currentProgress = 10,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             notes = "Initial",
             lastUpdated = 100L,
             dateAdded = 100L
@@ -476,7 +476,7 @@ class MediaDetailsViewModelTest {
             mediaType = MediaType.NOVEL,
             title = "Flush Test",
             currentProgress = 10,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             notes = "Initial",
             lastUpdated = 100L,
             dateAdded = 100L
@@ -527,7 +527,7 @@ class MediaDetailsViewModelTest {
             mediaType = MediaType.NOVEL,
             title = "Sync Test",
             currentProgress = 10,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 100L,
             dateAdded = 100L
         )
@@ -580,7 +580,7 @@ class MediaDetailsViewModelTest {
             mediaType = MediaType.NOVEL,
             title = "Push Test",
             currentProgress = 10,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 100L,
             dateAdded = 100L
         )
@@ -612,7 +612,7 @@ class MediaDetailsViewModelTest {
             mediaType = MediaType.NOVEL,
             title = "Push Fail Test",
             currentProgress = 10,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 100L,
             dateAdded = 100L
         )
@@ -646,7 +646,7 @@ class MediaDetailsViewModelTest {
             mediaType = MediaType.NOVEL,
             title = "Live Test",
             currentProgress = 10,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 100L,
             dateAdded = 100L
         )
@@ -695,7 +695,7 @@ class MediaDetailsViewModelTest {
             mediaType = MediaType.MANGA,
             title = "Artwork Test",
             currentProgress = 1,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 100L,
             dateAdded = 100L
         )
@@ -727,7 +727,7 @@ class MediaDetailsViewModelTest {
             totalItems = 100,
             lastUpdated = 1000L,
             dateAdded = 1000L,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             rating = null
         )
         repo.items.add(existing)
@@ -791,7 +791,7 @@ class MediaDetailsViewModelTest {
             totalItems = 100,
             lastUpdated = 1000L,
             dateAdded = 1000L,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             rating = null
         )
         repo.items.add(existing)
@@ -956,7 +956,7 @@ class MediaDetailsViewModelTest {
             title = "Berserk",
             currentProgress = 10,
             totalItems = 40,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 1000L,
             dateAdded = 500L,
             isAdult = false
@@ -996,7 +996,7 @@ class MediaDetailsViewModelTest {
             title = "Original",
             currentProgress = 25,
             totalItems = 100,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 1000L,
             dateAdded = 1000L,
         )
@@ -1081,7 +1081,7 @@ class MediaDetailsViewModelTest {
             type = "NOVEL",
             title = "Initial Title",
             currentProgress = 5,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 1000L,
             dateAdded = 1000L,
         )
@@ -1115,7 +1115,7 @@ class MediaDetailsViewModelTest {
             format = "MANGA",
             countryOfOrigin = "KR",
             title = "Omniscient Reader",
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 1000L,
             dateAdded = 1000L,
         )

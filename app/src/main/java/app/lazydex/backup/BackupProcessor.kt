@@ -188,7 +188,7 @@ object BackupProcessor {
 
         val resolvedCountry = countryOfOrigin
 
-        val safeStatus = userStatus?.let { UserStatus.fromString(it) } ?: inProgressStatusFor(resolvedType)
+        val safeStatus = userStatus?.let { UserStatus.fromString(it) } ?: UserStatus.CURRENT
         val safeProgress = maxOf(currentProgress ?: 0, 0)
         val safeTotal = totalItems?.takeIf { it >= 0 }
         val safeLastUpdated = if (lastUpdated != null && lastUpdated > 0L) lastUpdated else 0L
@@ -221,14 +221,5 @@ object BackupProcessor {
             isDeleted = isDeleted ?: false,
             progressIncreasedAt = progressIncreasedAt ?: if (safeProgress > 0) safeLastUpdated.takeIf { it > 0 } ?: safeDateAdded else null
         ).normalize()
-    }
-
-    private fun inProgressStatusFor(type: String): UserStatus {
-        return when (type.uppercase()) {
-            "NOVEL", "MANGA" -> UserStatus.READING
-            "ANIME" -> UserStatus.WATCHING
-            "GAME" -> UserStatus.PLAYING
-            else -> UserStatus.READING
-        }
     }
 }

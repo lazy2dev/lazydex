@@ -10,6 +10,7 @@ import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.ResolvedTypeConfig
 import app.lazydex.domain.model.StatusFilter
 import app.lazydex.domain.model.TypeConfig
+import app.lazydex.domain.model.UserStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 
@@ -68,7 +69,10 @@ interface MediaRepository {
     suspend fun update(item: MediaItem)
     suspend fun delete(id: String)
     suspend fun incrementProgress(id: String, delta: Double, mode: String? = null, speed: Double = 1.0): MediaItem? = null
+    suspend fun updateRepeat(id: String, repeat: Int) {}
 
     /** Bulk operations */
     suspend fun replaceAll(items: List<MediaItem>)
+    suspend fun updateStatus(ids: Collection<String>, status: UserStatus) {}
+    suspend fun deleteItems(ids: Collection<String>) {}
 }

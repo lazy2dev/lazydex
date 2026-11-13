@@ -6,7 +6,6 @@ import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.StatusFilter
 import app.lazydex.domain.model.UserStatus
 import app.lazydex.domain.model.resolveMediaType
-import app.lazydex.domain.model.statusLabel
 import app.lazydex.ui.components.color
 import app.lazydex.ui.theme.getRatingColor
 import java.text.NumberFormat
@@ -437,35 +436,22 @@ object StatisticsCalculator {
         selectedType: MediaType?
     ): List<StatusSegmentData> {
         val activeTotal = items.size
-        val inProgressCount = items.count {
-            it.userStatus in setOf(UserStatus.READING, UserStatus.WATCHING, UserStatus.PLAYING)
-        }
-        val planToCount = items.count { it.userStatus == UserStatus.PLAN_TO }
-        val completedCount = items.count { it.userStatus == UserStatus.COMPLETED }
-        val onHoldCount = items.count { it.userStatus == UserStatus.ON_HOLD }
-        val droppedCount = items.count { it.userStatus == UserStatus.DROPPED }
-
-        val activeUserStatus = when (selectedType) {
-            MediaType.NOVEL, MediaType.MANGA -> UserStatus.READING
-            MediaType.ANIME, MediaType.MOVIE, MediaType.TV -> UserStatus.WATCHING
-            MediaType.GAME -> UserStatus.PLAYING
-            null -> UserStatus.READING
-        }
-
-        val ordered = listOf(
-            Triple(StatusFilter.IN_PROGRESS, inProgressCount, activeUserStatus),
-            Triple(StatusFilter.PLAN_TO, planToCount, UserStatus.PLAN_TO),
-            Triple(StatusFilter.COMPLETED, completedCount, UserStatus.COMPLETED),
-            Triple(StatusFilter.ON_HOLD, onHoldCount, UserStatus.ON_HOLD),
-            Triple(StatusFilter.DROPPED, droppedCount, UserStatus.DROPPED)
+        val statuses = listOf(
+            UserStatus.CURRENT,
+            UserStatus.PLANNING,
+            UserStatus.COMPLETED,
+            UserStatus.PAUSED,
+            UserStatus.DROPPED,
+            UserStatus.REPEATING
         )
 
-        return ordered.mapNotNull { (filter, count, status) ->
+        return statuses.mapNotNull { status ->
+            val count = items.count { it.userStatus == status }
             if (count > 0 || activeTotal == 0) {
                 val percentage = if (activeTotal > 0) (count.toFloat() / activeTotal) * 100f else 0f
                 StatusSegmentData(
                     status = status,
-                    label = selectedType.statusLabel(filter),
+                    label = status.displayName,
                     count = count,
                     percentage = percentage,
                     color = status.color()

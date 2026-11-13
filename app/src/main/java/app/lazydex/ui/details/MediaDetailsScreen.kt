@@ -89,6 +89,7 @@ import app.lazydex.ui.details.components.MediaTrackerSyncDialog
 import app.lazydex.ui.details.components.MediaTrackingSection
 import app.lazydex.ui.details.components.TrackDateSelector
 import app.lazydex.ui.details.components.TrackProgressSelector
+import app.lazydex.ui.details.components.TrackRepeatSelector
 import app.lazydex.ui.details.components.TrackScoreSelector
 import app.lazydex.ui.details.components.TrackStatusSelector
 import app.lazydex.ui.theme.coverColorScheme
@@ -101,6 +102,7 @@ private sealed interface ActiveDialog {
     data object Score : ActiveDialog
     data object StartDate : ActiveDialog
     data object FinishDate : ActiveDialog
+    data object Repeat : ActiveDialog
     data object Cover : ActiveDialog
     data object Metadata : ActiveDialog
     data object Sync : ActiveDialog
@@ -355,11 +357,13 @@ fun MediaDetailsScreen(
                     secondaryProgress = state.secondaryProgress,
                     secondaryProgressTotal = state.secondaryProgressTotal,
                     notes = state.notes,
+                    repeatCount = state.repeat,
                     onStatusClick = { activeDialog = ActiveDialog.Status },
                     onProgressClick = { activeDialog = ActiveDialog.Progress },
                     onScoreClick = { activeDialog = ActiveDialog.Score },
                     onStartDateClick = { activeDialog = ActiveDialog.StartDate },
                     onEndDateClick = { activeDialog = ActiveDialog.FinishDate },
+                    onRepeatClick = { activeDialog = ActiveDialog.Repeat },
                     onSecondaryStep = { step ->
                         val cur = state.parsedSecondaryProgress ?: 0.0
                         val next = (cur + step).coerceAtLeast(0.0)
@@ -427,7 +431,7 @@ fun MediaDetailsScreen(
         }
         ActiveDialog.StartDate -> {
             TrackDateSelector(
-                title = "Started Reading Date",
+                title = "Started Date",
                 initialDateMillis = state.startDate,
                 onDateConfirmed = { date ->
                     if (date != state.startDate) {
@@ -440,11 +444,23 @@ fun MediaDetailsScreen(
         }
         ActiveDialog.FinishDate -> {
             TrackDateSelector(
-                title = "Finished Reading Date",
+                title = "Finished Date",
                 initialDateMillis = state.endDate,
                 onDateConfirmed = { date ->
                     if (date != state.endDate) {
                         viewModel.updateEndDate(date)
+                        viewModel.autoSave()
+                    }
+                },
+                onDismissRequest = { activeDialog = null }
+            )
+        }
+        ActiveDialog.Repeat -> {
+            TrackRepeatSelector(
+                repeatCount = state.repeat,
+                onRepeatConfirmed = { count ->
+                    if (count != state.repeat) {
+                        viewModel.updateRepeat(count)
                         viewModel.autoSave()
                     }
                 },

@@ -149,23 +149,26 @@ object ThreeWayMergeResolver {
 
     fun anilistStatusToLazyDex(anilistStatus: String?): String {
         return when (anilistStatus?.uppercase()) {
-            "CURRENT", "REPEATING" -> "IN_PROGRESS"
+            "CURRENT" -> "CURRENT"
             "PLANNING" -> "PLANNING"
             "COMPLETED" -> "COMPLETED"
-            "PAUSED" -> "ON_HOLD"
+            "PAUSED" -> "PAUSED"
             "DROPPED" -> "DROPPED"
+            "REPEATING" -> "REPEATING"
             else -> "PLANNING"
         }
     }
 
     fun lazyDexStatusToAniList(lazyDexStatus: String, repeat: Int = 0): String {
         return when (lazyDexStatus.uppercase()) {
+            "CURRENT" -> "CURRENT"
+            "REPEATING" -> "REPEATING"
             "IN_PROGRESS", "READING", "WATCHING", "PLAYING" -> {
                 if (repeat > 0) "REPEATING" else "CURRENT"
             }
             "PLANNING", "PLAN_TO" -> "PLANNING"
             "COMPLETED" -> "COMPLETED"
-            "ON_HOLD" -> "PAUSED"
+            "PAUSED", "ON_HOLD" -> "PAUSED"
             "DROPPED" -> "DROPPED"
             else -> "PLANNING"
         }

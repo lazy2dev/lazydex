@@ -237,7 +237,7 @@ class SettingsViewModelTest {
                 coverImagePath = activeFile1.absolutePath,
                 currentProgress = 10,
                 totalItems = 100,
-                userStatus = app.lazydex.domain.model.UserStatus.READING,
+                userStatus = app.lazydex.domain.model.UserStatus.CURRENT,
                 lastUpdated = 1000L,
                 dateAdded = 1000L
             ),
@@ -259,7 +259,7 @@ class SettingsViewModelTest {
                 coverImagePath = "", // Blank cover path in DB, but file exists named item-3.png
                 currentProgress = 1,
                 totalItems = 12,
-                userStatus = app.lazydex.domain.model.UserStatus.PLAN_TO,
+                userStatus = app.lazydex.domain.model.UserStatus.PLANNING,
                 lastUpdated = 3000L,
                 dateAdded = 3000L
             ),
@@ -270,7 +270,7 @@ class SettingsViewModelTest {
                 coverImagePath = "/different/virtual/dir/custom_named_cover.jpg",
                 currentProgress = 0,
                 totalItems = 1,
-                userStatus = app.lazydex.domain.model.UserStatus.PLAN_TO,
+                userStatus = app.lazydex.domain.model.UserStatus.PLANNING,
                 lastUpdated = 4000L,
                 dateAdded = 4000L
             )
@@ -321,7 +321,7 @@ class SettingsViewModelTest {
                 coverImagePath = activeFile.absolutePath,
                 currentProgress = 0,
                 totalItems = 0,
-                userStatus = app.lazydex.domain.model.UserStatus.PLAN_TO,
+                userStatus = app.lazydex.domain.model.UserStatus.PLANNING,
                 lastUpdated = 1000L,
                 dateAdded = 1000L
             )

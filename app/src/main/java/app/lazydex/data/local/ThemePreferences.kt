@@ -33,6 +33,18 @@ enum class LibraryDisplayMode {
     PANORAMA_COMFORTABLE_GRID
 }
 
+enum class LibraryGroupMode {
+    BY_DEFAULT,
+    BY_STATUS,
+    UNGROUPED;
+
+    companion object {
+        fun fromNameOrDefault(name: String?): LibraryGroupMode {
+            return entries.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: BY_DEFAULT
+        }
+    }
+}
+
 data class DisplayPreferences(
     val displayMode: LibraryDisplayMode = LibraryDisplayMode.LIST,
     val gridColumns: Int = 0,
@@ -41,7 +53,8 @@ data class DisplayPreferences(
     val showStatusBadge: Boolean = true,
     val showScoreBadge: Boolean = true,
     val showItemCount: Boolean = false,
-    val blurAdultCovers: Boolean = false
+    val blurAdultCovers: Boolean = false,
+    val groupMode: LibraryGroupMode = LibraryGroupMode.BY_DEFAULT
 )
 
 open class ThemePreferences(private val context: Context? = null) {
@@ -62,6 +75,7 @@ open class ThemePreferences(private val context: Context? = null) {
         val SORT_FIELD_KEY = stringPreferencesKey("sort_field")
         val SORT_DIRECTION_KEY = stringPreferencesKey("sort_direction")
         val PINNED_SOURCES_KEY = stringSetPreferencesKey("pinned_sources")
+        val LIBRARY_GROUP_MODE_KEY = stringPreferencesKey("library_group_mode")
     }
 
     private val dataStore: DataStore<Preferences>
@@ -136,7 +150,8 @@ open class ThemePreferences(private val context: Context? = null) {
                 showStatusBadge = preferences[SHOW_STATUS_BADGE_KEY] ?: true,
                 showScoreBadge = preferences[SHOW_SCORE_BADGE_KEY] ?: true,
                 showItemCount = preferences[SHOW_ITEM_COUNT_KEY] ?: false,
-                blurAdultCovers = preferences[BLUR_ADULT_COVERS_KEY] ?: false
+                blurAdultCovers = preferences[BLUR_ADULT_COVERS_KEY] ?: false,
+                groupMode = LibraryGroupMode.fromNameOrDefault(preferences[LIBRARY_GROUP_MODE_KEY])
             )
         }
     }
@@ -243,6 +258,12 @@ open class ThemePreferences(private val context: Context? = null) {
     open suspend fun setBlurAdultCovers(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[BLUR_ADULT_COVERS_KEY] = enabled
+        }
+    }
+
+    open suspend fun setGroupMode(mode: LibraryGroupMode) {
+        dataStore.edit { preferences ->
+            preferences[LIBRARY_GROUP_MODE_KEY] = mode.name
         }
     }
 }

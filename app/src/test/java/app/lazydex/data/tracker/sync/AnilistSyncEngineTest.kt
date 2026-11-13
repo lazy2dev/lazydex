@@ -213,7 +213,7 @@ class AnilistSyncEngineTest {
         assertEquals("MANGA", item.type)
         assertEquals("MANGA", item.format)
         val userData = fakeMediaItemDao.userData[item.id]!!
-        assertEquals("IN_PROGRESS", userData.userStatus)
+        assertEquals("CURRENT", userData.userStatus)
         assertEquals(25.0, userData.progress, 0.001)
         assertEquals(100.0, item.progressTotal!!, 0.001)
         assertEquals(3.0, userData.secondaryProgress, 0.001)
@@ -233,7 +233,7 @@ class AnilistSyncEngineTest {
         val snapshot = SyncSnapshot.fromJson(link.syncedSnapshot)
         assertNotNull(snapshot)
         assertEquals(25.0, snapshot!!.progress, 0.001)
-        assertEquals("IN_PROGRESS", snapshot.status)
+        assertEquals("CURRENT", snapshot.status)
     }
 
     @Test
@@ -267,7 +267,7 @@ class AnilistSyncEngineTest {
         fakeMediaItemDao.items[existingItem.id] = existingItem
         fakeMediaItemDao.userData[existingItem.id] = UserDataEntity(
             mediaId = existingItem.id,
-            userStatus = "IN_PROGRESS",
+            userStatus = "CURRENT",
             progress = 10.0,
             secondaryProgress = 0.0,
             scoreRaw = null,
@@ -356,7 +356,7 @@ class AnilistSyncEngineTest {
         val updatedUserData = fakeMediaItemDao.userData["local_frieren"]!!
         // 2. Monotonic progress: advanced from 10.0 to 15.0
         assertEquals(15.0, updatedUserData.progress, 0.001)
-        assertEquals("IN_PROGRESS", updatedUserData.userStatus)
+        assertEquals("CURRENT", updatedUserData.userStatus)
 
         // 3. Link remains LINKED
         assertEquals(1, fakeMediaLinkDao.links.size)
@@ -399,7 +399,7 @@ class AnilistSyncEngineTest {
         fakeMediaItemDao.items[existingItem.id] = existingItem
         fakeMediaItemDao.userData[existingItem.id] = UserDataEntity(
             mediaId = existingItem.id,
-            userStatus = "IN_PROGRESS",
+            userStatus = "CURRENT",
             progress = 10.0,
             secondaryProgress = 2.0,
             scoreRaw = null,
@@ -669,7 +669,7 @@ class AnilistSyncEngineTest {
         fakeMediaItemDao.items[localItem.id] = localItem
         fakeMediaItemDao.userData[localItem.id] = UserDataEntity(
             mediaId = localItem.id,
-            userStatus = "IN_PROGRESS",
+            userStatus = "CURRENT",
             progress = 12.5,
             updatedAt = 1_600_000_010_000L
         )
@@ -678,7 +678,7 @@ class AnilistSyncEngineTest {
             remoteUpdatedAt = 1600000010L,
             localUpdatedAt = 1_600_000_010_000L,
             progress = 12.5,
-            status = "IN_PROGRESS"
+            status = "CURRENT"
         )
         val link = MediaLinkEntity(
             id = "link-fractional",
@@ -753,7 +753,7 @@ class AnilistSyncEngineTest {
         fakeMediaItemDao.items[localItem.id] = localItem
         fakeMediaItemDao.userData[localItem.id] = UserDataEntity(
             mediaId = localItem.id,
-            userStatus = "IN_PROGRESS",
+            userStatus = "CURRENT",
             progress = 10.0,
             updatedAt = 1_000_000L
         )
@@ -823,7 +823,7 @@ class AnilistSyncEngineTest {
         fakeMediaItemDao.items[localItem.id] = localItem
         fakeMediaItemDao.userData[localItem.id] = UserDataEntity(
             mediaId = localItem.id,
-            userStatus = "IN_PROGRESS",
+            userStatus = "CURRENT",
             progress = 50.0,
             updatedAt = 1_000_000L
         )
@@ -1002,7 +1002,7 @@ class AnilistSyncEngineTest {
         fakeMediaItemDao.items[localItem.id] = localItem
         fakeMediaItemDao.userData[localItem.id] = UserDataEntity(
             mediaId = localItem.id,
-            userStatus = "IN_PROGRESS",
+            userStatus = "CURRENT",
             progress = 25.0,
             updatedAt = 1_700_000_000_000L
         )
@@ -1011,7 +1011,7 @@ class AnilistSyncEngineTest {
             remoteUpdatedAt = 1690000000L,
             localUpdatedAt = 1_690_000_000_000L,
             progress = 10.0,
-            status = "IN_PROGRESS"
+            status = "CURRENT"
         )
         val link = MediaLinkEntity(
             id = "link-concurrent",
@@ -1187,7 +1187,7 @@ class AnilistSyncEngineTest {
         fakeMediaItemDao.items[animeItem.id] = animeItem
         fakeMediaItemDao.userData[animeItem.id] = UserDataEntity(
             mediaId = animeItem.id,
-            userStatus = "IN_PROGRESS",
+            userStatus = "CURRENT",
             progress = 12.0,
             secondaryProgress = 2.0,
             updatedAt = 1_000_000L
@@ -1246,7 +1246,7 @@ class AnilistSyncEngineTest {
         fakeMediaItemDao.items[mangaItem.id] = mangaItem
         fakeMediaItemDao.userData[mangaItem.id] = UserDataEntity(
             mediaId = mangaItem.id,
-            userStatus = "IN_PROGRESS",
+            userStatus = "CURRENT",
             progress = 40.0,
             secondaryProgress = 5.0,
             updatedAt = 1_000_000L
@@ -1306,7 +1306,7 @@ class AnilistSyncEngineTest {
         val originalHistoryTimestamp = 1_650_000_000_000L
         fakeMediaItemDao.userData[mangaItem.id] = UserDataEntity(
             mediaId = mangaItem.id,
-            userStatus = "IN_PROGRESS",
+            userStatus = "CURRENT",
             progress = 50.0,
             updatedAt = 1_000_000L,
             progressIncreasedAt = originalHistoryTimestamp
@@ -1383,8 +1383,8 @@ class AnilistSyncEngineTest {
         override fun observeByType(type: String): Flow<List<ActiveMediaItemView>> = emptyFlow()
         override fun observeTypeCounts(): Flow<List<TypeCount>> = emptyFlow()
         override fun observeStatusCounts(type: String?): Flow<List<StatusCount>> = emptyFlow()
-        override fun observeFiltered(type: String?, format: String?, filterType: String, exactStatus: String?): Flow<List<ActiveMediaItemView>> = emptyFlow()
-        override fun observeFilteredLegacy(type: String?, filterType: String, exactStatus: String?): Flow<List<ActiveMediaItemView>> = emptyFlow()
+        override fun observeFiltered(type: String?, format: String?, filterType: String): Flow<List<ActiveMediaItemView>> = emptyFlow()
+        override fun observeFilteredLegacy(type: String?, filterType: String): Flow<List<ActiveMediaItemView>> = emptyFlow()
         override fun observeCount(): Flow<Int> = emptyFlow()
         override fun observeById(id: String): Flow<ActiveMediaItemView?> = emptyFlow()
         override suspend fun getById(id: String): MediaItemEntity? = items[id]
@@ -1407,7 +1407,7 @@ class AnilistSyncEngineTest {
                 bannerImage = e.bannerImage,
                 description = e.description,
                 author = e.author,
-                userStatus = u?.userStatus ?: "PLAN_TO",
+                userStatus = u?.userStatus ?: "PLANNING",
                 progress = u?.progress ?: 0.0,
                 progressTotal = e.progressTotal,
                 secondaryProgress = u?.secondaryProgress ?: 0.0,

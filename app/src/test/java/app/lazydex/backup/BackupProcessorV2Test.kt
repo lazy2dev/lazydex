@@ -21,7 +21,7 @@ class BackupProcessorV2Test {
                 title = "Solo Leveling",
                 currentProgress = 100,
                 totalItems = 270,
-                userStatus = UserStatus.READING,
+                userStatus = UserStatus.CURRENT,
                 author = "Chugong",
                 description = "Shadow Monarch web novel",
                 genres = listOf("Action", "Fantasy"),
@@ -61,7 +61,7 @@ class BackupProcessorV2Test {
             coverImageUrl = null,
             currentProgress = 50,
             totalItems = 100,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             author = "Chugong",
             description = "Local Description",
             genres = listOf("Action"),
@@ -82,7 +82,7 @@ class BackupProcessorV2Test {
             coverImageUrl = null,
             currentProgress = 60,
             totalItems = 100,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             author = "",
             description = "",
             genres = emptyList(),
@@ -121,7 +121,7 @@ class BackupProcessorV2Test {
             title = "One Piece",
             currentProgress = 50,
             totalItems = 1100,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 1600000000000L,
             dateAdded = 1500000000000L
         )
@@ -133,7 +133,7 @@ class BackupProcessorV2Test {
             title = "One Piece",
             currentProgress = 40,
             totalItems = 1100,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 1700000000000L,
             dateAdded = 1500000000000L
         )

@@ -55,11 +55,13 @@ fun MediaTrackingSection(
     secondaryProgress: String,
     secondaryProgressTotal: String,
     notes: String,
+    repeatCount: Int = 0,
     onStatusClick: () -> Unit,
     onProgressClick: () -> Unit,
     onScoreClick: () -> Unit,
     onStartDateClick: () -> Unit,
     onEndDateClick: () -> Unit,
+    onRepeatClick: () -> Unit = {},
     onSecondaryStep: (Double) -> Unit,
     onNotesChange: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -69,6 +71,12 @@ fun MediaTrackingSection(
         MediaType.ANIME, MediaType.TV -> "Ep."
         MediaType.GAME -> "Hrs"
         MediaType.MOVIE -> "Part"
+    }
+
+    val repeatLabel = when (mediaType) {
+        MediaType.ANIME, MediaType.TV, MediaType.MOVIE -> "REWATCHES"
+        MediaType.GAME -> "REPLAYS"
+        else -> "REREADS"
     }
 
     val progressDisplay = if (totalItems != null && totalItems > 0) {
@@ -135,7 +143,7 @@ fun MediaTrackingSection(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
 
-                // Row 2: Started date | Finished date
+                // Row 2: Started date | Finished date | Repeat count
                 Row(modifier = Modifier.height(IntrinsicSize.Min)) {
                     TrackMatrixCell(
                         label = "STARTED",
@@ -150,6 +158,13 @@ fun MediaTrackingSection(
                         value = endDate?.let { formatTrackDate(it) },
                         placeholder = "—",
                         onClick = onEndDateClick,
+                        modifier = Modifier.weight(1f),
+                    )
+                    VerticalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    TrackMatrixCell(
+                        label = repeatLabel,
+                        value = repeatCount.toString(),
+                        onClick = onRepeatClick,
                         modifier = Modifier.weight(1f),
                     )
                 }

@@ -39,26 +39,18 @@ interface MediaItemDao {
         SELECT * FROM active_media_items 
         WHERE (:type IS NULL OR type = :type)
         AND (:format IS NULL OR format = :format)
-        AND (
-            :filterType = 'ALL' OR 
-            (:filterType = 'IN_PROGRESS' AND userStatus IN ('READING', 'WATCHING', 'PLAYING', 'IN_PROGRESS')) OR
-            (:filterType = 'EXACT' AND userStatus = :exactStatus)
-        )
+        AND (:filterType = 'ALL' OR userStatus = :filterType)
         ORDER BY createdAt DESC
     """)
-    fun observeFiltered(type: String?, format: String?, filterType: String, exactStatus: String?): Flow<List<ActiveMediaItemView>>
+    fun observeFiltered(type: String?, format: String?, filterType: String): Flow<List<ActiveMediaItemView>>
 
     @Query("""
         SELECT * FROM active_media_items 
         WHERE (:type IS NULL OR type = :type)
-        AND (
-            :filterType = 'ALL' OR 
-            (:filterType = 'IN_PROGRESS' AND userStatus IN ('READING', 'WATCHING', 'PLAYING', 'IN_PROGRESS')) OR
-            (:filterType = 'EXACT' AND userStatus = :exactStatus)
-        )
+        AND (:filterType = 'ALL' OR userStatus = :filterType)
         ORDER BY createdAt DESC
     """)
-    fun observeFilteredLegacy(type: String?, filterType: String, exactStatus: String?): Flow<List<ActiveMediaItemView>>
+    fun observeFilteredLegacy(type: String?, filterType: String): Flow<List<ActiveMediaItemView>>
 
     @Query("SELECT COUNT(*) FROM active_media_items")
     fun observeCount(): Flow<Int>
@@ -133,7 +125,7 @@ interface MediaItemDao {
           (SELECT COUNT(*) FROM active_media_items WHERE userStatus = 'COMPLETED') as completedCount,
           (SELECT CAST(COALESCE(SUM(progress), 0) AS INTEGER) FROM active_media_items) as totalProgress,
           (SELECT AVG(scoreRaw) / 20.0 FROM active_media_items WHERE scoreRaw IS NOT NULL) as meanRating,
-          (SELECT COUNT(*) FROM active_media_items WHERE userStatus IN ('READING', 'WATCHING', 'PLAYING', 'IN_PROGRESS')) as inProgressCount,
+          (SELECT COUNT(*) FROM active_media_items WHERE userStatus IN ('CURRENT', 'REPEATING')) as inProgressCount,
           (SELECT COUNT(*) FROM active_media_items WHERE type = 'NOVEL') as novelCount,
           (SELECT COUNT(*) FROM active_media_items WHERE type = 'MANGA') as mangaCount,
           (SELECT COUNT(*) FROM active_media_items WHERE type = 'ANIME') as animeCount,

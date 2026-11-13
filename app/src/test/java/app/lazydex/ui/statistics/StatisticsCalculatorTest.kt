@@ -62,11 +62,11 @@ class StatisticsCalculatorTest {
         )
         val startEpoch = { d: LocalDate -> d.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() }
 
-        val undated = MediaItem(id = "undated", title = "Undated", mediaType = MediaType.NOVEL, userStatus = UserStatus.READING, startDate = null, endDate = null)
+        val undated = MediaItem(id = "undated", title = "Undated", mediaType = MediaType.NOVEL, userStatus = UserStatus.CURRENT, startDate = null, endDate = null)
         val outside = MediaItem(id = "outside", title = "Old", mediaType = MediaType.NOVEL, userStatus = UserStatus.COMPLETED, startDate = startEpoch(LocalDate.of(2026, 4, 1)), endDate = startEpoch(LocalDate.of(2026, 5, 3)))
-        val overlap = MediaItem(id = "overlap", title = "Span", mediaType = MediaType.MANGA, userStatus = UserStatus.READING, startDate = startEpoch(LocalDate.of(2026, 4, 20)), endDate = startEpoch(LocalDate.of(2026, 5, 5)))
-        val startOnlyInside = MediaItem(id = "startOnly", title = "Started", mediaType = MediaType.ANIME, userStatus = UserStatus.WATCHING, startDate = startEpoch(LocalDate.of(2026, 5, 8)), endDate = null)
-        val startOnlyBefore = MediaItem(id = "startOld", title = "Old Start", mediaType = MediaType.ANIME, userStatus = UserStatus.WATCHING, startDate = startEpoch(LocalDate.of(2026, 5, 1)), endDate = null)
+        val overlap = MediaItem(id = "overlap", title = "Span", mediaType = MediaType.MANGA, userStatus = UserStatus.CURRENT, startDate = startEpoch(LocalDate.of(2026, 4, 20)), endDate = startEpoch(LocalDate.of(2026, 5, 5)))
+        val startOnlyInside = MediaItem(id = "startOnly", title = "Started", mediaType = MediaType.ANIME, userStatus = UserStatus.CURRENT, startDate = startEpoch(LocalDate.of(2026, 5, 8)), endDate = null)
+        val startOnlyBefore = MediaItem(id = "startOld", title = "Old Start", mediaType = MediaType.ANIME, userStatus = UserStatus.CURRENT, startDate = startEpoch(LocalDate.of(2026, 5, 1)), endDate = null)
 
         val filteredAll = StatisticsCalculator.filterItemsByRange(listOf(undated, outside, overlap, startOnlyInside, startOnlyBefore), null, null)
         assertEquals(5, filteredAll.size)
@@ -82,11 +82,11 @@ class StatisticsCalculatorTest {
     @Test
     fun `computeConsumptionStats splits per-type units and distinguishes anime movies without dividing by 60`() {
         val items = listOf(
-            MediaItem(id = "n1", type = "NOVEL", format = "NOVEL", title = "Novel 1", userStatus = UserStatus.READING, currentProgress = 120, progress = 120.0, lastUpdated = 1L, dateAdded = 1L),
-            MediaItem(id = "m1", type = "MANGA", format = "MANGA", title = "Manga 1", userStatus = UserStatus.READING, currentProgress = 45, progress = 45.0, lastUpdated = 1L, dateAdded = 1L),
-            MediaItem(id = "a1", type = "ANIME", format = "TV", title = "Anime 1", userStatus = UserStatus.WATCHING, currentProgress = 24, progress = 24.0, lastUpdated = 1L, dateAdded = 1L),
+            MediaItem(id = "n1", type = "NOVEL", format = "NOVEL", title = "Novel 1", userStatus = UserStatus.CURRENT, currentProgress = 120, progress = 120.0, lastUpdated = 1L, dateAdded = 1L),
+            MediaItem(id = "m1", type = "MANGA", format = "MANGA", title = "Manga 1", userStatus = UserStatus.CURRENT, currentProgress = 45, progress = 45.0, lastUpdated = 1L, dateAdded = 1L),
+            MediaItem(id = "a1", type = "ANIME", format = "TV", title = "Anime 1", userStatus = UserStatus.CURRENT, currentProgress = 24, progress = 24.0, lastUpdated = 1L, dateAdded = 1L),
             MediaItem(id = "a2", type = "ANIME", format = "MOVIE", title = "Anime Movie", userStatus = UserStatus.COMPLETED, currentProgress = 1, progress = 1.0, lastUpdated = 1L, dateAdded = 1L),
-            MediaItem(id = "g1", type = "GAME", format = "GAME", title = "Game 1", userStatus = UserStatus.PLAYING, currentProgress = 35, progress = 35.5, lastUpdated = 1L, dateAdded = 1L)
+            MediaItem(id = "g1", type = "GAME", format = "GAME", title = "Game 1", userStatus = UserStatus.CURRENT, currentProgress = 35, progress = 35.5, lastUpdated = 1L, dateAdded = 1L)
         )
 
         val stats = StatisticsCalculator.computeConsumptionStats(items).associateBy { it.key }
@@ -185,7 +185,7 @@ class StatisticsCalculatorTest {
             MediaItem(id = "4", title = "T4", mediaType = MediaType.GAME, userStatus = UserStatus.COMPLETED, rating = 2.7),
             MediaItem(id = "5", title = "T5", mediaType = MediaType.NOVEL, userStatus = UserStatus.COMPLETED, rating = 1.6),
             MediaItem(id = "6", title = "T6", mediaType = MediaType.MANGA, userStatus = UserStatus.COMPLETED, rating = 0.8),
-            MediaItem(id = "7", title = "T7", mediaType = MediaType.ANIME, userStatus = UserStatus.WATCHING, rating = null)
+            MediaItem(id = "7", title = "T7", mediaType = MediaType.ANIME, userStatus = UserStatus.CURRENT, rating = null)
         )
 
         val buckets = StatisticsCalculator.computeStackedRatings(items, selectedType = null)
@@ -218,7 +218,7 @@ class StatisticsCalculatorTest {
             mediaType = MediaType.MANGA,
             title = "Manga",
             currentProgress = 20,
-            userStatus = UserStatus.READING // 20 ch * 3m = 60 min
+            userStatus = UserStatus.CURRENT // 20 ch * 3m = 60 min
         )
         val animeTvSynced = MediaItem(
             id = "a1",
@@ -284,7 +284,7 @@ class StatisticsCalculatorTest {
             title = "Game",
             currentProgress = 2,
             progress = 2.5,
-            userStatus = UserStatus.PLAYING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 1L,
             dateAdded = 1L // 2.5 * 60 = 150 min
         )

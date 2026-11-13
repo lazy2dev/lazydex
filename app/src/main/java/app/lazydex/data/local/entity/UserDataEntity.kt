@@ -23,7 +23,7 @@ import androidx.room.PrimaryKey
 )
 data class UserDataEntity(
     @PrimaryKey val mediaId: String,
-    @ColumnInfo(defaultValue = "PLAN_TO") val userStatus: String = "PLAN_TO",
+    @ColumnInfo(defaultValue = "PLANNING") val userStatus: String = "PLANNING",
     @ColumnInfo(defaultValue = "0") val progress: Double = 0.0,
     @ColumnInfo(defaultValue = "0") val secondaryProgress: Double = 0.0,
     val scoreRaw: Int? = null,

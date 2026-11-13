@@ -3,6 +3,7 @@ package app.lazydex.ui.dex
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.lazydex.data.local.LibraryDisplayMode
+import app.lazydex.data.local.LibraryGroupMode
 import app.lazydex.data.local.ThemePreferences
 import app.lazydex.data.tracker.sync.AnilistSyncEngine
 import app.lazydex.domain.model.MediaItem
@@ -11,6 +12,7 @@ import app.lazydex.domain.model.SortDirection
 import app.lazydex.domain.model.SortField
 import app.lazydex.domain.model.StatusFilter
 import app.lazydex.domain.model.TypeConfig
+import app.lazydex.domain.model.UserStatus
 import app.lazydex.domain.model.resolveMediaType
 import app.lazydex.domain.model.toTopLevelId
 import app.lazydex.domain.repository.MediaRepository
@@ -63,6 +65,9 @@ data class DexUiState(
     val showScoreBadge: Boolean = true,
     val showItemCount: Boolean = false,
     val blurAdultCovers: Boolean = false,
+    val groupMode: LibraryGroupMode = LibraryGroupMode.BY_STATUS,
+    val selectedIds: Set<String> = emptySet(),
+    val isSelectionMode: Boolean = selectedIds.isNotEmpty(),
     val isLoading: Boolean = true
 )
 
@@ -121,6 +126,8 @@ class DexViewModel(
 
     private val mutableFilterState = MutableStateFlow(MutableFilterState())
     val searchQuery = MutableStateFlow<String?>(null)
+    val selectedIds = MutableStateFlow<Set<String>>(emptySet())
+    private var lastSelectedId: String? = null
 
     fun setSearchQuery(query: String?) {
         searchQuery.value = query
@@ -277,7 +284,14 @@ class DexViewModel(
             showStatusBadge = dp.showStatusBadge,
             showScoreBadge = dp.showScoreBadge,
             showItemCount = dp.showItemCount,
-            blurAdultCovers = dp.blurAdultCovers
+            blurAdultCovers = dp.blurAdultCovers,
+            groupMode = dp.groupMode
+        )
+    }
+    .combine(selectedIds) { state, ids ->
+        state.copy(
+            selectedIds = ids,
+            isSelectionMode = ids.isNotEmpty()
         )
     }
     .throttleDuringSync()
@@ -365,7 +379,81 @@ class DexViewModel(
     }
 
     fun selectStatus(status: StatusFilter) {
-        mutableFilterState.update { it.copy(status = status) }
+        mutableFilterState.update { current ->
+            val newStatus = if (current.status == status) StatusFilter.ALL else status
+            current.copy(status = newStatus)
+        }
+    }
+
+    fun toggleSelection(id: String) {
+        selectedIds.update { current ->
+            if (id in current) current - id else current + id
+        }
+        lastSelectedId = id
+    }
+
+    fun toggleRangeSelection(id: String) {
+        val currentItems = uiState.value.items
+        val lastId = lastSelectedId
+        if (lastId == null || currentItems.none { it.id == lastId }) {
+            toggleSelection(id)
+            return
+        }
+
+        val lastIndex = currentItems.indexOfFirst { it.id == lastId }
+        val currentIndex = currentItems.indexOfFirst { it.id == id }
+
+        if (lastIndex == -1 || currentIndex == -1) {
+            toggleSelection(id)
+            return
+        }
+
+        val range = if (lastIndex <= currentIndex) lastIndex..currentIndex else currentIndex..lastIndex
+        val rangeIds = range.map { currentItems[it].id }.toSet()
+
+        selectedIds.update { it + rangeIds }
+        lastSelectedId = id
+    }
+
+    fun selectAll() {
+        val allIds = uiState.value.items.map { it.id }.toSet()
+        selectedIds.value = allIds
+    }
+
+    fun invertSelection() {
+        val allIds = uiState.value.items.map { it.id }.toSet()
+        selectedIds.update { current ->
+            allIds - current
+        }
+    }
+
+    fun clearSelection() {
+        selectedIds.value = emptySet()
+        lastSelectedId = null
+    }
+
+    fun updateStatusForSelected(status: UserStatus) {
+        val idsToUpdate = selectedIds.value
+        if (idsToUpdate.isEmpty()) return
+        clearSelection()
+        viewModelScope.launch {
+            repository.updateStatus(idsToUpdate, status)
+        }
+    }
+
+    fun deleteSelected() {
+        val idsToDelete = selectedIds.value
+        if (idsToDelete.isEmpty()) return
+        clearSelection()
+        viewModelScope.launch {
+            repository.deleteItems(idsToDelete)
+        }
+    }
+
+    fun setGroupMode(mode: LibraryGroupMode) {
+        viewModelScope.launch {
+            themePreferences.setGroupMode(mode)
+        }
     }
 
     fun selectGenres(genres: Set<String>) {
@@ -430,6 +518,7 @@ class DexViewModel(
         maxRating.value = null
         dateRangeStart.value = null
         dateRangeEnd.value = null
+        clearSelection()
     }
 
     private fun sortItems(

@@ -32,24 +32,3 @@ fun resolveMediaType(typeId: String?): MediaType {
         else -> MediaType.fromString(raw) ?: MediaType.NOVEL
     }
 }
-
-fun MediaType?.statusLabel(statusFilter: StatusFilter): String {
-    return when (statusFilter) {
-        StatusFilter.ALL -> "All"
-        StatusFilter.IN_PROGRESS -> when (this) {
-            MediaType.NOVEL, MediaType.MANGA -> "Reading"
-            MediaType.ANIME, MediaType.MOVIE, MediaType.TV -> "Watching"
-            MediaType.GAME -> "Playing"
-            null -> StatusFilter.IN_PROGRESS.displayName
-        }
-        StatusFilter.PLAN_TO -> when (this) {
-            MediaType.NOVEL, MediaType.MANGA -> "Plan to Read"
-            MediaType.ANIME, MediaType.MOVIE, MediaType.TV -> "Plan to Watch"
-            MediaType.GAME -> "Plan to Play"
-            null -> StatusFilter.PLAN_TO.displayName
-        }
-        StatusFilter.COMPLETED -> StatusFilter.COMPLETED.displayName
-        StatusFilter.ON_HOLD -> StatusFilter.ON_HOLD.displayName
-        StatusFilter.DROPPED -> StatusFilter.DROPPED.displayName
-    }
-}

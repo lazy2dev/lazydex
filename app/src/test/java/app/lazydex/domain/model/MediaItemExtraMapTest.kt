@@ -12,7 +12,7 @@ class MediaItemExtraMapTest {
         val item = MediaItem(
             id = "test-1",
             title = "Solo Leveling",
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 0L,
             dateAdded = 0L,
             extraData = json
@@ -30,7 +30,7 @@ class MediaItemExtraMapTest {
         val item = MediaItem(
             id = "test-1",
             title = "Solo Leveling",
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 0L,
             dateAdded = 0L
         )

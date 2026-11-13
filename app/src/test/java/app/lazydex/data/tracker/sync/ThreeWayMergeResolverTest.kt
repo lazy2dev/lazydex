@@ -17,7 +17,7 @@ class ThreeWayMergeResolverTest {
         localUpdatedAt = 1700000000000L,     // ms
         progress = 10.0,
         secondaryProgress = 1.0,
-        status = "IN_PROGRESS",
+        status = "CURRENT",
         scoreRaw = 80,
         repeat = 0,
         isPrivate = false,
@@ -26,7 +26,7 @@ class ThreeWayMergeResolverTest {
 
     private val baseLocal = LocalState(
         id = "local-123",
-        userStatus = "IN_PROGRESS",
+        userStatus = "CURRENT",
         progress = 10.0,
         secondaryProgress = 1.0,
         scoreRaw = 80,
@@ -155,7 +155,7 @@ class ThreeWayMergeResolverTest {
         assertEquals(ResolutionType.CLEAN_LOCAL, result.resolutionType)
         assertEquals(ThreeWayMergeResolver.SYNC_STATUS_DIRTY_LOCAL, result.syncStatus)
         assertEquals(11.0, result.mergedState.progress, 0.001)
-        assertEquals("IN_PROGRESS", result.mergedState.userStatus)
+        assertEquals("CURRENT", result.mergedState.userStatus)
         assertEquals(baseSnapshot, result.newSnapshot)
     }
 
@@ -299,7 +299,7 @@ class ThreeWayMergeResolverTest {
 
         assertEquals(ResolutionType.CONCURRENT, result.resolutionType)
         // Remote wins because remote.updatedAt * 1000 >= local.updatedAt
-        assertEquals("IN_PROGRESS", result.mergedState.userStatus)
+        assertEquals("CURRENT", result.mergedState.userStatus)
         assertEquals(85, result.mergedState.scoreRaw)
     }
 
@@ -349,7 +349,7 @@ class ThreeWayMergeResolverTest {
         )
 
         assertEquals(42.0, result.mergedState.progress, 0.001)
-        assertEquals("IN_PROGRESS", result.mergedState.userStatus)
+        assertEquals("CURRENT", result.mergedState.userStatus)
         assertEquals(ThreeWayMergeResolver.SYNC_STATUS_SYNCED, result.syncStatus)
     }
 
@@ -373,7 +373,7 @@ class ThreeWayMergeResolverTest {
 
         assertEquals(ResolutionType.CONCURRENT, result.resolutionType)
         assertEquals(15.0, result.mergedState.progress, 0.001)
-        assertEquals("IN_PROGRESS", result.mergedState.userStatus)
+        assertEquals("CURRENT", result.mergedState.userStatus)
         assertEquals(ThreeWayMergeResolver.SYNC_STATUS_DIRTY_LOCAL, result.syncStatus)
     }
 
@@ -395,14 +395,16 @@ class ThreeWayMergeResolverTest {
 
     @Test
     fun `status mapping bidirectional translations`() {
-        assertEquals("IN_PROGRESS", ThreeWayMergeResolver.anilistStatusToLazyDex("CURRENT"))
-        assertEquals("IN_PROGRESS", ThreeWayMergeResolver.anilistStatusToLazyDex("REPEATING"))
+        assertEquals("CURRENT", ThreeWayMergeResolver.anilistStatusToLazyDex("CURRENT"))
+        assertEquals("REPEATING", ThreeWayMergeResolver.anilistStatusToLazyDex("REPEATING"))
         assertEquals("PLANNING", ThreeWayMergeResolver.anilistStatusToLazyDex("PLANNING"))
         assertEquals("COMPLETED", ThreeWayMergeResolver.anilistStatusToLazyDex("COMPLETED"))
-        assertEquals("ON_HOLD", ThreeWayMergeResolver.anilistStatusToLazyDex("PAUSED"))
+        assertEquals("PAUSED", ThreeWayMergeResolver.anilistStatusToLazyDex("PAUSED"))
         assertEquals("DROPPED", ThreeWayMergeResolver.anilistStatusToLazyDex("DROPPED"))
         assertEquals("PLANNING", ThreeWayMergeResolver.anilistStatusToLazyDex(null))
 
+        assertEquals("CURRENT", ThreeWayMergeResolver.lazyDexStatusToAniList("CURRENT"))
+        assertEquals("REPEATING", ThreeWayMergeResolver.lazyDexStatusToAniList("REPEATING"))
         assertEquals("CURRENT", ThreeWayMergeResolver.lazyDexStatusToAniList("IN_PROGRESS", repeat = 0))
         assertEquals("REPEATING", ThreeWayMergeResolver.lazyDexStatusToAniList("IN_PROGRESS", repeat = 2))
         assertEquals("CURRENT", ThreeWayMergeResolver.lazyDexStatusToAniList("READING", repeat = 0))
@@ -411,6 +413,7 @@ class ThreeWayMergeResolverTest {
         assertEquals("PLANNING", ThreeWayMergeResolver.lazyDexStatusToAniList("PLANNING"))
         assertEquals("PLANNING", ThreeWayMergeResolver.lazyDexStatusToAniList("PLAN_TO"))
         assertEquals("COMPLETED", ThreeWayMergeResolver.lazyDexStatusToAniList("COMPLETED"))
+        assertEquals("PAUSED", ThreeWayMergeResolver.lazyDexStatusToAniList("PAUSED"))
         assertEquals("PAUSED", ThreeWayMergeResolver.lazyDexStatusToAniList("ON_HOLD"))
         assertEquals("DROPPED", ThreeWayMergeResolver.lazyDexStatusToAniList("DROPPED"))
     }

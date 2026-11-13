@@ -100,7 +100,7 @@ class StatisticsViewModelTest {
                 title = "Shadow Slave",
                 currentProgress = 50,
                 totalItems = 1000,
-                userStatus = UserStatus.READING,
+                userStatus = UserStatus.CURRENT,
                 rating = 4.0,
                 genres = listOf("Fantasy"),
                 tags = listOf("Magic"),
@@ -307,7 +307,7 @@ class StatisticsViewModelTest {
             mediaType = MediaType.NOVEL,
             title = "Recent Novel",
             currentProgress = 80,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             rating = 4.8,
             startDate = ts(fixedToday.minusDays(2)),
             endDate = ts(fixedToday)
@@ -327,7 +327,7 @@ class StatisticsViewModelTest {
             mediaType = MediaType.GAME,
             title = "Undated Game",
             currentProgress = 12,
-            userStatus = UserStatus.PLAYING,
+            userStatus = UserStatus.CURRENT,
             rating = 4.0
         )
 

@@ -12,6 +12,7 @@ import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.anilist.TokenBucketLimiter
 import app.lazydex.data.tracker.anilist.dto.AniListFuzzyDateInput
 import app.lazydex.data.tracker.anilist.dto.AniListMediaListEntry
+import app.lazydex.domain.model.UserStatus
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow

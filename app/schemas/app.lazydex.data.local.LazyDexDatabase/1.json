@@ -207,7 +207,7 @@
       },
       {
         "tableName": "user_data",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`mediaId` TEXT NOT NULL, `userStatus` TEXT NOT NULL DEFAULT 'PLAN_TO', `progress` REAL NOT NULL DEFAULT 0, `secondaryProgress` REAL NOT NULL DEFAULT 0, `scoreRaw` INTEGER, `repeat` INTEGER NOT NULL DEFAULT 0, `notes` TEXT NOT NULL DEFAULT '', `isPrivate` INTEGER NOT NULL DEFAULT 0, `startYear` INTEGER, `startMonth` INTEGER, `startDay` INTEGER, `endYear` INTEGER, `endMonth` INTEGER, `endDay` INTEGER, `updatedAt` INTEGER, `progressIncreasedAt` INTEGER, PRIMARY KEY(`mediaId`), FOREIGN KEY(`mediaId`) REFERENCES `media_items`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`mediaId` TEXT NOT NULL, `userStatus` TEXT NOT NULL DEFAULT 'PLANNING', `progress` REAL NOT NULL DEFAULT 0, `secondaryProgress` REAL NOT NULL DEFAULT 0, `scoreRaw` INTEGER, `repeat` INTEGER NOT NULL DEFAULT 0, `notes` TEXT NOT NULL DEFAULT '', `isPrivate` INTEGER NOT NULL DEFAULT 0, `startYear` INTEGER, `startMonth` INTEGER, `startDay` INTEGER, `endYear` INTEGER, `endMonth` INTEGER, `endDay` INTEGER, `updatedAt` INTEGER, `progressIncreasedAt` INTEGER, PRIMARY KEY(`mediaId`), FOREIGN KEY(`mediaId`) REFERENCES `media_items`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "mediaId",
@@ -220,7 +220,7 @@
             "columnName": "userStatus",
             "affinity": "TEXT",
             "notNull": true,
-            "defaultValue": "'PLAN_TO'"
+            "defaultValue": "'PLANNING'"
           },
           {
             "fieldPath": "progress",
@@ -912,7 +912,7 @@
     "views": [
       {
         "viewName": "active_media_items",
-        "createSql": "CREATE VIEW `${VIEW_NAME}` AS SELECT \n            m.id,\n            m.type,\n            m.format,\n            m.countryOfOrigin,\n            m.title,\n            m.titleEnglish,\n            m.titleRomaji,\n            m.titleNative,\n            m.coverImagePath,\n            m.coverImageUrl,\n            m.bannerImage,\n            m.description,\n            m.author,\n            COALESCE(u.userStatus, 'PLAN_TO') AS userStatus,\n            COALESCE(u.progress, 0.0) AS progress,\n            m.progressTotal,\n            COALESCE(u.secondaryProgress, 0.0) AS secondaryProgress,\n            m.secondaryProgressTotal,\n            u.scoreRaw,\n            COALESCE(u.repeat, 0) AS repeat,\n            COALESCE(u.notes, '') AS notes,\n            m.genres,\n            m.tags,\n            COALESCE(u.isPrivate, 0) AS isPrivate,\n            m.isAdult,\n            u.startYear,\n            u.startMonth,\n            u.startDay,\n            u.endYear,\n            u.endMonth,\n            u.endDay,\n            m.durationMinutes,\n            m.avgChapterLength,\n            m.lengthUnitOverride,\n            m.playbackSpeed,\n            m.createdAt,\n            m.updatedAt AS catalogUpdatedAt,\n            u.updatedAt AS userUpdatedAt,\n            u.progressIncreasedAt,\n            m.deletedAt\n        FROM media_items m\n        LEFT JOIN user_data u ON u.mediaId = m.id\n        WHERE m.deletedAt IS NULL"
+        "createSql": "CREATE VIEW `${VIEW_NAME}` AS SELECT \n            m.id,\n            m.type,\n            m.format,\n            m.countryOfOrigin,\n            m.title,\n            m.titleEnglish,\n            m.titleRomaji,\n            m.titleNative,\n            m.coverImagePath,\n            m.coverImageUrl,\n            m.bannerImage,\n            m.description,\n            m.author,\n            COALESCE(u.userStatus, 'PLANNING') AS userStatus,\n            COALESCE(u.progress, 0.0) AS progress,\n            m.progressTotal,\n            COALESCE(u.secondaryProgress, 0.0) AS secondaryProgress,\n            m.secondaryProgressTotal,\n            u.scoreRaw,\n            COALESCE(u.repeat, 0) AS repeat,\n            COALESCE(u.notes, '') AS notes,\n            m.genres,\n            m.tags,\n            COALESCE(u.isPrivate, 0) AS isPrivate,\n            m.isAdult,\n            u.startYear,\n            u.startMonth,\n            u.startDay,\n            u.endYear,\n            u.endMonth,\n            u.endDay,\n            m.durationMinutes,\n            m.avgChapterLength,\n            m.lengthUnitOverride,\n            m.playbackSpeed,\n            m.createdAt,\n            m.updatedAt AS catalogUpdatedAt,\n            u.updatedAt AS userUpdatedAt,\n            u.progressIncreasedAt,\n            m.deletedAt\n        FROM media_items m\n        LEFT JOIN user_data u ON u.mediaId = m.id\n        WHERE m.deletedAt IS NULL"
       }
     ],
     "setupQueries": [

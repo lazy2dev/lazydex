@@ -9,6 +9,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import app.lazydex.data.tracker.sync.AnilistSyncEngine
 import app.lazydex.data.tracker.sync.TrackChapter
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -19,6 +20,7 @@ class DelayedTrackingUpdateJob(private val context: Context, workerParams: Worke
 
     private val delayedTrackingStore: DelayedTrackingStore by inject()
     private val trackChapter: TrackChapter by inject()
+    private val syncEngine: AnilistSyncEngine by inject()
 
     override suspend fun doWork(): Result {
         if (runAttemptCount > 3) {
@@ -27,8 +29,22 @@ class DelayedTrackingUpdateJob(private val context: Context, workerParams: Worke
 
         val items = delayedTrackingStore.getItems()
         for (item in items) {
-            trackChapter.await(context, item.mediaId, item.lastProgressRead.toDouble(), setupJobOnFailure = false)
+            var anySuccess = false
+            if (item.status != null) {
+                val pushed = syncEngine.pushDirtyItem(item.mediaId)
+                if (pushed) anySuccess = true
+            }
+            if (item.lastProgressRead != null) {
+                trackChapter.await(context, item.mediaId, item.lastProgressRead.toDouble(), setupJobOnFailure = false)
+                anySuccess = true
+            }
+            if (anySuccess) {
+                delayedTrackingStore.remove(item.mediaId)
+            }
         }
+
+        // Also sweep any remaining dirty links
+        syncEngine.pushDirtyLinks()
 
         return if (delayedTrackingStore.getItems().isEmpty()) Result.success() else Result.retry()
     }
@@ -55,4 +71,3 @@ class DelayedTrackingUpdateJob(private val context: Context, workerParams: Worke
         }
     }
 }
-

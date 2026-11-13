@@ -60,12 +60,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.automirrored.outlined.Label
+import androidx.compose.material.icons.outlined.LayersClear
+import androidx.compose.material.icons.outlined.Schedule
 import app.lazydex.data.local.LibraryDisplayMode
+import app.lazydex.data.local.LibraryGroupMode
 import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.SortDirection
 import app.lazydex.domain.model.SortField
 import app.lazydex.domain.model.StatusFilter
-import app.lazydex.domain.model.statusLabel
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -108,10 +111,12 @@ fun DexSettingsSheet(
     onToggleShowItemCount: (Boolean) -> Unit = {},
     isGridView: Boolean = displayMode != LibraryDisplayMode.LIST,
     onToggleGridView: ((Boolean) -> Unit)? = null,
+    groupMode: LibraryGroupMode = LibraryGroupMode.BY_DEFAULT,
+    onSelectGroupMode: (LibraryGroupMode) -> Unit = {},
     onClearAll: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val tabs = remember { listOf("Filter", "Sort", "Display") }
+    val tabs = remember { listOf("Filter", "Sort", "Display", "Group") }
     val pagerState = rememberPagerState { tabs.size }
     val coroutineScope = rememberCoroutineScope()
 
@@ -197,6 +202,10 @@ fun DexSettingsSheet(
                         showItemCount = showItemCount,
                         onToggleShowItemCount = onToggleShowItemCount,
                     )
+                    3 -> GroupPage(
+                        selectedGroupMode = groupMode,
+                        onSelectGroupMode = onSelectGroupMode,
+                    )
                 }
             }
         }
@@ -281,15 +290,16 @@ private fun FilterPage(
     ) {
         // Status Checkbox Rows (Komikku Filter style)
         val statusList = listOf(
-            StatusFilter.IN_PROGRESS,
-            StatusFilter.PLAN_TO,
+            StatusFilter.CURRENT,
+            StatusFilter.PLANNING,
             StatusFilter.COMPLETED,
-            StatusFilter.ON_HOLD,
-            StatusFilter.DROPPED
+            StatusFilter.PAUSED,
+            StatusFilter.DROPPED,
+            StatusFilter.REPEATING
         )
         statusList.forEach { stat ->
             val isChecked = selectedStatus == stat
-            val label = selectedType.statusLabel(stat)
+            val label = stat.displayName
             CheckboxItem(
                 label = label,
                 checked = isChecked,
@@ -687,4 +697,62 @@ private fun SortItem(
         onClick = onClick
     )
 }
+
+@Composable
+private fun GroupPage(
+    selectedGroupMode: LibraryGroupMode,
+    onSelectGroupMode: (LibraryGroupMode) -> Unit,
+) {
+    val groups = listOf(
+        Triple(LibraryGroupMode.BY_DEFAULT, "By Type (Default)", Icons.AutoMirrored.Outlined.Label),
+        Triple(LibraryGroupMode.BY_STATUS, "By Status", Icons.Outlined.Schedule),
+        Triple(LibraryGroupMode.UNGROUPED, "Ungrouped", Icons.Outlined.LayersClear)
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "Group Library",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        groups.forEach { (mode, label, icon) ->
+            val isSelected = selectedGroupMode == mode
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onSelectGroupMode(mode) }
+                    .padding(vertical = 12.dp, horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    modifier = Modifier.weight(1f)
+                )
+                RadioButton(
+                    selected = isSelected,
+                    onClick = { onSelectGroupMode(mode) }
+                )
+            }
+        }
+    }
+}
+
 

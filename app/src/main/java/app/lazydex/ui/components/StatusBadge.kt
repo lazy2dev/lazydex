@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.LocalLibrary
 import androidx.compose.material.icons.filled.PauseCircle
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -24,25 +25,28 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.lazydex.domain.model.UserStatus
 import app.lazydex.ui.theme.StatusCompleted
+import app.lazydex.ui.theme.StatusCurrent
 import app.lazydex.ui.theme.StatusDropped
-import app.lazydex.ui.theme.StatusInProgress
-import app.lazydex.ui.theme.StatusOnHold
-import app.lazydex.ui.theme.StatusPlanTo
+import app.lazydex.ui.theme.StatusPaused
+import app.lazydex.ui.theme.StatusPlanning
+import app.lazydex.ui.theme.StatusRepeating
 
 fun UserStatus.icon(): ImageVector = when (this) {
-    UserStatus.READING, UserStatus.WATCHING, UserStatus.PLAYING -> Icons.Default.LocalLibrary
-    UserStatus.PLAN_TO -> Icons.Default.BookmarkBorder
+    UserStatus.CURRENT -> Icons.Default.LocalLibrary
+    UserStatus.PLANNING -> Icons.Default.BookmarkBorder
     UserStatus.COMPLETED -> Icons.Default.TaskAlt
-    UserStatus.ON_HOLD -> Icons.Default.PauseCircle
+    UserStatus.PAUSED -> Icons.Default.PauseCircle
     UserStatus.DROPPED -> Icons.Default.Cancel
+    UserStatus.REPEATING -> Icons.Default.Repeat
 }
 
 fun UserStatus.color(): Color = when (this) {
-    UserStatus.READING, UserStatus.WATCHING, UserStatus.PLAYING -> StatusInProgress
+    UserStatus.CURRENT -> StatusCurrent
     UserStatus.COMPLETED -> StatusCompleted
-    UserStatus.ON_HOLD -> StatusOnHold
+    UserStatus.PAUSED -> StatusPaused
     UserStatus.DROPPED -> StatusDropped
-    UserStatus.PLAN_TO -> StatusPlanTo
+    UserStatus.PLANNING -> StatusPlanning
+    UserStatus.REPEATING -> StatusRepeating
 }
 
 @Composable

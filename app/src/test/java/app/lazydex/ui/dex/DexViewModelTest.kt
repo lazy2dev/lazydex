@@ -1,6 +1,7 @@
 package app.lazydex.ui.dex
 
 import app.lazydex.data.local.DisplayPreferences
+import app.lazydex.data.local.LibraryGroupMode
 import app.lazydex.data.local.ThemePreferences
 import app.lazydex.domain.model.TypeConfig
 import app.lazydex.domain.model.MediaType
@@ -26,6 +27,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -37,9 +40,10 @@ class DexViewModelTest {
     private class FakeThemePreferences : ThemePreferences(null) {
         val sortFieldFlow = MutableStateFlow(SortField.DATE_ADDED)
         val sortDirectionFlow = MutableStateFlow(SortDirection.DESCENDING)
+        val displayPrefsFlow = MutableStateFlow(DisplayPreferences())
         override val sortField: Flow<SortField> = sortFieldFlow
         override val sortDirection: Flow<SortDirection> = sortDirectionFlow
-        override val displayPreferences: Flow<DisplayPreferences> = flowOf(DisplayPreferences())
+        override val displayPreferences: Flow<DisplayPreferences> = displayPrefsFlow
 
         override suspend fun setSortField(field: SortField) {
             sortFieldFlow.value = field
@@ -47,6 +51,10 @@ class DexViewModelTest {
 
         override suspend fun setSortDirection(direction: SortDirection) {
             sortDirectionFlow.value = direction
+        }
+
+        override suspend fun setGroupMode(mode: LibraryGroupMode) {
+            displayPrefsFlow.value = displayPrefsFlow.value.copy(groupMode = mode)
         }
     }
 
@@ -74,6 +82,14 @@ class DexViewModelTest {
         override suspend fun update(item: MediaItem) {}
         override suspend fun delete(id: String) {}
         override suspend fun replaceAll(items: List<MediaItem>) {}
+        override suspend fun updateStatus(ids: Collection<String>, status: UserStatus) {
+            itemsFlow.value = itemsFlow.value.map { item ->
+                if (item.id in ids) item.copy(userStatus = status) else item
+            }
+        }
+        override suspend fun deleteItems(ids: Collection<String>) {
+            itemsFlow.value = itemsFlow.value.filterNot { it.id in ids }
+        }
     }
 
     private lateinit var repository: FakeMediaRepository
@@ -86,7 +102,7 @@ class DexViewModelTest {
             title = "Solo Leveling",
             author = "Chugong",
             alternativeTitles = listOf("Only I Level Up"),
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 1000L,
             dateAdded = 1000L
         ),
@@ -95,7 +111,7 @@ class DexViewModelTest {
             title = "Omniscient Reader",
             author = "Sing Shong",
             alternativeTitles = listOf("ORV"),
-            userStatus = UserStatus.PLAN_TO,
+            userStatus = UserStatus.PLANNING,
             lastUpdated = 2000L,
             dateAdded = 2000L
         ),
@@ -229,6 +245,117 @@ class DexViewModelTest {
         assertEquals("The Beginning After The End", descItems[0].title)
         assertEquals("Solo Leveling", descItems[1].title)
         assertEquals("Omniscient Reader", descItems[2].title)
+    }
+
+    @Test
+    fun `toggleSelection enters selection mode and toggles item id`() = runTest(testDispatcher) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isSelectionMode)
+        assertTrue(viewModel.uiState.value.selectedIds.isEmpty())
+
+        viewModel.toggleSelection("1")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isSelectionMode)
+        assertEquals(setOf("1"), viewModel.uiState.value.selectedIds)
+
+        viewModel.toggleSelection("2")
+        advanceUntilIdle()
+        assertEquals(setOf("1", "2"), viewModel.uiState.value.selectedIds)
+
+        viewModel.toggleSelection("1")
+        viewModel.toggleSelection("2")
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isSelectionMode)
+        assertTrue(viewModel.uiState.value.selectedIds.isEmpty())
+    }
+
+    @Test
+    fun `selectAll selects all items in current list and invertSelection flips selection`() = runTest(testDispatcher) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.toggleSelection("1")
+        advanceUntilIdle()
+        assertEquals(setOf("1"), viewModel.uiState.value.selectedIds)
+
+        viewModel.selectAll()
+        advanceUntilIdle()
+        assertEquals(setOf("1", "2", "3"), viewModel.uiState.value.selectedIds)
+
+        viewModel.invertSelection()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.selectedIds.isEmpty())
+        assertFalse(viewModel.uiState.value.isSelectionMode)
+
+        viewModel.toggleSelection("1")
+        advanceUntilIdle()
+        viewModel.invertSelection()
+        advanceUntilIdle()
+        assertEquals(setOf("2", "3"), viewModel.uiState.value.selectedIds)
+    }
+
+    @Test
+    fun `toggleRangeSelection selects range between last selected and target`() = runTest(testDispatcher) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.toggleSelection("1")
+        advanceUntilIdle()
+        viewModel.toggleRangeSelection("3")
+        advanceUntilIdle()
+
+        assertEquals(setOf("1", "2", "3"), viewModel.uiState.value.selectedIds)
+    }
+
+    @Test
+    fun `updateStatusForSelected updates repository and clears selection`() = runTest(testDispatcher) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.toggleSelection("1")
+        viewModel.toggleSelection("2")
+        advanceUntilIdle()
+
+        viewModel.updateStatusForSelected(UserStatus.COMPLETED)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isSelectionMode)
+        assertTrue(viewModel.uiState.value.selectedIds.isEmpty())
+
+        val updatedItems = repository.itemsFlow.value
+        assertEquals(UserStatus.COMPLETED, updatedItems.find { it.id == "1" }?.userStatus)
+        assertEquals(UserStatus.COMPLETED, updatedItems.find { it.id == "2" }?.userStatus)
+    }
+
+    @Test
+    fun `selectStatus re-clicking active status toggles back to ALL`() = runTest(testDispatcher) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(StatusFilter.ALL, viewModel.uiState.value.selectedStatus)
+
+        viewModel.selectStatus(StatusFilter.CURRENT)
+        advanceUntilIdle()
+        assertEquals(StatusFilter.CURRENT, viewModel.uiState.value.selectedStatus)
+
+        // Clicking same status again toggles back to ALL
+        viewModel.selectStatus(StatusFilter.CURRENT)
+        advanceUntilIdle()
+        assertEquals(StatusFilter.ALL, viewModel.uiState.value.selectedStatus)
+    }
+
+    @Test
+    fun `setGroupMode updates preferences and uiState`() = runTest(testDispatcher) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(LibraryGroupMode.BY_DEFAULT, viewModel.uiState.value.groupMode)
+
+        viewModel.setGroupMode(LibraryGroupMode.BY_STATUS)
+        advanceUntilIdle()
+        assertEquals(LibraryGroupMode.BY_STATUS, viewModel.uiState.value.groupMode)
     }
 }
 

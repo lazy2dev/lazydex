@@ -1,5 +1,6 @@
 package app.lazydex.ui.dex
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -25,8 +26,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.FlipToBack
+import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -56,11 +60,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.lazydex.data.local.LibraryDisplayMode
+import app.lazydex.data.local.LibraryGroupMode
 import app.lazydex.domain.model.StatusFilter
+import app.lazydex.ui.components.ChangeStatusDialog
+import app.lazydex.ui.components.DexBottomActionMenu
 import app.lazydex.ui.components.DexSettingsSheet
 import app.lazydex.ui.components.EmptyState
 import app.lazydex.ui.components.MediaCard
@@ -84,7 +93,13 @@ fun DexScreen(
     val coroutineScope = rememberCoroutineScope()
 
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
+    var showChangeStatusDialog by rememberSaveable { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
     val filterSheetState = rememberModalBottomSheetState()
+
+    BackHandler(enabled = uiState.isSelectionMode) {
+        viewModel.clearSelection()
+    }
 
     val searchFocusRequester = remember { FocusRequester() }
 
@@ -110,89 +125,134 @@ fun DexScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    if (searchQuery != null) {
-                        BasicTextField(
-                            value = searchQuery.orEmpty(),
-                            onValueChange = { viewModel.setSearchQuery(it) },
-                            singleLine = true,
-                            textStyle = MaterialTheme.typography.titleMedium.copy(
-                                color = MaterialTheme.colorScheme.onSurface
-                            ),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(searchFocusRequester),
-                            decorationBox = { innerTextField ->
-                                if (searchQuery.isNullOrEmpty()) {
-                                    Text(
-                                        text = "Search dex...",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                innerTextField()
-                            }
-                        )
-                    } else {
+            if (uiState.isSelectionMode) {
+                TopAppBar(
+                    title = {
                         Text(
-                            text = "Dex",
+                            text = "${uiState.selectedIds.size}",
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp
                         )
-                    }
-                },
-                navigationIcon = {
-                    if (searchQuery != null) {
-                        IconButton(onClick = { viewModel.setSearchQuery(null) }) {
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { viewModel.clearSelection() }) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Close search"
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close selection mode"
                             )
                         }
-                    }
-                },
-                actions = {
-                    if (searchQuery != null) {
-                        if (!searchQuery.isNullOrEmpty()) {
-                            IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                    },
+                    actions = {
+                        IconButton(onClick = { viewModel.selectAll() }) {
+                            Icon(
+                                imageVector = Icons.Outlined.SelectAll,
+                                contentDescription = "Select all"
+                            )
+                        }
+                        IconButton(onClick = { viewModel.invertSelection() }) {
+                            Icon(
+                                imageVector = Icons.Outlined.FlipToBack,
+                                contentDescription = "Invert selection"
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    )
+                )
+            } else {
+                TopAppBar(
+                    title = {
+                        if (searchQuery != null) {
+                            BasicTextField(
+                                value = searchQuery.orEmpty(),
+                                onValueChange = { viewModel.setSearchQuery(it) },
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.titleMedium.copy(
+                                    color = MaterialTheme.colorScheme.onSurface
+                                ),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(searchFocusRequester),
+                                decorationBox = { innerTextField ->
+                                    if (searchQuery.isNullOrEmpty()) {
+                                        Text(
+                                            text = "Search dex...",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            )
+                        } else {
+                            Text(
+                                text = "Dex",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        if (searchQuery != null) {
+                            IconButton(onClick = { viewModel.setSearchQuery(null) }) {
                                 Icon(
-                                    imageVector = Icons.Default.Clear,
-                                    contentDescription = "Clear search"
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Close search"
                                 )
                             }
                         }
-                    } else {
-                        IconButton(onClick = {
-                            if (onSearchClick != null) onSearchClick() else viewModel.setSearchQuery("")
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = "Search",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
+                    },
+                    actions = {
+                        if (searchQuery != null) {
+                            if (!searchQuery.isNullOrEmpty()) {
+                                IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Clear,
+                                        contentDescription = "Clear search"
+                                    )
+                                }
+                            }
+                        } else {
+                            IconButton(onClick = {
+                                if (onSearchClick != null) onSearchClick() else viewModel.setSearchQuery("")
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Search",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            IconButton(onClick = { showFilterSheet = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.FilterList,
+                                    contentDescription = "Filter and Sort",
+                                    tint = if (isFilterActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
-                        IconButton(onClick = { showFilterSheet = true }) {
-                            Icon(
-                                imageVector = Icons.Default.FilterList,
-                                contentDescription = "Filter and Sort",
-                                tint = if (isFilterActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background
+                    )
                 )
-            )
+            }
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToAddItem
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Item")
+            if (!uiState.isSelectionMode) {
+                FloatingActionButton(
+                    onClick = onNavigateToAddItem
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Item")
+                }
             }
+        },
+        bottomBar = {
+            DexBottomActionMenu(
+                visible = uiState.isSelectionMode,
+                onChangeStatusClicked = { showChangeStatusDialog = true }
+            )
         },
         containerColor = MaterialTheme.colorScheme.background,
         modifier = modifier
@@ -201,6 +261,21 @@ fun DexScreen(
         val gridState = rememberLazyGridState()
         val onCardClick: (String) -> Unit = remember(onNavigateToEditItem) {
             { id -> onNavigateToEditItem(id) }
+        }
+        val onItemClick: (String) -> Unit = { id ->
+            if (uiState.isSelectionMode) {
+                viewModel.toggleSelection(id)
+            } else {
+                onCardClick(id)
+            }
+        }
+        val onItemLongClick: (String) -> Unit = { id ->
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            if (uiState.isSelectionMode) {
+                viewModel.toggleRangeSelection(id)
+            } else {
+                viewModel.toggleSelection(id)
+            }
         }
 
         Column(
@@ -242,12 +317,8 @@ fun DexScreen(
                     }
                 }
 
-                // Tier 2: Formats Rail with smooth animation
-                AnimatedVisibility(
-                    visible = uiState.selectedTypeId != null && uiState.formatsForSelectedType.isNotEmpty(),
-                    enter = expandVertically(tween(200)),
-                    exit = shrinkVertically(tween(200))
-                ) {
+                // Tier 2: When groupMode == BY_STATUS -> Status chips. When BY_DEFAULT -> Format chips.
+                if (uiState.groupMode == LibraryGroupMode.BY_STATUS) {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
                         shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
@@ -261,18 +332,59 @@ fun DexScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            FilterChip(
-                                selected = uiState.selectedFormatId == null,
-                                onClick = { viewModel.selectFormatId(null) },
-                                label = { Text("All ${activeParent?.name ?: ""}") }
-                            )
-
-                            uiState.formatsForSelectedType.forEach { formatConfig ->
+                            val statusFilters = StatusFilter.entries
+                            statusFilters.forEach { statusFilter ->
+                                val count = uiState.perStatusCounts[statusFilter] ?: 0
+                                val label = if (statusFilter == StatusFilter.ALL) {
+                                    "All (${uiState.perStatusCounts[StatusFilter.ALL] ?: uiState.totalCount})"
+                                } else {
+                                    "${statusFilter.displayName} ($count)"
+                                }
                                 FilterChip(
-                                    selected = uiState.selectedFormatId == formatConfig.id,
-                                    onClick = { viewModel.selectFormatId(formatConfig.id) },
-                                    label = { Text(formatConfig.name) }
+                                    selected = uiState.selectedStatus == statusFilter,
+                                    onClick = { viewModel.selectStatus(statusFilter) },
+                                    label = { Text(label) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
                                 )
+                            }
+                        }
+                    }
+                } else if (uiState.groupMode == LibraryGroupMode.BY_DEFAULT) {
+                    // Formats Rail with smooth animation
+                    AnimatedVisibility(
+                        visible = uiState.selectedTypeId != null && uiState.formatsForSelectedType.isNotEmpty(),
+                        enter = expandVertically(tween(200)),
+                        exit = shrinkVertically(tween(200))
+                    ) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                FilterChip(
+                                    selected = uiState.selectedFormatId == null,
+                                    onClick = { viewModel.selectFormatId(null) },
+                                    label = { Text("All ${activeParent?.name ?: ""}") }
+                                )
+
+                                uiState.formatsForSelectedType.forEach { formatConfig ->
+                                    FilterChip(
+                                        selected = uiState.selectedFormatId == formatConfig.id,
+                                        onClick = { viewModel.selectFormatId(formatConfig.id) },
+                                        label = { Text(formatConfig.name) }
+                                    )
+                                }
                             }
                         }
                     }
@@ -333,7 +445,9 @@ fun DexScreen(
                                     ) { item ->
                                         MediaCard(
                                             item = item,
-                                            onClick = { onCardClick(item.id) },
+                                            onClick = { onItemClick(item.id) },
+                                            onLongClick = { onItemLongClick(item.id) },
+                                            isSelected = item.id in uiState.selectedIds,
                                             displayMode = uiState.displayMode,
                                             showProgressBadge = uiState.showProgressBadge,
                                             showStatusBadge = uiState.showStatusBadge,
@@ -374,7 +488,9 @@ fun DexScreen(
                                     ) { item ->
                                         MediaCard(
                                             item = item,
-                                            onClick = { onCardClick(item.id) },
+                                            onClick = { onItemClick(item.id) },
+                                            onLongClick = { onItemLongClick(item.id) },
+                                            isSelected = item.id in uiState.selectedIds,
                                             displayMode = uiState.displayMode,
                                             showProgressBadge = uiState.showProgressBadge,
                                             showStatusBadge = uiState.showStatusBadge,
@@ -434,7 +550,19 @@ fun DexScreen(
             onToggleScoreBadge = { viewModel.setShowScoreBadge(it) },
             showItemCount = uiState.showItemCount,
             onToggleShowItemCount = { viewModel.setShowItemCount(it) },
+            groupMode = uiState.groupMode,
+            onSelectGroupMode = { viewModel.setGroupMode(it) },
             onClearAll = { viewModel.clearFilters() }
+        )
+    }
+
+    if (showChangeStatusDialog) {
+        ChangeStatusDialog(
+            onConfirm = { status ->
+                viewModel.updateStatusForSelected(status)
+                showChangeStatusDialog = false
+            },
+            onDismissRequest = { showChangeStatusDialog = false }
         )
     }
 }

@@ -85,7 +85,7 @@ class MediaCardTest {
             progressTotal = 200.0,
             secondaryProgress = 0.0,
             secondaryProgressTotal = null,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             rating = 8.5,
             lastUpdated = 1000L,
             dateAdded = 500L,
@@ -117,7 +117,7 @@ class MediaCardTest {
             hasSecondaryProgress = true,
             isDirtyLocal = true,
             scoreRaw = 180,
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 2000L,
             mediaType = MediaType.NOVEL,
         )
@@ -130,7 +130,7 @@ class MediaCardTest {
         assertEquals(16.0, item.secondaryProgress, 0.001)
         assertEquals(18.0, item.secondaryProgressTotal!!, 0.001)
         assertEquals(9.0, item.rating!!, 0.001)
-        assertEquals(UserStatus.READING, item.userStatus)
+        assertEquals(UserStatus.CURRENT, item.userStatus)
     }
 
     @Test
@@ -138,7 +138,7 @@ class MediaCardTest {
         val adultItem = MediaItem(
             id = "adult1",
             title = "Adult Media",
-            userStatus = UserStatus.PLAN_TO,
+            userStatus = UserStatus.PLANNING,
             lastUpdated = 1000L,
             dateAdded = 1000L,
             isAdult = true
@@ -146,7 +146,7 @@ class MediaCardTest {
         val nonAdultItem = MediaItem(
             id = "regular1",
             title = "Regular Media",
-            userStatus = UserStatus.PLAN_TO,
+            userStatus = UserStatus.PLANNING,
             lastUpdated = 1000L,
             dateAdded = 1000L,
             isAdult = false

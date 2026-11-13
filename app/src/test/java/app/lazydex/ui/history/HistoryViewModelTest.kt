@@ -82,7 +82,7 @@ class HistoryViewModelTest {
             id = "1",
             title = "Solo Leveling",
             author = "Chugong",
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 2000L,
             dateAdded = 1000L,
             progressIncreasedAt = 2000L
@@ -91,7 +91,7 @@ class HistoryViewModelTest {
             id = "2",
             title = "Omniscient Reader",
             author = "Sing Shong",
-            userStatus = UserStatus.READING,
+            userStatus = UserStatus.CURRENT,
             lastUpdated = 3000L,
             dateAdded = 1000L,
             progressIncreasedAt = 3000L

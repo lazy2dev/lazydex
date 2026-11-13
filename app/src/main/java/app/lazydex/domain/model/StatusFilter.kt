@@ -2,9 +2,20 @@ package app.lazydex.domain.model
 
 enum class StatusFilter(val displayName: String) {
     ALL("All"),
-    IN_PROGRESS("In Progress"),
+    CURRENT("Current"),
+    PLANNING("Planning"),
     COMPLETED("Completed"),
-    ON_HOLD("On Hold"),
+    PAUSED("Paused"),
     DROPPED("Dropped"),
-    PLAN_TO("Plan to")
+    REPEATING("Repeating");
+
+    fun toUserStatus(): UserStatus? = when (this) {
+        ALL -> null
+        CURRENT -> UserStatus.CURRENT
+        PLANNING -> UserStatus.PLANNING
+        COMPLETED -> UserStatus.COMPLETED
+        PAUSED -> UserStatus.PAUSED
+        DROPPED -> UserStatus.DROPPED
+        REPEATING -> UserStatus.REPEATING
+    }
 }
