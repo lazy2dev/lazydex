@@ -112,14 +112,27 @@ fun TrackProgressSelector(
     title: String,
     currentProgress: Int,
     total: Int?,
+    hasSecondaryProgress: Boolean = false,
+    secondaryUnitName: String? = null,
+    currentVolume: Double = 0.0,
+    totalVolumes: Double? = null,
     repeatCount: Int = 0,
     repeatLabel: String = "Rewatches",
-    onConfirmed: (progress: Int, total: Int?, repeat: Int) -> Unit,
+    onConfirmed: (progress: Int, total: Int?, volume: Double, totalVolumes: Double?, repeat: Int) -> Unit,
     onDismissRequest: () -> Unit
 ) {
     var progress by remember { mutableIntStateOf(currentProgress.coerceAtLeast(0)) }
     var textValue by remember { mutableStateOf(progress.toString()) }
     var totalTextValue by remember { mutableStateOf(total?.toString() ?: "") }
+
+    var volume by remember { mutableDoubleStateOf(currentVolume.coerceAtLeast(0.0)) }
+    var volumeTextValue by remember {
+        mutableStateOf(if (volume % 1.0 == 0.0) volume.toInt().toString() else volume.toString())
+    }
+    var totalVolumesTextValue by remember {
+        mutableStateOf(totalVolumes?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() } ?: "")
+    }
+
     var count by remember { mutableIntStateOf(repeatCount.coerceAtLeast(0)) }
 
     BaseSelector(
@@ -131,6 +144,7 @@ fun TrackProgressSelector(
                     .padding(vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // --- 1. PRIMARY PROGRESS (CHAPTERS / EPISODES) ---
                 val parsedTotal = totalTextValue.trim().toIntOrNull()
                 Text(
                     text = if (parsedTotal != null && parsedTotal > 0) "$progress / $parsedTotal" else "$progress",
@@ -139,7 +153,7 @@ fun TrackProgressSelector(
                     color = MaterialTheme.colorScheme.primary
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -189,7 +203,7 @@ fun TrackProgressSelector(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -226,6 +240,113 @@ fun TrackProgressSelector(
                     )
                 }
 
+                // --- 2. SECONDARY VOLUME PROGRESS (IF APPLICABLE) ---
+                if (hasSecondaryProgress) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    val unitName = secondaryUnitName ?: "Volume"
+                    val parsedTotalVol = totalVolumesTextValue.trim().toDoubleOrNull()
+                    val displayVol = if (volume % 1.0 == 0.0) volume.toInt().toString() else volume.toString()
+                    val displayTotalVol = parsedTotalVol?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() }
+
+                    Text(
+                        text = "$unitName Progress: ${if (displayTotalVol != null) "$displayVol / $displayTotalVol" else displayVol}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilledTonalButton(
+                            onClick = {
+                                val next = (volume - 5.0).coerceAtLeast(0.0)
+                                volume = next
+                                volumeTextValue = if (next % 1.0 == 0.0) next.toInt().toString() else next.toString()
+                            }
+                        ) {
+                            Text("-5")
+                        }
+
+                        FilledTonalIconButton(
+                            onClick = {
+                                val next = (volume - 1.0).coerceAtLeast(0.0)
+                                volume = next
+                                volumeTextValue = if (next % 1.0 == 0.0) next.toInt().toString() else next.toString()
+                            }
+                        ) {
+                            Icon(imageVector = Icons.Default.Remove, contentDescription = "Decrease 1 Volume")
+                        }
+
+                        FilledTonalIconButton(
+                            onClick = {
+                                val max = parsedTotalVol ?: Double.MAX_VALUE
+                                val next = (volume + 1.0).coerceAtMost(max)
+                                volume = next
+                                volumeTextValue = if (next % 1.0 == 0.0) next.toInt().toString() else next.toString()
+                            }
+                        ) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = "Increase 1 Volume")
+                        }
+
+                        FilledTonalButton(
+                            onClick = {
+                                val max = parsedTotalVol ?: Double.MAX_VALUE
+                                val next = (volume + 5.0).coerceAtMost(max)
+                                volume = next
+                                volumeTextValue = if (next % 1.0 == 0.0) next.toInt().toString() else next.toString()
+                            }
+                        ) {
+                            Text("+5")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = volumeTextValue,
+                            onValueChange = { input ->
+                                val filtered = input.filter { it.isDigit() || it == '.' }
+                                volumeTextValue = filtered
+                                val parsed = filtered.toDoubleOrNull()
+                                if (parsed != null) {
+                                    val max = parsedTotalVol ?: Double.MAX_VALUE
+                                    volume = parsed.coerceIn(0.0, max)
+                                }
+                            },
+                            label = { Text("Exact $unitName") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        OutlinedTextField(
+                            value = totalVolumesTextValue,
+                            onValueChange = { input ->
+                                val filtered = input.filter { it.isDigit() || it == '.' }
+                                totalVolumesTextValue = filtered
+                            },
+                            label = { Text("Total ${unitName}s") },
+                            placeholder = { Text("—") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                // --- 3. REPEAT COUNT ---
                 Spacer(modifier = Modifier.height(12.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 Spacer(modifier = Modifier.height(10.dp))
@@ -281,139 +402,13 @@ fun TrackProgressSelector(
             }
         },
         onConfirm = {
-            onConfirmed(progress, totalTextValue.trim().toIntOrNull(), count)
-            onDismissRequest()
-        },
-        onDismissRequest = onDismissRequest
-    )
-}
-
-@Composable
-fun TrackVolumeSelector(
-    title: String = "Volume Progress",
-    currentVolume: Double,
-    totalVolumes: Double?,
-    onConfirmed: (volume: Double, total: Double?) -> Unit,
-    onDismissRequest: () -> Unit
-) {
-    var volume by remember { mutableDoubleStateOf(currentVolume.coerceAtLeast(0.0)) }
-    var textValue by remember {
-        mutableStateOf(if (volume % 1.0 == 0.0) volume.toInt().toString() else volume.toString())
-    }
-    var totalTextValue by remember {
-        mutableStateOf(totalVolumes?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() } ?: "")
-    }
-
-    BaseSelector(
-        title = title,
-        content = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                val parsedTotal = totalTextValue.trim().toDoubleOrNull()
-                val displayVol = if (volume % 1.0 == 0.0) volume.toInt().toString() else volume.toString()
-                val displayTotal = parsedTotal?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() }
-
-                Text(
-                    text = if (displayTotal != null) "Vol $displayVol / $displayTotal" else "Vol $displayVol",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FilledTonalButton(
-                        onClick = {
-                            val next = (volume - 5.0).coerceAtLeast(0.0)
-                            volume = next
-                            textValue = if (next % 1.0 == 0.0) next.toInt().toString() else next.toString()
-                        }
-                    ) {
-                        Text("-5")
-                    }
-
-                    FilledTonalIconButton(
-                        onClick = {
-                            val next = (volume - 1.0).coerceAtLeast(0.0)
-                            volume = next
-                            textValue = if (next % 1.0 == 0.0) next.toInt().toString() else next.toString()
-                        }
-                    ) {
-                        Icon(imageVector = Icons.Default.Remove, contentDescription = "Decrease 1")
-                    }
-
-                    FilledTonalIconButton(
-                        onClick = {
-                            val max = parsedTotal ?: Double.MAX_VALUE
-                            val next = (volume + 1.0).coerceAtMost(max)
-                            volume = next
-                            textValue = if (next % 1.0 == 0.0) next.toInt().toString() else next.toString()
-                        }
-                    ) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = "Increase 1")
-                    }
-
-                    FilledTonalButton(
-                        onClick = {
-                            val max = parsedTotal ?: Double.MAX_VALUE
-                            val next = (volume + 5.0).coerceAtMost(max)
-                            volume = next
-                            textValue = if (next % 1.0 == 0.0) next.toInt().toString() else next.toString()
-                        }
-                    ) {
-                        Text("+5")
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = textValue,
-                        onValueChange = { input ->
-                            val filtered = input.filter { it.isDigit() || it == '.' }
-                            textValue = filtered
-                            val parsed = filtered.toDoubleOrNull()
-                            if (parsed != null) {
-                                val max = parsedTotal ?: Double.MAX_VALUE
-                                volume = parsed.coerceIn(0.0, max)
-                            }
-                        },
-                        label = { Text("Exact Volume") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    OutlinedTextField(
-                        value = totalTextValue,
-                        onValueChange = { input ->
-                            val filtered = input.filter { it.isDigit() || it == '.' }
-                            totalTextValue = filtered
-                        },
-                        label = { Text("Total Volumes") },
-                        placeholder = { Text("—") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        },
-        onConfirm = {
-            onConfirmed(volume, totalTextValue.trim().toDoubleOrNull())
+            onConfirmed(
+                progress,
+                totalTextValue.trim().toIntOrNull(),
+                volume,
+                totalVolumesTextValue.trim().toDoubleOrNull(),
+                count
+            )
             onDismissRequest()
         },
         onDismissRequest = onDismissRequest

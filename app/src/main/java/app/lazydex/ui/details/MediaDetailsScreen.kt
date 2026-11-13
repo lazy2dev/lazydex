@@ -91,7 +91,6 @@ import app.lazydex.ui.details.components.TrackDateSelector
 import app.lazydex.ui.details.components.TrackProgressSelector
 import app.lazydex.ui.details.components.TrackScoreSelector
 import app.lazydex.ui.details.components.TrackStatusSelector
-import app.lazydex.ui.details.components.TrackVolumeSelector
 import app.lazydex.ui.theme.coverColorScheme
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
@@ -102,7 +101,6 @@ private sealed interface ActiveDialog {
     data object Score : ActiveDialog
     data object StartDate : ActiveDialog
     data object FinishDate : ActiveDialog
-    data object Volume : ActiveDialog
     data object Cover : ActiveDialog
     data object Metadata : ActiveDialog
     data object Sync : ActiveDialog
@@ -363,15 +361,6 @@ fun MediaDetailsScreen(
                     onScoreClick = { activeDialog = ActiveDialog.Score },
                     onStartDateClick = { activeDialog = ActiveDialog.StartDate },
                     onEndDateClick = { activeDialog = ActiveDialog.FinishDate },
-                    onSecondaryClick = { activeDialog = ActiveDialog.Volume },
-                    onSecondaryStep = { step ->
-                        val cur = state.parsedSecondaryProgress ?: 0.0
-                        val next = (cur + step).coerceAtLeast(0.0)
-                        if (kotlin.math.abs(next - cur) > 1e-6) {
-                            viewModel.updateSecondaryProgress(next.toString())
-                            viewModel.autoSave()
-                        }
-                    },
                     onNotesChange = {
                         viewModel.updateNotes(it)
                     }
@@ -413,9 +402,13 @@ fun MediaDetailsScreen(
                 },
                 currentProgress = state.parsedProgress ?: 0,
                 total = state.parsedTotal,
+                hasSecondaryProgress = state.hasSecondaryProgress,
+                secondaryUnitName = state.resolvedConfig?.secondaryUnitName,
+                currentVolume = state.parsedSecondaryProgress ?: 0.0,
+                totalVolumes = state.parsedSecondaryTotal,
                 repeatCount = state.repeat,
                 repeatLabel = repeatLabel,
-                onConfirmed = { progress, total, repeat ->
+                onConfirmed = { progress, total, vol, totalVol, repeat ->
                     var changed = false
                     if (progress != (state.parsedProgress ?: 0)) {
                         viewModel.updateCurrentProgress(progress.toString())
@@ -426,6 +419,19 @@ fun MediaDetailsScreen(
                     if (newTotalStr != currentTotalStr) {
                         viewModel.updateTotalItems(newTotalStr)
                         changed = true
+                    }
+                    if (state.hasSecondaryProgress) {
+                        val curVol = state.parsedSecondaryProgress ?: 0.0
+                        if (kotlin.math.abs(vol - curVol) > 1e-6) {
+                            viewModel.updateSecondaryProgress(if (vol % 1.0 == 0.0) vol.toInt().toString() else vol.toString())
+                            changed = true
+                        }
+                        val curTotalVol = state.secondaryProgressTotal.trim()
+                        val newTotalVol = totalVol?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() } ?: ""
+                        if (newTotalVol != curTotalVol) {
+                            viewModel.updateSecondaryProgressTotal(newTotalVol)
+                            changed = true
+                        }
                     }
                     if (repeat != state.repeat) {
                         viewModel.updateRepeat(repeat)
@@ -470,31 +476,6 @@ fun MediaDetailsScreen(
                 onDateConfirmed = { date ->
                     if (date != state.endDate) {
                         viewModel.updateEndDate(date)
-                        viewModel.autoSave()
-                    }
-                },
-                onDismissRequest = { activeDialog = null }
-            )
-        }
-        ActiveDialog.Volume -> {
-            TrackVolumeSelector(
-                title = "${state.resolvedConfig?.secondaryUnitName ?: "Volume"} Progress",
-                currentVolume = state.parsedSecondaryProgress ?: 0.0,
-                totalVolumes = state.parsedSecondaryTotal,
-                onConfirmed = { volume, totalVol ->
-                    var changed = false
-                    val curVol = state.parsedSecondaryProgress ?: 0.0
-                    if (kotlin.math.abs(volume - curVol) > 1e-6) {
-                        viewModel.updateSecondaryProgress(if (volume % 1.0 == 0.0) volume.toInt().toString() else volume.toString())
-                        changed = true
-                    }
-                    val currentTotalVol = state.secondaryProgressTotal.trim()
-                    val newTotalVol = totalVol?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() } ?: ""
-                    if (newTotalVol != currentTotalVol) {
-                        viewModel.updateSecondaryProgressTotal(newTotalVol)
-                        changed = true
-                    }
-                    if (changed) {
                         viewModel.autoSave()
                     }
                 },

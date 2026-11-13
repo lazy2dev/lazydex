@@ -64,8 +64,6 @@ fun MediaTrackingSection(
     onScoreClick: () -> Unit,
     onStartDateClick: () -> Unit,
     onEndDateClick: () -> Unit,
-    onSecondaryClick: () -> Unit = {},
-    onSecondaryStep: (Double) -> Unit,
     onNotesChange: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -81,6 +79,15 @@ fun MediaTrackingSection(
     } else {
         "$unitLabel $currentProgress"
     }
+
+    val volumeSubtext = if (hasSecondaryProgress && (secondaryProgress.isNotEmpty() && secondaryProgress != "0" || secondaryProgressTotal.isNotEmpty())) {
+        val unit = secondaryUnitName ?: "Vol."
+        if (secondaryProgressTotal.isNotEmpty()) {
+            "$unit ${secondaryProgress.ifEmpty { "0" }} / $secondaryProgressTotal"
+        } else {
+            "$unit ${secondaryProgress.ifEmpty { "0" }}"
+        }
+    } else null
 
     val scoreDisplay = rating?.let {
         String.format(Locale.US, "%.1f ★", it)
@@ -125,6 +132,7 @@ fun MediaTrackingSection(
                     TrackMatrixCell(
                         label = "PROGRESS",
                         value = progressDisplay,
+                        subValue = volumeSubtext,
                         onClick = onProgressClick,
                         modifier = Modifier.weight(1f),
                         badge = if (repeatCount > 0) {
@@ -187,64 +195,6 @@ fun MediaTrackingSection(
             }
         }
 
-        // Secondary Volume Progress (if applicable)
-        if (hasSecondaryProgress) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(
-                        text = "${secondaryUnitName ?: "Volume"} Progress",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        FilledTonalIconButton(
-                            onClick = { onSecondaryStep(-1.0) },
-                            modifier = Modifier.size(36.dp),
-                        ) {
-                            Icon(Icons.Default.Remove, contentDescription = "Decrement", modifier = Modifier.size(16.dp))
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .clickable(onClick = onSecondaryClick)
-                                .padding(horizontal = 6.dp, vertical = 4.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = "${secondaryProgress.ifEmpty { "0" }} / ${secondaryProgressTotal.ifEmpty { "—" }}",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
-
-                        FilledTonalIconButton(
-                            onClick = { onSecondaryStep(1.0) },
-                            modifier = Modifier.size(36.dp),
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = "Increment", modifier = Modifier.size(16.dp))
-                        }
-                    }
-                }
-            }
-        }
-
         // Personal Notes Section
         Surface(
             shape = MaterialTheme.shapes.medium,
@@ -288,6 +238,7 @@ fun TrackMatrixCell(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String = "—",
+    subValue: String? = null,
     badge: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     Box(
@@ -318,6 +269,18 @@ fun TrackMatrixCell(
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
             )
+            if (!subValue.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subValue,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.secondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
         if (badge != null) {
             badge()
