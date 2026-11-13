@@ -1,6 +1,8 @@
 package app.lazydex.ui.details.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -134,6 +136,7 @@ fun TrackProgressSelector(
     }
 
     var count by remember { mutableIntStateOf(repeatCount.coerceAtLeast(0)) }
+    val scrollState = rememberScrollState()
 
     BaseSelector(
         title = title,
@@ -141,6 +144,7 @@ fun TrackProgressSelector(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(scrollState)
                     .padding(vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -157,7 +161,7 @@ fun TrackProgressSelector(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     FilledTonalButton(
@@ -220,7 +224,7 @@ fun TrackProgressSelector(
                                 progress = parsed.coerceIn(0, max)
                             }
                         },
-                        label = { Text("Exact Progress") },
+                        label = { Text("Progress", maxLines = 1) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
                         modifier = Modifier.weight(1f)
@@ -232,7 +236,7 @@ fun TrackProgressSelector(
                             val filtered = input.filter { it.isDigit() }
                             totalTextValue = filtered
                         },
-                        label = { Text("Total Units") },
+                        label = { Text("Total", maxLines = 1) },
                         placeholder = { Text("—") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
@@ -243,7 +247,7 @@ fun TrackProgressSelector(
                 // --- 2. SECONDARY VOLUME PROGRESS (IF APPLICABLE) ---
                 if (hasSecondaryProgress) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                     Spacer(modifier = Modifier.height(10.dp))
 
                     val unitName = secondaryUnitName ?: "Volume"
@@ -251,64 +255,52 @@ fun TrackProgressSelector(
                     val displayVol = if (volume % 1.0 == 0.0) volume.toInt().toString() else volume.toString()
                     val displayTotalVol = parsedTotalVol?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() }
 
-                    Text(
-                        text = "$unitName Progress: ${if (displayTotalVol != null) "$displayVol / $displayTotalVol" else displayVol}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.secondary
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        FilledTonalButton(
-                            onClick = {
-                                val next = (volume - 5.0).coerceAtLeast(0.0)
-                                volume = next
-                                volumeTextValue = if (next % 1.0 == 0.0) next.toInt().toString() else next.toString()
-                            }
-                        ) {
-                            Text("-5")
+                        Column {
+                            Text(
+                                text = "${unitName}s",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = if (displayTotalVol != null) "$displayVol / $displayTotalVol" else displayVol,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
 
-                        FilledTonalIconButton(
-                            onClick = {
-                                val next = (volume - 1.0).coerceAtLeast(0.0)
-                                volume = next
-                                volumeTextValue = if (next % 1.0 == 0.0) next.toInt().toString() else next.toString()
-                            }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Icon(imageVector = Icons.Default.Remove, contentDescription = "Decrease 1 Volume")
-                        }
+                            FilledTonalIconButton(
+                                onClick = {
+                                    val next = (volume - 1.0).coerceAtLeast(0.0)
+                                    volume = next
+                                    volumeTextValue = if (next % 1.0 == 0.0) next.toInt().toString() else next.toString()
+                                }
+                            ) {
+                                Icon(imageVector = Icons.Default.Remove, contentDescription = "Decrease 1 $unitName")
+                            }
 
-                        FilledTonalIconButton(
-                            onClick = {
-                                val max = parsedTotalVol ?: Double.MAX_VALUE
-                                val next = (volume + 1.0).coerceAtMost(max)
-                                volume = next
-                                volumeTextValue = if (next % 1.0 == 0.0) next.toInt().toString() else next.toString()
+                            FilledTonalIconButton(
+                                onClick = {
+                                    val max = parsedTotalVol ?: Double.MAX_VALUE
+                                    val next = (volume + 1.0).coerceAtMost(max)
+                                    volume = next
+                                    volumeTextValue = if (next % 1.0 == 0.0) next.toInt().toString() else next.toString()
+                                }
+                            ) {
+                                Icon(imageVector = Icons.Default.Add, contentDescription = "Increase 1 $unitName")
                             }
-                        ) {
-                            Icon(imageVector = Icons.Default.Add, contentDescription = "Increase 1 Volume")
-                        }
-
-                        FilledTonalButton(
-                            onClick = {
-                                val max = parsedTotalVol ?: Double.MAX_VALUE
-                                val next = (volume + 5.0).coerceAtMost(max)
-                                volume = next
-                                volumeTextValue = if (next % 1.0 == 0.0) next.toInt().toString() else next.toString()
-                            }
-                        ) {
-                            Text("+5")
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -325,7 +317,7 @@ fun TrackProgressSelector(
                                     volume = parsed.coerceIn(0.0, max)
                                 }
                             },
-                            label = { Text("Exact $unitName") },
+                            label = { Text(unitName, maxLines = 1) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
                             modifier = Modifier.weight(1f)
@@ -337,7 +329,7 @@ fun TrackProgressSelector(
                                 val filtered = input.filter { it.isDigit() || it == '.' }
                                 totalVolumesTextValue = filtered
                             },
-                            label = { Text("Total ${unitName}s") },
+                            label = { Text("Total", maxLines = 1) },
                             placeholder = { Text("—") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
@@ -348,7 +340,7 @@ fun TrackProgressSelector(
 
                 // --- 3. REPEAT COUNT ---
                 Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Row(
