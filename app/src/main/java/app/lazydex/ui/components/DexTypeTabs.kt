@@ -4,12 +4,14 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryScrollableTabRow
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -36,28 +38,47 @@ fun DexTypeTabs(
     if (tabs.isEmpty()) return
     val currentPageIndex = selectedIndex.coerceIn(0, tabs.lastIndex)
 
-    Column(modifier = modifier.zIndex(2f)) {
-        PrimaryScrollableTabRow(
-            selectedTabIndex = currentPageIndex,
-            edgePadding = 0.dp,
-            divider = {},
-        ) {
-            tabs.forEachIndexed { index, tab ->
-                Tab(
-                    selected = currentPageIndex == index,
-                    onClick = { onTabItemClick(index) },
-                    text = {
-                        DexTabText(
-                            text = tab.name,
-                            badgeCount = getItemCount(tab),
-                        )
-                    },
-                    unselectedContentColor = MaterialTheme.colorScheme.onSurface,
-                )
-            }
+    val tabItems: @Composable () -> Unit = {
+        tabs.forEachIndexed { index, tab ->
+            Tab(
+                selected = currentPageIndex == index,
+                onClick = { onTabItemClick(index) },
+                text = {
+                    DexTabText(
+                        text = tab.name,
+                        badgeCount = getItemCount(tab),
+                    )
+                },
+                unselectedContentColor = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .zIndex(2f)
+    ) {
+        if (tabs.size <= 4) {
+            PrimaryTabRow(
+                selectedTabIndex = currentPageIndex,
+                modifier = Modifier.fillMaxWidth(),
+                containerColor = MaterialTheme.colorScheme.background,
+                divider = {},
+                tabs = tabItems
+            )
+        } else {
+            PrimaryScrollableTabRow(
+                selectedTabIndex = currentPageIndex,
+                modifier = Modifier.fillMaxWidth(),
+                containerColor = MaterialTheme.colorScheme.background,
+                edgePadding = 0.dp,
+                divider = {},
+                tabs = tabItems
+            )
         }
 
-        HorizontalDivider()
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
     }
 }
 
