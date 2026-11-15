@@ -7,20 +7,24 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -43,11 +47,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -620,8 +626,8 @@ fun DexScreen(
                         LibraryGroupMode.UNGROUPED -> "Library"
                     },
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(bottom = 12.dp, start = 8.dp)
                 )
 
                 val quickFilterTabItems = getItemsForType(uiState.items, uiState.selectedTypeId)
@@ -633,112 +639,103 @@ fun DexScreen(
                             } else {
                                 uiState.perStatusCounts[status] ?: 0
                             }
-                            val isSelected = uiState.selectedStatus == status
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable {
-                                        viewModel.selectStatus(status)
-                                        showQuickFilterSheet = false
-                                    }
-                                    .padding(vertical = 12.dp, horizontal = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = status.displayName,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                )
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Text(
-                                        text = "$count",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    if (isSelected) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = "Selected",
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
+                            DexFilterSelectRow(
+                                label = status.displayName,
+                                isSelected = uiState.selectedStatus == status,
+                                count = count,
+                                onClick = {
+                                    viewModel.selectStatus(status)
+                                    showQuickFilterSheet = false
                                 }
-                            }
+                            )
                         }
                     }
                     LibraryGroupMode.BY_DEFAULT -> {
                         val isAllSelected = uiState.selectedFormatId == null
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable {
-                                    viewModel.selectFormatId(null)
-                                    showQuickFilterSheet = false
-                                }
-                                .padding(vertical = 12.dp, horizontal = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "All ${activeParent?.name ?: ""}".trim(),
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isAllSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            )
-                            if (isAllSelected) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "Selected",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
+                        DexFilterSelectRow(
+                            label = "All ${activeParent?.name ?: ""}".trim(),
+                            isSelected = isAllSelected,
+                            count = quickFilterTabItems.size,
+                            onClick = {
+                                viewModel.selectFormatId(null)
+                                showQuickFilterSheet = false
                             }
-                        }
+                        )
 
                         uiState.formatsForSelectedType.forEach { formatConfig ->
                             val isSelected = uiState.selectedFormatId == formatConfig.id
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable {
-                                        viewModel.selectFormatId(formatConfig.id)
-                                        showQuickFilterSheet = false
-                                    }
-                                    .padding(vertical = 12.dp, horizontal = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = formatConfig.name,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                )
-                                if (isSelected) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "Selected",
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
+                            val formatCount = quickFilterTabItems.count {
+                                it.format.equals(formatConfig.id, ignoreCase = true) ||
+                                it.typeId.equals(formatConfig.id, ignoreCase = true)
                             }
+                            DexFilterSelectRow(
+                                label = formatConfig.name,
+                                isSelected = isSelected,
+                                count = formatCount,
+                                onClick = {
+                                    viewModel.selectFormatId(formatConfig.id)
+                                    showQuickFilterSheet = false
+                                }
+                            )
                         }
                     }
                     LibraryGroupMode.UNGROUPED -> {
                         Text(
                             text = "Library ungrouped. Total items: ${quickFilterTabItems.size}",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 8.dp)
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DexFilterSelectRow(
+    label: String,
+    isSelected: Boolean,
+    count: Int? = null,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .selectable(
+                selected = isSelected,
+                onClick = onClick
+            )
+            .minimumInteractiveComponentSize()
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        RadioButton(
+            selected = isSelected,
+            onClick = null
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        if (count != null) {
+            Surface(
+                shape = RoundedCornerShape(100.dp),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = pillAlpha)
+            ) {
+                Text(
+                    text = "$count",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                )
             }
         }
     }
