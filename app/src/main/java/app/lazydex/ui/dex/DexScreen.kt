@@ -341,6 +341,21 @@ fun DexScreen(
             initialPage = initialTabIndex.coerceIn(0, (tabs.size - 1).coerceAtLeast(0))
         ) { tabs.size }
 
+        // Initial sync when tabs are loaded (matches Komikku LaunchedEffect(categories))
+        LaunchedEffect(tabs) {
+            if (tabs.isNotEmpty()) {
+                val targetIndex = if (uiState.selectedTypeId != null) {
+                    tabs.indexOfFirst { it.id == uiState.selectedTypeId }.takeIf { it != -1 } ?: 0
+                } else {
+                    0
+                }
+                if (targetIndex != pagerState.currentPage) {
+                    pagerState.scrollToPage(targetIndex)
+                }
+            }
+        }
+
+        // Notify ViewModel when active page changes (unidirectional, never cancels running scroll animation)
         LaunchedEffect(pagerState.currentPage, tabs) {
             if (tabs.isNotEmpty()) {
                 val activeTab = tabs.getOrNull(pagerState.currentPage)
@@ -350,12 +365,9 @@ fun DexScreen(
             }
         }
 
-        LaunchedEffect(uiState.selectedTypeId, tabs) {
-            if (tabs.isNotEmpty() && uiState.selectedTypeId != null) {
-                val targetIndex = tabs.indexOfFirst { it.id == uiState.selectedTypeId }
-                if (targetIndex != -1 && targetIndex != pagerState.currentPage) {
-                    pagerState.scrollToPage(targetIndex)
-                }
+        val itemsByTabId = remember(uiState.items, tabs) {
+            tabs.associate { tab ->
+                tab.id to getItemsForType(uiState.items, tab.id)
             }
         }
 
@@ -396,7 +408,7 @@ fun DexScreen(
                             selectedIndex = pagerState.currentPage,
                             getItemCount = { tab ->
                                 if (uiState.showItemCount || !searchQuery.isNullOrEmpty()) {
-                                    getItemsForType(uiState.items, tab.id).size
+                                    itemsByTabId[tab.id]?.size ?: 0
                                 } else {
                                     null
                                 }
@@ -418,9 +430,7 @@ fun DexScreen(
                             return@HorizontalPager
                         }
                         val tab = tabs[page]
-                        val itemsForPage = remember(uiState.items, tab.id) {
-                            getItemsForType(uiState.items, tab.id)
-                        }
+                        val itemsForPage = itemsByTabId[tab.id].orEmpty()
 
                         val pageListState = rememberSaveable(tab.id, saver = LazyListState.Saver) {
                             LazyListState()

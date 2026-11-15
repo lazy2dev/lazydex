@@ -405,5 +405,23 @@ class DexViewModelTest {
         advanceUntilIdle()
         assertEquals(null, viewModel.uiState.value.selectedFormatId)
     }
+
+    @Test
+    fun `selectTypeId preserves items instance reference without re-sorting`() = runTest(testDispatcher) {
+        val mixedItems = listOf(
+            MediaItem(id = "n1", type = "NOVEL", title = "Novel 1", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L),
+            MediaItem(id = "m1", type = "MANGA", title = "Manga 1", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L)
+        )
+        repository.itemsFlow.value = mixedItems
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        val initialItems = viewModel.uiState.value.items
+        viewModel.selectTypeId("MANGA")
+        advanceUntilIdle()
+        val afterItems = viewModel.uiState.value.items
+
+        assertTrue("Items list reference must remain identical on tab switch", initialItems === afterItems)
+    }
 }
 

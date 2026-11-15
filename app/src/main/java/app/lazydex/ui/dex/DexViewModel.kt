@@ -205,37 +205,30 @@ class DexViewModel(
         availableGenres, availableTags, typeCounts
     ) { genres, tags, tc -> MetadataBundle(genres, tags, tc) }
 
-    val uiState: StateFlow<DexUiState> = combine(
+    private val sortedItems: Flow<List<MediaItem>> = combine(
         dbFiltered,
-        filterState,
-        advancedFilterState,
-        combine(sortField, sortDirection, randomSeed) { f, d, r -> SortBundle(f, d, r) },
-        metadataState,
-        topLevelTypes,
-        formatsForSelectedType,
-        selectedTypeId,
         selectedFormatId,
-        debouncedSearchQuery
+        mutableFilterState.map { it.genres to it.tags }.distinctUntilChanged(),
+        advancedFilterState,
+        debouncedSearchQuery,
+        combine(sortField, sortDirection, randomSeed) { f, d, r -> SortBundle(f, d, r) }
     ) { args: Array<Any?> ->
         @Suppress("UNCHECKED_CAST")
         val items = args[0] as List<MediaItem>
-        val fs = args[1] as FilterBundle
-        val afs = args[2] as AdvancedFilterBundle
-        val ss = args[3] as SortBundle
-        val meta = args[4] as MetadataBundle
+        val selFormatId = args[1] as String?
         @Suppress("UNCHECKED_CAST")
-        val topTypes = args[5] as List<TypeConfig>
-        @Suppress("UNCHECKED_CAST")
-        val formatConfigs = args[6] as List<TypeConfig>
-        val selTypeId = args[7] as String?
-        val selFormatId = args[8] as String?
-        val search = args[9] as String?
+        val genresAndTags = args[2] as Pair<Set<String>, Set<String>>
+        val afs = args[3] as AdvancedFilterBundle
+        val search = args[4] as String?
+        val ss = args[5] as SortBundle
 
+        val selectedGenres = genresAndTags.first
+        val selectedTags = genresAndTags.second
         val q = search?.trim()
         val filtered = items.filter { item ->
             (selFormatId == null || item.format.equals(selFormatId, ignoreCase = true) || item.typeId.equals(selFormatId, ignoreCase = true)) &&
-            (fs.selectedGenres.isEmpty() || item.genres.any { it.lowercase() in fs.selectedGenres }) &&
-            (fs.selectedTags.isEmpty() || item.tags.any { it.lowercase() in fs.selectedTags }) &&
+            (selectedGenres.isEmpty() || item.genres.any { it.lowercase() in selectedGenres }) &&
+            (selectedTags.isEmpty() || item.tags.any { it.lowercase() in selectedTags }) &&
             (afs.authorQuery.isBlank() || item.author.contains(afs.authorQuery, ignoreCase = true)) &&
             (afs.minRating == null || (item.rating ?: 0.0) >= afs.minRating) &&
             (afs.maxRating == null || (item.rating ?: 0.0) <= afs.maxRating) &&
@@ -250,16 +243,44 @@ class DexViewModel(
             ))
         }
 
+        sortItems(filtered, ss.field, ss.direction, ss.randomSeed)
+    }.flowOn(defaultDispatcher)
+
+    val uiState: StateFlow<DexUiState> = combine(
+        sortedItems,
+        filterState,
+        advancedFilterState,
+        combine(sortField, sortDirection) { f, d -> f to d },
+        metadataState,
+        topLevelTypes,
+        formatsForSelectedType,
+        selectedTypeId,
+        selectedFormatId
+    ) { args: Array<Any?> ->
+        @Suppress("UNCHECKED_CAST")
+        val items = args[0] as List<MediaItem>
+        val fs = args[1] as FilterBundle
+        val afs = args[2] as AdvancedFilterBundle
+        @Suppress("UNCHECKED_CAST")
+        val sortPair = args[3] as Pair<SortField, SortDirection>
+        val meta = args[4] as MetadataBundle
+        @Suppress("UNCHECKED_CAST")
+        val topTypes = args[5] as List<TypeConfig>
+        @Suppress("UNCHECKED_CAST")
+        val formatConfigs = args[6] as List<TypeConfig>
+        val selTypeId = args[7] as String?
+        val selFormatId = args[8] as String?
+
         DexUiState(
-            items = sortItems(filtered, ss.field, ss.direction, ss.randomSeed),
+            items = items,
             selectedType = fs.mediaType,
             selectedStatus = fs.status,
             topLevelTypes = topTypes,
             selectedTypeId = selTypeId,
             formatsForSelectedType = formatConfigs,
             selectedFormatId = selFormatId,
-            sortField = ss.field,
-            sortDirection = ss.direction,
+            sortField = sortPair.first,
+            sortDirection = sortPair.second,
             selectedGenres = fs.selectedGenres,
             availableGenres = if (fs.mediaType != null) meta.genres else emptyList(),
             selectedTags = fs.selectedTags,
