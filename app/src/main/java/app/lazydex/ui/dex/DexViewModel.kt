@@ -178,10 +178,8 @@ class DexViewModel(
         formatId ?: typeId
     }
 
-    private val dbFiltered = activeTargetTypeId.flatMapLatest { targetId ->
-        selectedStatus.flatMapLatest { stat ->
-            repository.observeFilteredByTypeId(targetId, stat)
-        }
+    private val dbFiltered = selectedStatus.flatMapLatest { stat ->
+        repository.observeFilteredByTypeId(null, stat)
     }.throttleDuringSync()
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -235,6 +233,7 @@ class DexViewModel(
 
         val q = search?.trim()
         val filtered = items.filter { item ->
+            (selFormatId == null || item.format.equals(selFormatId, ignoreCase = true) || item.typeId.equals(selFormatId, ignoreCase = true)) &&
             (fs.selectedGenres.isEmpty() || item.genres.any { it.lowercase() in fs.selectedGenres }) &&
             (fs.selectedTags.isEmpty() || item.tags.any { it.lowercase() in fs.selectedTags }) &&
             (afs.authorQuery.isBlank() || item.author.contains(afs.authorQuery, ignoreCase = true)) &&
@@ -393,7 +392,7 @@ class DexViewModel(
     }
 
     fun toggleRangeSelection(id: String) {
-        val currentItems = uiState.value.items
+        val currentItems = getItemsForType(uiState.value.items, selectedTypeId.value)
         val lastId = lastSelectedId
         if (lastId == null || currentItems.none { it.id == lastId }) {
             toggleSelection(id)
@@ -416,14 +415,16 @@ class DexViewModel(
     }
 
     fun selectAll() {
-        val allIds = uiState.value.items.map { it.id }.toSet()
+        val currentTabItems = getItemsForType(uiState.value.items, selectedTypeId.value)
+        val allIds = currentTabItems.map { it.id }.toSet()
         selectedIds.value = allIds
     }
 
     fun invertSelection() {
-        val allIds = uiState.value.items.map { it.id }.toSet()
+        val currentTabItems = getItemsForType(uiState.value.items, selectedTypeId.value)
+        val tabIds = currentTabItems.map { it.id }.toSet()
         selectedIds.update { current ->
-            allIds - current
+            tabIds - current
         }
     }
 
@@ -547,6 +548,18 @@ class DexViewModel(
             items.sortedWith(comparator.reversed())
         } else {
             items.sortedWith(comparator)
+        }
+    }
+
+    companion object {
+        fun getItemsForType(items: List<MediaItem>, typeId: String?): List<MediaItem> {
+            if (typeId == null) return items
+            val targetType = resolveMediaType(typeId)
+            return items.filter { item ->
+                item.type.equals(typeId, ignoreCase = true) ||
+                item.typeId.equals(typeId, ignoreCase = true) ||
+                item.mediaType == targetType
+            }
         }
     }
 }

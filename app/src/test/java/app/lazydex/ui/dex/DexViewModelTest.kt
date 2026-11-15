@@ -357,5 +357,53 @@ class DexViewModelTest {
         advanceUntilIdle()
         assertEquals(LibraryGroupMode.BY_STATUS, viewModel.uiState.value.groupMode)
     }
+
+    @Test
+    fun `getItemsForType correctly partitions media items by type`() {
+        val novel = MediaItem(id = "n1", type = "NOVEL", title = "Novel 1", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L)
+        val manga = MediaItem(id = "m1", type = "MANGA", title = "Manga 1", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L)
+        val anime = MediaItem(id = "a1", type = "ANIME", title = "Anime 1", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L)
+        val game = MediaItem(id = "g1", type = "GAME", title = "Game 1", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L)
+        val list = listOf(novel, manga, anime, game)
+
+        assertEquals(4, DexViewModel.getItemsForType(list, null).size)
+        assertEquals(listOf(novel), DexViewModel.getItemsForType(list, "NOVEL"))
+        assertEquals(listOf(manga), DexViewModel.getItemsForType(list, "MANGA"))
+        assertEquals(listOf(anime), DexViewModel.getItemsForType(list, "ANIME"))
+        assertEquals(listOf(game), DexViewModel.getItemsForType(list, "GAME"))
+    }
+
+    @Test
+    fun `selectAll on active type tab selects only items of that type`() = runTest(testDispatcher) {
+        val mixedItems = listOf(
+            MediaItem(id = "n1", type = "NOVEL", title = "Novel 1", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L),
+            MediaItem(id = "m1", type = "MANGA", title = "Manga 1", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L)
+        )
+        repository.itemsFlow.value = mixedItems
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.selectTypeId("MANGA")
+        advanceUntilIdle()
+
+        viewModel.selectAll()
+        advanceUntilIdle()
+
+        assertEquals(setOf("m1"), viewModel.uiState.value.selectedIds)
+    }
+
+    @Test
+    fun `selectTypeId clears selectedFormatId`() = runTest(testDispatcher) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.selectFormatId("LIGHT_NOVEL")
+        advanceUntilIdle()
+        assertEquals("LIGHT_NOVEL", viewModel.uiState.value.selectedFormatId)
+
+        viewModel.selectTypeId("MANGA")
+        advanceUntilIdle()
+        assertEquals(null, viewModel.uiState.value.selectedFormatId)
+    }
 }
 

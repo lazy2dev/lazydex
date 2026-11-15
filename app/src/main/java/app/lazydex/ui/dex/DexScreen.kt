@@ -79,8 +79,12 @@ import app.lazydex.ui.components.EmptyState
 import app.lazydex.ui.components.MediaCard
 import app.lazydex.ui.components.VerticalFastScroller
 import app.lazydex.ui.components.VerticalGridFastScroller
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import app.lazydex.ui.components.DexTypeTabs
+import app.lazydex.ui.dex.DexViewModel.Companion.getItemsForType
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -118,8 +122,7 @@ fun DexScreen(
         }
     }
 
-    val isFilterActive = uiState.selectedTypeId != null ||
-            uiState.selectedFormatId != null ||
+    val isFilterActive = uiState.selectedFormatId != null ||
             uiState.selectedStatus != StatusFilter.ALL ||
             uiState.selectedGenres.isNotEmpty() ||
             uiState.selectedTags.isNotEmpty() ||
@@ -133,14 +136,16 @@ fun DexScreen(
         uiState.selectedStatus,
         uiState.perStatusCounts,
         uiState.totalCount,
+        uiState.selectedTypeId,
         uiState.selectedFormatId,
         uiState.formatsForSelectedType,
-        uiState.items.size
+        uiState.items
     ) {
+        val tabItems = getItemsForType(uiState.items, uiState.selectedTypeId)
         when (uiState.groupMode) {
             LibraryGroupMode.BY_STATUS -> {
                 val count = if (uiState.selectedStatus == StatusFilter.ALL) {
-                    uiState.perStatusCounts[StatusFilter.ALL] ?: uiState.totalCount
+                    uiState.perStatusCounts[StatusFilter.ALL] ?: tabItems.size
                 } else {
                     uiState.perStatusCounts[uiState.selectedStatus] ?: 0
                 }
@@ -149,10 +154,15 @@ fun DexScreen(
             LibraryGroupMode.BY_DEFAULT -> {
                 val formatName = uiState.formatsForSelectedType.firstOrNull { it.id == uiState.selectedFormatId }?.name
                 val label = formatName ?: "All"
-                "$label ${uiState.items.size}"
+                val count = if (uiState.selectedFormatId != null) {
+                    tabItems.count { it.format.equals(uiState.selectedFormatId, ignoreCase = true) || it.typeId.equals(uiState.selectedFormatId, ignoreCase = true) }
+                } else {
+                    tabItems.size
+                }
+                "$label $count"
             }
             LibraryGroupMode.UNGROUPED -> {
-                "All ${uiState.totalCount}"
+                "All ${tabItems.size}"
             }
         }
     }
@@ -300,8 +310,6 @@ fun DexScreen(
         containerColor = MaterialTheme.colorScheme.background,
         modifier = modifier
     ) { innerPadding ->
-        val listState = rememberLazyListState()
-        val gridState = rememberLazyGridState()
         val onCardClick: (String) -> Unit = remember(onNavigateToEditItem) {
             { id -> onNavigateToEditItem(id) }
         }
@@ -321,152 +329,201 @@ fun DexScreen(
             }
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            // Adaptive Two-Tier Type & Format Rail
-            if (uiState.showTypeTabs) {
-                // Tier 1: Top-level type pills
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FilterChip(
-                        selected = uiState.selectedTypeId == null,
-                        onClick = { viewModel.selectTypeId(null) },
-                        label = { Text("All (${uiState.totalCount})") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    )
-
-                    uiState.topLevelTypes.forEach { typeConfig ->
-                        FilterChip(
-                            selected = uiState.selectedTypeId == typeConfig.id,
-                            onClick = { viewModel.selectTypeId(typeConfig.id) },
-                            label = { Text(typeConfig.name) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        )
-                    }
-                }
-
-                HorizontalDivider()
+        val tabs = uiState.topLevelTypes
+        val initialTabIndex = remember(tabs, uiState.selectedTypeId) {
+            if (uiState.selectedTypeId != null) {
+                tabs.indexOfFirst { it.id == uiState.selectedTypeId }.takeIf { it != -1 } ?: 0
+            } else {
+                0
             }
+        }
+        val pagerState = rememberPagerState(
+            initialPage = initialTabIndex.coerceIn(0, (tabs.size - 1).coerceAtLeast(0))
+        ) { tabs.size }
 
-            // Main List/Grid Content
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                when {
-                    uiState.isLoading -> {
-                        CircularProgressIndicator()
-                    }
-                    uiState.items.isEmpty() -> {
-                        val currentQuery = searchQuery?.trim()
-                        val isSearchActive = !currentQuery.isNullOrEmpty()
-                        val message = when {
-                            isSearchActive -> "No items matching '$currentQuery'"
-                            isFilterActive -> "No items match your filters"
-                            else -> "Nothing here yet. Tap [+] to add your first tracking item."
-                        }
-                        val actionLabel = when {
-                            isSearchActive -> "Clear Search"
-                            isFilterActive -> "Clear Filters"
-                            else -> null
-                        }
-                        val actionCallback = when {
-                            isSearchActive -> { { viewModel.setSearchQuery("") } }
-                            isFilterActive -> { { viewModel.clearFilters() } }
-                            else -> null
-                        }
+        LaunchedEffect(pagerState.currentPage, tabs) {
+            if (tabs.isNotEmpty()) {
+                val activeTab = tabs.getOrNull(pagerState.currentPage)
+                if (activeTab != null && activeTab.id != uiState.selectedTypeId) {
+                    viewModel.selectTypeId(activeTab.id)
+                }
+            }
+        }
 
-                        EmptyState(
-                            message = message,
-                            actionLabel = actionLabel,
-                            onActionClick = actionCallback
-                        )
-                    }
-                    else -> {
-                        if (uiState.displayMode == LibraryDisplayMode.LIST) {
-                            VerticalFastScroller(
-                                listState = listState,
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                LazyColumn(
-                                    state = listState,
-                                    contentPadding = PaddingValues(vertical = 4.dp),
-                                    modifier = Modifier.fillMaxSize()
-                                ) {
-                                    items(
-                                        items = uiState.items,
-                                        key = { it.id },
-                                        contentType = { uiState.displayMode }
-                                    ) { item ->
-                                        MediaCard(
-                                            item = item,
-                                            onClick = { onItemClick(item.id) },
-                                            onLongClick = { onItemLongClick(item.id) },
-                                            isSelected = item.id in uiState.selectedIds,
-                                            displayMode = uiState.displayMode,
-                                            showProgressBadge = uiState.showProgressBadge,
-                                            showStatusBadge = uiState.showStatusBadge,
-                                            showScoreBadge = uiState.showScoreBadge,
-                                            blurAdultCovers = uiState.blurAdultCovers,
-                                        )
-                                    }
+        LaunchedEffect(uiState.selectedTypeId, tabs) {
+            if (tabs.isNotEmpty() && uiState.selectedTypeId != null) {
+                val targetIndex = tabs.indexOfFirst { it.id == uiState.selectedTypeId }
+                if (targetIndex != -1 && targetIndex != pagerState.currentPage) {
+                    pagerState.scrollToPage(targetIndex)
+                }
+            }
+        }
+
+        when {
+            uiState.isLoading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+            uiState.totalCount == 0 && searchQuery.isNullOrEmpty() && !isFilterActive -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    EmptyState(
+                        message = "Nothing here yet. Tap [+] to add your first tracking item.",
+                        actionLabel = null,
+                        onActionClick = null
+                    )
+                }
+            }
+            else -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    if (uiState.showTypeTabs || !searchQuery.isNullOrEmpty()) {
+                        DexTypeTabs(
+                            tabs = tabs,
+                            selectedIndex = pagerState.currentPage,
+                            getItemCount = { tab ->
+                                if (uiState.showItemCount || !searchQuery.isNullOrEmpty()) {
+                                    getItemsForType(uiState.items, tab.id).size
+                                } else {
+                                    null
+                                }
+                            },
+                            onTabItemClick = { index ->
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(index)
                                 }
                             }
-                        } else {
-                            val gridCells = when {
-                                uiState.gridColumns > 0 -> GridCells.Fixed(uiState.gridColumns)
-                                uiState.displayMode == LibraryDisplayMode.PANORAMA_COMFORTABLE_GRID -> GridCells.Adaptive(minSize = 160.dp)
-                                else -> GridCells.Adaptive(minSize = 128.dp)
-                            }
-                            val horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            val gridContentPadding = PaddingValues(8.dp)
+                        )
+                    }
 
-                            VerticalGridFastScroller(
-                                state = gridState,
-                                columns = gridCells,
-                                arrangement = horizontalArrangement,
-                                contentPadding = gridContentPadding,
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                LazyVerticalGrid(
-                                    columns = gridCells,
-                                    state = gridState,
-                                    contentPadding = gridContentPadding,
-                                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                                    horizontalArrangement = horizontalArrangement,
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize(),
+                        verticalAlignment = Alignment.Top
+                    ) { page ->
+                        if (page !in ((pagerState.currentPage - 1)..(pagerState.currentPage + 1))) {
+                            return@HorizontalPager
+                        }
+                        val tab = tabs[page]
+                        val itemsForPage = remember(uiState.items, tab.id) {
+                            getItemsForType(uiState.items, tab.id)
+                        }
+
+                        val pageListState = rememberSaveable(tab.id, saver = LazyListState.Saver) {
+                            LazyListState()
+                        }
+                        val pageGridState = rememberSaveable(tab.id, saver = LazyGridState.Saver) {
+                            LazyGridState()
+                        }
+
+                        if (itemsForPage.isEmpty()) {
+                            val currentQuery = searchQuery?.trim()
+                            val isSearchActive = !currentQuery.isNullOrEmpty()
+                            val message = when {
+                                isSearchActive -> "No ${tab.name} matching '$currentQuery'"
+                                isFilterActive -> "No ${tab.name} match your filters"
+                                else -> "No ${tab.name} in your library yet."
+                            }
+                            val actionLabel = when {
+                                isSearchActive -> "Clear Search"
+                                isFilterActive -> "Clear Filters"
+                                else -> null
+                            }
+                            val actionCallback = when {
+                                isSearchActive -> { { viewModel.setSearchQuery("") } }
+                                isFilterActive -> { { viewModel.clearFilters() } }
+                                else -> null
+                            }
+
+                            EmptyState(
+                                message = message,
+                                actionLabel = actionLabel,
+                                onActionClick = actionCallback
+                            )
+                        } else {
+                            if (uiState.displayMode == LibraryDisplayMode.LIST) {
+                                VerticalFastScroller(
+                                    listState = pageListState,
                                     modifier = Modifier.fillMaxSize()
                                 ) {
-                                    items(
-                                        items = uiState.items,
-                                        key = { it.id },
-                                        contentType = { uiState.displayMode }
-                                    ) { item ->
-                                        MediaCard(
-                                            item = item,
-                                            onClick = { onItemClick(item.id) },
-                                            onLongClick = { onItemLongClick(item.id) },
-                                            isSelected = item.id in uiState.selectedIds,
-                                            displayMode = uiState.displayMode,
-                                            showProgressBadge = uiState.showProgressBadge,
-                                            showStatusBadge = uiState.showStatusBadge,
-                                            showScoreBadge = uiState.showScoreBadge,
-                                            blurAdultCovers = uiState.blurAdultCovers,
-                                        )
+                                    LazyColumn(
+                                        state = pageListState,
+                                        contentPadding = PaddingValues(vertical = 4.dp),
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        items(
+                                            items = itemsForPage,
+                                            key = { it.id },
+                                            contentType = { uiState.displayMode }
+                                        ) { item ->
+                                            MediaCard(
+                                                item = item,
+                                                onClick = { onItemClick(item.id) },
+                                                onLongClick = { onItemLongClick(item.id) },
+                                                isSelected = item.id in uiState.selectedIds,
+                                                displayMode = uiState.displayMode,
+                                                showProgressBadge = uiState.showProgressBadge,
+                                                showStatusBadge = uiState.showStatusBadge,
+                                                showScoreBadge = uiState.showScoreBadge,
+                                                blurAdultCovers = uiState.blurAdultCovers,
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                val gridCells = when {
+                                    uiState.gridColumns > 0 -> GridCells.Fixed(uiState.gridColumns)
+                                    uiState.displayMode == LibraryDisplayMode.PANORAMA_COMFORTABLE_GRID -> GridCells.Adaptive(minSize = 160.dp)
+                                    else -> GridCells.Adaptive(minSize = 128.dp)
+                                }
+                                val horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                val gridContentPadding = PaddingValues(8.dp)
+
+                                VerticalGridFastScroller(
+                                    state = pageGridState,
+                                    columns = gridCells,
+                                    arrangement = horizontalArrangement,
+                                    contentPadding = gridContentPadding,
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    LazyVerticalGrid(
+                                        columns = gridCells,
+                                        state = pageGridState,
+                                        contentPadding = gridContentPadding,
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                        horizontalArrangement = horizontalArrangement,
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        items(
+                                            items = itemsForPage,
+                                            key = { it.id },
+                                            contentType = { uiState.displayMode }
+                                        ) { item ->
+                                            MediaCard(
+                                                item = item,
+                                                onClick = { onItemClick(item.id) },
+                                                onLongClick = { onItemLongClick(item.id) },
+                                                isSelected = item.id in uiState.selectedIds,
+                                                displayMode = uiState.displayMode,
+                                                showProgressBadge = uiState.showProgressBadge,
+                                                showStatusBadge = uiState.showStatusBadge,
+                                                showScoreBadge = uiState.showScoreBadge,
+                                                blurAdultCovers = uiState.blurAdultCovers,
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -557,11 +614,12 @@ fun DexScreen(
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
 
+                val quickFilterTabItems = getItemsForType(uiState.items, uiState.selectedTypeId)
                 when (uiState.groupMode) {
                     LibraryGroupMode.BY_STATUS -> {
                         StatusFilter.entries.forEach { status ->
                             val count = if (status == StatusFilter.ALL) {
-                                uiState.perStatusCounts[StatusFilter.ALL] ?: uiState.totalCount
+                                uiState.perStatusCounts[StatusFilter.ALL] ?: quickFilterTabItems.size
                             } else {
                                 uiState.perStatusCounts[status] ?: 0
                             }
@@ -665,7 +723,7 @@ fun DexScreen(
                     }
                     LibraryGroupMode.UNGROUPED -> {
                         Text(
-                            text = "Library ungrouped. Total items: ${uiState.totalCount}",
+                            text = "Library ungrouped. Total items: ${quickFilterTabItems.size}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
