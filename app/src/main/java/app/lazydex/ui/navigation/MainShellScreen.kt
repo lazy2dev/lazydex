@@ -1,17 +1,18 @@
 package app.lazydex.ui.navigation
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Explore
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -25,20 +26,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import app.lazydex.ui.settings.SettingsMainScreen
 import app.lazydex.ui.browser.BrowserScreen
 import app.lazydex.ui.browser.BrowserViewModel
 import app.lazydex.ui.dex.DexScreen
 import app.lazydex.ui.dex.DexViewModel
-import app.lazydex.ui.history.HistoryScreen
-import app.lazydex.ui.history.HistoryViewModel
+import app.lazydex.ui.settings.SettingsMainScreen
 import app.lazydex.ui.statistics.StatisticsScreen
 import org.koin.androidx.compose.koinViewModel
 
 enum class ShellTab {
-    DEX, STATISTICS, BROWSE, HISTORY, SETTINGS
+    DEX, BROWSE, STATISTICS, SETTINGS
 }
 
 @Composable
@@ -52,8 +52,7 @@ fun MainShellScreen(
     onNavigateToEditItem: (String) -> Unit,
     modifier: Modifier = Modifier,
     dexViewModel: DexViewModel = koinViewModel(),
-    browserViewModel: BrowserViewModel = koinViewModel(),
-    historyViewModel: HistoryViewModel = koinViewModel()
+    browserViewModel: BrowserViewModel = koinViewModel()
 ) {
     var currentTab by rememberSaveable { mutableStateOf(ShellTab.DEX) }
     val dexUiState by dexViewModel.uiState.collectAsState()
@@ -71,34 +70,44 @@ fun MainShellScreen(
                         label = { Text("Dex") }
                     )
 
-                    // 2. Statistics Tab
+                    // 2. Browse Tab
+                    NavigationBarItem(
+                        selected = currentTab == ShellTab.BROWSE,
+                        onClick = { currentTab = ShellTab.BROWSE },
+                        icon = { Icon(imageVector = Icons.Default.Explore, contentDescription = "Browse") },
+                        label = { Text("Browse") }
+                    )
+
+                    // 3. Central Add Action
+                    NavigationBarItem(
+                        selected = false,
+                        onClick = { onNavigateToAddItem(null) },
+                        icon = {
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 56.dp, height = 32.dp)
+                                    .background(
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        shape = RoundedCornerShape(16.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Add",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        },
+                        label = { Text("Add") }
+                    )
+
+                    // 4. Statistics Tab
                     NavigationBarItem(
                         selected = currentTab == ShellTab.STATISTICS,
                         onClick = { currentTab = ShellTab.STATISTICS },
                         icon = { Icon(imageVector = Icons.Default.BarChart, contentDescription = "Statistics") },
                         label = { Text("Stats") }
-                    )
-
-                    // 3. Add / Browse Tab
-                    NavigationBarItem(
-                        selected = currentTab == ShellTab.BROWSE,
-                        onClick = {
-                            if (currentTab != ShellTab.BROWSE) {
-                                currentTab = ShellTab.BROWSE
-                            } else {
-                                onNavigateToAddItem(null)
-                            }
-                        },
-                        icon = { Icon(imageVector = Icons.Default.Add, contentDescription = "Add or Browse") },
-                        label = { Text("Add") }
-                    )
-
-                    // 4. History Tab
-                    NavigationBarItem(
-                        selected = currentTab == ShellTab.HISTORY,
-                        onClick = { currentTab = ShellTab.HISTORY },
-                        icon = { Icon(imageVector = Icons.Default.History, contentDescription = "History") },
-                        label = { Text("History") }
                     )
 
                     // 5. Settings Tab
@@ -128,12 +137,6 @@ fun MainShellScreen(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
-                ShellTab.STATISTICS -> {
-                    StatisticsScreen(
-                        onNavigateToItem = onNavigateToEditItem,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
                 ShellTab.BROWSE -> {
                     BrowserScreen(
                         onNavigateToCreateFromUrl = { url -> onNavigateToAddItem(url) },
@@ -142,10 +145,9 @@ fun MainShellScreen(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
-                ShellTab.HISTORY -> {
-                    HistoryScreen(
-                        onNavigateToEditItem = onNavigateToEditItem,
-                        viewModel = historyViewModel,
+                ShellTab.STATISTICS -> {
+                    StatisticsScreen(
+                        onNavigateToItem = onNavigateToEditItem,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
