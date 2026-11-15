@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Explore
@@ -78,18 +79,18 @@ fun MainShellScreen(
                         label = { Text("Stats") }
                     )
 
-                    // 3. Browse Tab
+                    // 3. Add / Browse Tab
                     NavigationBarItem(
                         selected = currentTab == ShellTab.BROWSE,
                         onClick = {
-                            if (currentTab == ShellTab.BROWSE) {
-                                browserViewModel.selectSource(null)
-                            } else {
+                            if (currentTab != ShellTab.BROWSE) {
                                 currentTab = ShellTab.BROWSE
+                            } else {
+                                onNavigateToAddItem(null)
                             }
                         },
-                        icon = { Icon(imageVector = Icons.Default.Explore, contentDescription = "Browse") },
-                        label = { Text("Browse") }
+                        icon = { Icon(imageVector = Icons.Default.Add, contentDescription = "Add or Browse") },
+                        label = { Text("Add") }
                     )
 
                     // 4. History Tab

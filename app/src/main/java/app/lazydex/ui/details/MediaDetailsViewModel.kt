@@ -68,6 +68,7 @@ data class MediaDetailsUiState(
     val totalItems: String = "",
     val secondaryProgress: String = "0",
     val secondaryProgressTotal: String = "",
+    val volumesEnabled: Boolean = false,
     val actionOverride: String? = null,
     val playbackSpeed: Double = 1.0,
     val avgChapterLength: String = "",
@@ -117,13 +118,9 @@ data class MediaDetailsUiState(
         if (mediaType == MediaType.ANIME || mediaType == MediaType.MOVIE || mediaType == MediaType.GAME || mediaType == MediaType.TV) {
             return false
         }
-        return (resolvedConfig?.hasSecondaryProgress == true) ||
+        return volumesEnabled ||
             ((parsedSecondaryProgress ?: 0.0) > 0.0) ||
-            ((parsedSecondaryTotal ?: 0.0) > 0.0) ||
-            formatId in setOf(
-                "LIGHT_NOVEL", "MANGA",
-                "typ_novel_ln", "typ_manga_jp", "typ_manga", "typ_manhwa", "typ_manhua"
-            )
+            (parsedSecondaryTotal != null)
     }
 
     val isTitleBlank: Boolean get() = title.trim().isBlank()
@@ -323,6 +320,7 @@ class MediaDetailsViewModel(
                         totalItems = item.totalItems?.toString() ?: "",
                         secondaryProgress = formatProgress(item.secondaryProgress),
                         secondaryProgressTotal = item.secondaryProgressTotal?.let { formatProgress(it) } ?: "",
+                        volumesEnabled = item.isVolumesEnabled,
                         actionOverride = item.actionOverride,
                         playbackSpeed = item.playbackSpeed,
                         avgChapterLength = item.avgChapterLength?.toString() ?: "",
@@ -487,6 +485,21 @@ class MediaDetailsViewModel(
 
     fun updateSecondaryProgressTotal(total: String) {
         _uiState.value = _uiState.value.copy(secondaryProgressTotal = total, errorMsg = null)
+    }
+
+    fun setVolumesEnabled(enabled: Boolean, resetIfDisabled: Boolean = false) {
+        _uiState.update { current ->
+            if (!enabled && resetIfDisabled) {
+                current.copy(
+                    volumesEnabled = false,
+                    secondaryProgress = "0",
+                    secondaryProgressTotal = ""
+                )
+            } else {
+                current.copy(volumesEnabled = enabled)
+            }
+        }
+        autoSave()
     }
 
     fun updateUserStatus(status: UserStatus) {
@@ -717,6 +730,7 @@ class MediaDetailsViewModel(
                     progressTotal = totalVal?.toDouble(),
                     secondaryProgress = state.parsedSecondaryProgress ?: 0.0,
                     secondaryProgressTotal = state.parsedSecondaryTotal,
+                    lengthUnitOverride = existing.lengthUnitOverride,
                     actionOverride = state.actionOverride,
                     playbackSpeed = state.playbackSpeed,
                     avgChapterLength = state.avgChapterLength.toIntOrNull(),
@@ -732,15 +746,21 @@ class MediaDetailsViewModel(
                     endDate = state.endDate,
                     isAdult = state.isAdult,
                 )
-                val bannerChanged = (state.bannerImage?.trim()?.ifEmpty { null }) != existing.getExtra("banner_image")
-                val candidateWithBanner = if (!state.bannerImage.isNullOrBlank()) {
-                    candidate.withExtra("banner_image", state.bannerImage!!)
+                val candidateWithVolume = if (state.volumesEnabled) {
+                    candidate.withExtra("volumes_enabled", "true")
                 } else {
-                    candidate
+                    candidate.withoutExtra("volumes_enabled")
+                }
+                val bannerChanged = (state.bannerImage?.trim()?.ifEmpty { null }) != existing.getExtra("banner_image")
+                val volumeChanged = candidateWithVolume.getExtra("volumes_enabled") != existing.getExtra("volumes_enabled")
+                val candidateWithBanner = if (!state.bannerImage.isNullOrBlank()) {
+                    candidateWithVolume.withExtra("banner_image", state.bannerImage!!)
+                } else {
+                    candidateWithVolume
                 }
 
                 val userdataChanged = candidateWithBanner.hasUserdataChangedFrom(existing)
-                val itemDataChanged = candidateWithBanner.hasItemDataChangedFrom(existing) || bannerChanged
+                val itemDataChanged = candidateWithBanner.hasItemDataChangedFrom(existing) || bannerChanged || volumeChanged
 
                 if (!userdataChanged && !itemDataChanged) {
                     if (exitOnSuccess) {
@@ -776,6 +796,7 @@ class MediaDetailsViewModel(
                     progressTotal = totalVal?.toDouble(),
                     secondaryProgress = state.parsedSecondaryProgress ?: 0.0,
                     secondaryProgressTotal = state.parsedSecondaryTotal,
+                    lengthUnitOverride = if (state.volumesEnabled) "track_volumes" else null,
                     actionOverride = state.actionOverride,
                     playbackSpeed = state.playbackSpeed,
                     avgChapterLength = state.avgChapterLength.toIntOrNull(),
@@ -794,10 +815,15 @@ class MediaDetailsViewModel(
                     isAdult = state.isAdult,
                     progressIncreasedAt = if (progressVal > 0 || ((state.parsedSecondaryProgress ?: 0.0) > 0.0)) now else null
                 )
-                if (!state.bannerImage.isNullOrBlank()) {
-                    newItem.withExtra("banner_image", state.bannerImage!!)
+                val itemWithVolume = if (state.volumesEnabled) {
+                    newItem.withExtra("volumes_enabled", "true")
                 } else {
                     newItem
+                }
+                if (!state.bannerImage.isNullOrBlank()) {
+                    itemWithVolume.withExtra("banner_image", state.bannerImage!!)
+                } else {
+                    itemWithVolume
                 }
             }
 

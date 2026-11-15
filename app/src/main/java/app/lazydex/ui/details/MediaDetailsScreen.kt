@@ -629,6 +629,7 @@ private fun EditMetadataModalSheet(
     var secondaryProgressTotal by remember { mutableStateOf(state.secondaryProgressTotal) }
     var description by remember { mutableStateOf(state.description) }
     var isAdult by remember { mutableStateOf(state.isAdult) }
+    var volumesEnabled by remember { mutableStateOf(state.hasSecondaryProgress) }
     var localError by remember { mutableStateOf<String?>(null) }
     var handledScrapeVersion by remember { mutableIntStateOf(state.scrapeVersion) }
     var committed by remember { mutableStateOf(false) }
@@ -641,6 +642,7 @@ private fun EditMetadataModalSheet(
             title = state.title
             author = state.author
             secondaryProgressTotal = state.secondaryProgressTotal
+            volumesEnabled = state.hasSecondaryProgress
             description = state.description
             isAdult = state.isAdult
             localError = null
@@ -687,12 +689,13 @@ private fun EditMetadataModalSheet(
             totalItems = totalItems,
             description = description,
             isAdult = isAdult,
-            secondaryProgressTotal = secondaryProgressTotal,
+            secondaryProgressTotal = if (volumesEnabled) secondaryProgressTotal else "",
         )
         if (!ok) {
             localError = viewModel.uiState.value.errorMsg ?: "Unable to save changes"
             return false
         }
+        viewModel.setVolumesEnabled(volumesEnabled)
         committed = true
         localError = null
         return true
@@ -978,21 +981,86 @@ private fun EditMetadataModalSheet(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            val showVolumeTotal = state.hasSecondaryProgress ||
-                selectedType == MediaType.MANGA ||
-                selectedType == MediaType.NOVEL
-            if (showVolumeTotal) {
-                OutlinedTextField(
-                    value = secondaryProgressTotal,
-                    onValueChange = {
-                        secondaryProgressTotal = it.filter { ch -> ch.isDigit() || ch == '.' }
-                    },
-                    label = { Text("Total Volumes") },
-                    placeholder = { Text("—") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+            if (selectedType == MediaType.MANGA || selectedType == MediaType.NOVEL) {
+                var showDisableConfirmDialog by remember { mutableStateOf(false) }
+
+                if (showDisableConfirmDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showDisableConfirmDialog = false },
+                        title = { Text("Disable Volume Tracking?") },
+                        text = { Text("Disabling volume tracking will reset your volume progress to 0 and remove the volume counter.") },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    volumesEnabled = false
+                                    secondaryProgressTotal = ""
+                                    viewModel.setVolumesEnabled(false, resetIfDisabled = true)
+                                    showDisableConfirmDialog = false
+                                }
+                            ) {
+                                Text("Disable & Reset", color = MaterialTheme.colorScheme.error)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showDisableConfirmDialog = false }) {
+                                Text("Cancel")
+                            }
+                        }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Track Volumes",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "Enable volume progress and volume total tracking",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = volumesEnabled,
+                        onCheckedChange = { checked ->
+                            if (!checked) {
+                                val currentVols = state.parsedSecondaryProgress ?: 0.0
+                                if (currentVols > 0.0) {
+                                    showDisableConfirmDialog = true
+                                } else {
+                                    volumesEnabled = false
+                                    secondaryProgressTotal = ""
+                                    viewModel.setVolumesEnabled(false, resetIfDisabled = true)
+                                }
+                            } else {
+                                volumesEnabled = true
+                                viewModel.setVolumesEnabled(true)
+                            }
+                        }
+                    )
+                }
+
+                if (volumesEnabled) {
+                    OutlinedTextField(
+                        value = secondaryProgressTotal,
+                        onValueChange = {
+                            secondaryProgressTotal = it.filter { ch -> ch.isDigit() || ch == '.' }
+                        },
+                        label = { Text("Total Volumes") },
+                        placeholder = { Text("—") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
             OutlinedTextField(

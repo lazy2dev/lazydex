@@ -486,7 +486,8 @@ open class AnilistSyncEngine(
                         titleNative = updatedTitleNative,
                         isAdult = updatedIsAdult,
                         genres = updatedGenres,
-                        tags = updatedTags
+                        tags = updatedTags,
+                        lengthUnitOverride = localItem.lengthUnitOverride
                     )
                     mediaItemDao.upsert(updatedMediaItem)
 

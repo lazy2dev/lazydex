@@ -275,6 +275,10 @@ data class MediaItem(
     val anilistId: Long? get() = getExtra("anilist_id")?.toLongOrNull()
     val malId: Long? get() = getExtra("mal_id")?.toLongOrNull()
     val simklId: Long? get() = getExtra("simkl_id")?.toLongOrNull()
+    val isVolumesEnabled: Boolean get() =
+        getExtra("volumes_enabled") == "true" ||
+        secondaryProgress > 0.0 ||
+        (secondaryProgressTotal != null && secondaryProgressTotal > 0.0)
 
     fun getExtra(key: String): String? = extraMap[key]
 
@@ -289,6 +293,18 @@ data class MediaItem(
             JsonObject(current).toString()
         } catch (e: Exception) {
             buildJsonObject { put(key, value) }.toString()
+        }
+        return copy(extraData = json)
+    }
+
+    fun withoutExtra(key: String): MediaItem {
+        if (extraData.isBlank() || extraData == "{}") return this
+        val json = try {
+            val current = Json.parseToJsonElement(extraData).jsonObject.toMutableMap()
+            current.remove(key)
+            if (current.isEmpty()) "{}" else JsonObject(current).toString()
+        } catch (e: Exception) {
+            extraData
         }
         return copy(extraData = json)
     }

@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,6 +26,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
@@ -40,6 +42,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -57,6 +60,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
@@ -93,6 +97,7 @@ fun DexScreen(
     val coroutineScope = rememberCoroutineScope()
 
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
+    var showQuickFilterSheet by rememberSaveable { mutableStateOf(false) }
     var showChangeStatusDialog by rememberSaveable { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
     val filterSheetState = rememberModalBottomSheetState()
@@ -122,6 +127,35 @@ fun DexScreen(
             uiState.minRating != null ||
             uiState.maxRating != null ||
             uiState.dateRangeStart != null
+
+    val filterPillText = remember(
+        uiState.groupMode,
+        uiState.selectedStatus,
+        uiState.perStatusCounts,
+        uiState.totalCount,
+        uiState.selectedFormatId,
+        uiState.formatsForSelectedType,
+        uiState.items.size
+    ) {
+        when (uiState.groupMode) {
+            LibraryGroupMode.BY_STATUS -> {
+                val count = if (uiState.selectedStatus == StatusFilter.ALL) {
+                    uiState.perStatusCounts[StatusFilter.ALL] ?: uiState.totalCount
+                } else {
+                    uiState.perStatusCounts[uiState.selectedStatus] ?: 0
+                }
+                "${uiState.selectedStatus.displayName} $count"
+            }
+            LibraryGroupMode.BY_DEFAULT -> {
+                val formatName = uiState.formatsForSelectedType.firstOrNull { it.id == uiState.selectedFormatId }?.name
+                val label = formatName ?: "All"
+                "$label ${uiState.items.size}"
+            }
+            LibraryGroupMode.UNGROUPED -> {
+                "All ${uiState.totalCount}"
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -241,10 +275,19 @@ fun DexScreen(
         },
         floatingActionButton = {
             if (!uiState.isSelectionMode) {
-                FloatingActionButton(
-                    onClick = onNavigateToAddItem
+                Surface(
+                    onClick = { showQuickFilterSheet = true },
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    shadowElevation = 6.dp
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Item")
+                    Text(
+                        text = filterPillText,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)
+                    )
                 }
             }
         },
@@ -314,79 +357,6 @@ fun DexScreen(
                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         )
-                    }
-                }
-
-                // Tier 2: When groupMode == BY_STATUS -> Status chips. When BY_DEFAULT -> Format chips.
-                if (uiState.groupMode == LibraryGroupMode.BY_STATUS) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            val statusFilters = StatusFilter.entries
-                            statusFilters.forEach { statusFilter ->
-                                val count = uiState.perStatusCounts[statusFilter] ?: 0
-                                val label = if (statusFilter == StatusFilter.ALL) {
-                                    "All (${uiState.perStatusCounts[StatusFilter.ALL] ?: uiState.totalCount})"
-                                } else {
-                                    "${statusFilter.displayName} ($count)"
-                                }
-                                FilterChip(
-                                    selected = uiState.selectedStatus == statusFilter,
-                                    onClick = { viewModel.selectStatus(statusFilter) },
-                                    label = { Text(label) },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                )
-                            }
-                        }
-                    }
-                } else if (uiState.groupMode == LibraryGroupMode.BY_DEFAULT) {
-                    // Formats Rail with smooth animation
-                    AnimatedVisibility(
-                        visible = uiState.selectedTypeId != null && uiState.formatsForSelectedType.isNotEmpty(),
-                        enter = expandVertically(tween(200)),
-                        exit = shrinkVertically(tween(200))
-                    ) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .horizontalScroll(rememberScrollState())
-                                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                FilterChip(
-                                    selected = uiState.selectedFormatId == null,
-                                    onClick = { viewModel.selectFormatId(null) },
-                                    label = { Text("All ${activeParent?.name ?: ""}") }
-                                )
-
-                                uiState.formatsForSelectedType.forEach { formatConfig ->
-                                    FilterChip(
-                                        selected = uiState.selectedFormatId == formatConfig.id,
-                                        onClick = { viewModel.selectFormatId(formatConfig.id) },
-                                        label = { Text(formatConfig.name) }
-                                    )
-                                }
-                            }
-                        }
                     }
                 }
 
@@ -564,5 +534,144 @@ fun DexScreen(
             },
             onDismissRequest = { showChangeStatusDialog = false }
         )
+    }
+
+    if (showQuickFilterSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showQuickFilterSheet = false }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 32.dp)
+            ) {
+                Text(
+                    text = when (uiState.groupMode) {
+                        LibraryGroupMode.BY_STATUS -> "Filter by Status"
+                        LibraryGroupMode.BY_DEFAULT -> "Filter by Format"
+                        LibraryGroupMode.UNGROUPED -> "Library"
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                when (uiState.groupMode) {
+                    LibraryGroupMode.BY_STATUS -> {
+                        StatusFilter.entries.forEach { status ->
+                            val count = if (status == StatusFilter.ALL) {
+                                uiState.perStatusCounts[StatusFilter.ALL] ?: uiState.totalCount
+                            } else {
+                                uiState.perStatusCounts[status] ?: 0
+                            }
+                            val isSelected = uiState.selectedStatus == status
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        viewModel.selectStatus(status)
+                                        showQuickFilterSheet = false
+                                    }
+                                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = status.displayName,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = "$count",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    if (isSelected) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = "Selected",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    LibraryGroupMode.BY_DEFAULT -> {
+                        val isAllSelected = uiState.selectedFormatId == null
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    viewModel.selectFormatId(null)
+                                    showQuickFilterSheet = false
+                                }
+                                .padding(vertical = 12.dp, horizontal = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "All ${activeParent?.name ?: ""}".trim(),
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isAllSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                            if (isAllSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Selected",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+
+                        uiState.formatsForSelectedType.forEach { formatConfig ->
+                            val isSelected = uiState.selectedFormatId == formatConfig.id
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        viewModel.selectFormatId(formatConfig.id)
+                                        showQuickFilterSheet = false
+                                    }
+                                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = formatConfig.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Selected",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    LibraryGroupMode.UNGROUPED -> {
+                        Text(
+                            text = "Library ungrouped. Total items: ${uiState.totalCount}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
     }
 }
