@@ -21,10 +21,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -35,6 +38,13 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.OpenInBrowser
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -79,15 +89,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.UserStatus
 import app.lazydex.ui.details.components.MediaActionRow
@@ -235,6 +248,7 @@ fun MediaDetailsScreen(
     }
 
     var showInlineDiscardDialog by remember { mutableStateOf(false) }
+    var showDisableConfirmDialog by remember { mutableStateOf(false) }
 
     fun handleCancelEdit() {
         if (isDirty) {
@@ -377,61 +391,61 @@ fun MediaDetailsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(end = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                val clipboardManager = LocalClipboardManager.current
-                                OutlinedTextField(
+                                BasicTextField(
                                     value = draftSourceUrl,
                                     onValueChange = {
                                         draftSourceUrl = it
                                         viewModel.clearScrapeError()
                                     },
-                                    placeholder = { Text("Source URL...", style = MaterialTheme.typography.bodySmall) },
                                     singleLine = true,
-                                    textStyle = MaterialTheme.typography.bodySmall,
-                                    trailingIcon = {
-                                        IconButton(
-                                            onClick = {
-                                                val clip = clipboardManager.getText()?.text?.trim()
-                                                if (!clip.isNullOrBlank()) {
-                                                    draftSourceUrl = clip
-                                                    viewModel.clearScrapeError()
-                                                    viewModel.updateSourceUrl(clip)
-                                                    viewModel.scrapeUrl(clip)
-                                                }
-                                            },
-                                            modifier = Modifier.size(28.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.ContentPaste,
-                                                contentDescription = "Paste",
-                                                modifier = Modifier.size(16.dp)
-                                            )
+                                    textStyle = MaterialTheme.typography.titleMedium.copy(
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 16.sp
+                                    ),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                    keyboardActions = KeyboardActions(
+                                        onDone = {
+                                            if (draftSourceUrl.isNotBlank() && !urlInvalid && !state.isScraping) {
+                                                viewModel.clearScrapeError()
+                                                viewModel.updateSourceUrl(draftSourceUrl)
+                                                viewModel.scrapeUrl(draftSourceUrl)
+                                            }
                                         }
-                                    },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(50.dp),
-                                    shape = MaterialTheme.shapes.small,
+                                    ),
+                                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                    modifier = Modifier.weight(1f),
+                                    decorationBox = { innerTextField ->
+                                        Box(contentAlignment = Alignment.CenterStart) {
+                                            if (draftSourceUrl.isEmpty()) {
+                                                Text(
+                                                    text = "Source or scraper URL...",
+                                                    style = MaterialTheme.typography.titleMedium.copy(
+                                                        fontSize = 16.sp
+                                                    ),
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                            innerTextField()
+                                        }
+                                    }
                                 )
-                                IconButton(
-                                    onClick = {
-                                        viewModel.clearScrapeError()
-                                        viewModel.updateSourceUrl(draftSourceUrl)
-                                        viewModel.scrapeUrl(draftSourceUrl)
-                                    },
-                                    enabled = !state.isScraping && draftSourceUrl.isNotBlank() && !urlInvalid,
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    if (state.isScraping) {
-                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                    } else {
+                                if (draftSourceUrl.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = {
+                                            draftSourceUrl = ""
+                                            viewModel.clearScrapeError()
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
                                         Icon(
-                                            Icons.Default.Refresh,
-                                            contentDescription = "Fetch info",
-                                            modifier = Modifier.size(20.dp),
-                                            tint = MaterialTheme.colorScheme.primary
+                                            imageVector = Icons.Outlined.Close,
+                                            contentDescription = "Clear URL",
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
@@ -449,7 +463,7 @@ fun MediaDetailsScreen(
                         if (isEditing) {
                             IconButton(onClick = { handleCancelEdit() }) {
                                 Icon(
-                                    imageVector = Icons.Default.Close,
+                                    imageVector = Icons.Outlined.Close,
                                     contentDescription = "Cancel edit"
                                 )
                             }
@@ -458,7 +472,7 @@ fun MediaDetailsScreen(
                                 if (viewModel.onBackPress()) onBack()
                             }) {
                                 Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
                                     contentDescription = "Back"
                                 )
                             }
@@ -466,12 +480,52 @@ fun MediaDetailsScreen(
                     },
                     actions = {
                         if (isEditing) {
+                            val clipboardManager = LocalClipboardManager.current
+                            IconButton(
+                                onClick = {
+                                    val clip = clipboardManager.getText()?.text?.trim()
+                                    if (!clip.isNullOrBlank()) {
+                                        draftSourceUrl = clip
+                                        viewModel.clearScrapeError()
+                                        viewModel.updateSourceUrl(clip)
+                                        viewModel.scrapeUrl(clip)
+                                    }
+                                },
+                                enabled = !state.isScraping
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.ContentPaste,
+                                    contentDescription = "Paste from clipboard"
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    viewModel.clearScrapeError()
+                                    viewModel.updateSourceUrl(draftSourceUrl)
+                                    viewModel.scrapeUrl(draftSourceUrl)
+                                },
+                                enabled = !state.isScraping && draftSourceUrl.isNotBlank() && !urlInvalid
+                            ) {
+                                if (state.isScraping) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Refresh,
+                                        contentDescription = "Fetch info",
+                                        tint = if (draftSourceUrl.isNotBlank() && !urlInvalid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                                    )
+                                }
+                            }
                             IconButton(
                                 onClick = { tryCommit() },
                                 enabled = !state.isScraping && !state.isSaving
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Check,
+                                    imageVector = Icons.Outlined.Check,
                                     contentDescription = "Save changes",
                                     tint = MaterialTheme.colorScheme.primary
                                 )
@@ -481,7 +535,7 @@ fun MediaDetailsScreen(
                             Box {
                                 IconButton(onClick = { menuExpanded = true }) {
                                     Icon(
-                                        imageVector = Icons.Default.MoreVert,
+                                        imageVector = Icons.Outlined.MoreVert,
                                         contentDescription = "Options"
                                     )
                                 }
@@ -494,7 +548,7 @@ fun MediaDetailsScreen(
                                             text = { Text("Open source URL") },
                                             leadingIcon = {
                                                 Icon(
-                                                    imageVector = Icons.Default.OpenInBrowser,
+                                                    imageVector = Icons.Outlined.OpenInBrowser,
                                                     contentDescription = null,
                                                     modifier = Modifier.size(20.dp)
                                                 )
@@ -510,12 +564,68 @@ fun MediaDetailsScreen(
                                             }
                                         )
                                     }
+                                    val currentIsAdult = if (isEditing) draftIsAdult else state.isAdult
+                                    DropdownMenuItem(
+                                        text = { Text(if (currentIsAdult) "18+ Adult (On)" else "18+ Adult (Off)") },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = if (currentIsAdult) Icons.Outlined.Check else Icons.Outlined.Close,
+                                                contentDescription = null,
+                                                tint = if (currentIsAdult) Color(0xFFEF5350) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        },
+                                        onClick = {
+                                            menuExpanded = false
+                                            if (isEditing) {
+                                                draftIsAdult = !draftIsAdult
+                                            } else {
+                                                viewModel.updateIsAdult(!state.isAdult)
+                                                viewModel.autoSave()
+                                            }
+                                        }
+                                    )
+                                    val currentType = if (isEditing) draftMediaType else state.mediaType
+                                    if (currentType == MediaType.MANGA || currentType == MediaType.NOVEL) {
+                                        val currentVolumes = if (isEditing) draftVolumesEnabled else state.hasSecondaryProgress
+                                        DropdownMenuItem(
+                                            text = { Text(if (currentVolumes) "Track Volumes (On)" else "Track Volumes (Off)") },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = if (currentVolumes) Icons.Outlined.Check else Icons.Outlined.Close,
+                                                    contentDescription = null,
+                                                    tint = if (currentVolumes) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            },
+                                            onClick = {
+                                                menuExpanded = false
+                                                if (currentVolumes) {
+                                                    val curVols = state.parsedSecondaryProgress ?: 0.0
+                                                    if (curVols > 0.0) {
+                                                        showDisableConfirmDialog = true
+                                                    } else {
+                                                        if (isEditing) {
+                                                            draftVolumesEnabled = false
+                                                            draftSecondaryProgressTotal = ""
+                                                        }
+                                                        viewModel.setVolumesEnabled(false, resetIfDisabled = true)
+                                                    }
+                                                } else {
+                                                    if (isEditing) {
+                                                        draftVolumesEnabled = true
+                                                    }
+                                                    viewModel.setVolumesEnabled(true)
+                                                }
+                                            }
+                                        )
+                                    }
                                     if (!state.isNew) {
                                         DropdownMenuItem(
                                             text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
                                             leadingIcon = {
                                                 Icon(
-                                                    imageVector = Icons.Default.Delete,
+                                                    imageVector = Icons.Outlined.Delete,
                                                     contentDescription = null,
                                                     tint = MaterialTheme.colorScheme.error,
                                                     modifier = Modifier.size(20.dp)
@@ -541,6 +651,10 @@ fun MediaDetailsScreen(
             if (state.isLoading) {
                 MediaDetailsSkeleton(modifier = Modifier.padding(innerPadding))
             } else {
+                val dynamicFormats by remember(draftMediaType) {
+                    viewModel.observeFormatsForType(draftMediaType.name)
+                }.collectAsState(initial = if (draftMediaType == state.mediaType) state.availableFormats else emptyList())
+
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -567,6 +681,25 @@ fun MediaDetailsScreen(
                         isEditing = isEditing,
                         onTitleChange = { draftTitle = it },
                         onAuthorChange = { draftAuthor = it },
+                        availableFormats = dynamicFormats,
+                        onFormatSelect = { draftFormatId = it },
+                        onTotalItemsChange = { draftTotalItems = it },
+                        isAdult = if (isEditing) draftIsAdult else state.isAdult,
+                        onToggleAdult = {
+                            if (isEditing) {
+                                draftIsAdult = !draftIsAdult
+                            } else {
+                                viewModel.updateIsAdult(!state.isAdult)
+                                viewModel.autoSave()
+                            }
+                        },
+                        isNew = state.isNew,
+                        onMediaTypeSelect = {
+                            if (draftMediaType != it) {
+                                draftMediaType = it
+                                draftFormatId = null
+                            }
+                        }
                     )
 
                     // 2. Action Row (In Library, Updated X, Sync, Edit)
@@ -656,7 +789,7 @@ fun MediaDetailsScreen(
                         onDescriptionChange = { draftDescription = it },
                     )
 
-                    // 4. Tracking Matrix
+                    // 4. Tracking Matrix & Personal Notes
                     MediaTrackingSection(
                         mediaType = if (isEditing) draftMediaType else state.mediaType,
                         userStatus = state.userStatus,
@@ -678,215 +811,12 @@ fun MediaDetailsScreen(
                         onEndDateClick = { activeDialog = ActiveDialog.FinishDate },
                         onNotesChange = {
                             viewModel.updateNotes(it)
+                        },
+                        isEditing = isEditing,
+                        onNotesClick = {
+                            enterEditMode()
                         }
                     )
-
-                    // 5. Extra Metadata Fields (Only shown in Edit Mode, right after tracking)
-                    if (isEditing) {
-                        val dynamicFormats by remember(draftMediaType) {
-                            viewModel.observeFormatsForType(draftMediaType.name)
-                        }.collectAsState(initial = if (draftMediaType == state.mediaType) state.availableFormats else emptyList())
-
-                        var showDisableConfirmDialog by remember { mutableStateOf(false) }
-
-                        if (showDisableConfirmDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showDisableConfirmDialog = false },
-                                title = { Text("Disable Volume Tracking?") },
-                                text = { Text("Disabling volume tracking will reset your volume progress to 0 and remove the volume counter.") },
-                                confirmButton = {
-                                    TextButton(
-                                        onClick = {
-                                            draftVolumesEnabled = false
-                                            draftSecondaryProgressTotal = ""
-                                            viewModel.setVolumesEnabled(false, resetIfDisabled = true)
-                                            showDisableConfirmDialog = false
-                                        }
-                                    ) {
-                                        Text("Disable & Reset", color = MaterialTheme.colorScheme.error)
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showDisableConfirmDialog = false }) {
-                                        Text("Cancel")
-                                    }
-                                }
-                            )
-                        }
-
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                            shape = MaterialTheme.shapes.medium,
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                Text(
-                                    text = "METADATA & DETAILS",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-
-                                // Type Selection (if isNew)
-                                if (state.isNew) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Text(
-                                            text = "Media Type",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            listOf(MediaType.NOVEL, MediaType.MANGA, MediaType.ANIME, MediaType.GAME).forEach { mType ->
-                                                FilterChip(
-                                                    selected = draftMediaType == mType,
-                                                    onClick = {
-                                                        if (draftMediaType != mType) {
-                                                            draftMediaType = mType
-                                                            draftFormatId = null
-                                                        }
-                                                    },
-                                                    label = { Text(mType.displayName) }
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Format Chips
-                                if (dynamicFormats.isNotEmpty()) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Text(
-                                            text = "Format",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        FlowRow(
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            dynamicFormats.forEach { format ->
-                                                val isSelected = format.id.equals(draftFormatId, ignoreCase = true)
-                                                FilterChip(
-                                                    selected = isSelected,
-                                                    onClick = {
-                                                        draftFormatId = if (isSelected) null else format.id
-                                                    },
-                                                    label = { Text(format.name) }
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Total Units
-                                val unitsLabel = when (draftMediaType) {
-                                    MediaType.NOVEL, MediaType.MANGA -> "Total Chapters"
-                                    MediaType.ANIME, MediaType.TV -> "Total Episodes"
-                                    MediaType.GAME -> "Total Hours"
-                                    MediaType.MOVIE -> "Total Parts"
-                                }
-                                OutlinedTextField(
-                                    value = draftTotalItems,
-                                    onValueChange = {
-                                        draftTotalItems = it.filter { ch -> ch.isDigit() }
-                                    },
-                                    label = { Text(unitsLabel) },
-                                    placeholder = { Text("Unknown / Ongoing") },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-
-                                // Volumes (for MANGA or NOVEL)
-                                if (draftMediaType == MediaType.MANGA || draftMediaType == MediaType.NOVEL) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "Track Volumes",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                            Text(
-                                                text = "Enable volume progress and volume total tracking",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        Switch(
-                                            checked = draftVolumesEnabled,
-                                            onCheckedChange = { checked ->
-                                                if (!checked) {
-                                                    val currentVols = state.parsedSecondaryProgress ?: 0.0
-                                                    if (currentVols > 0.0) {
-                                                        showDisableConfirmDialog = true
-                                                    } else {
-                                                        draftVolumesEnabled = false
-                                                        draftSecondaryProgressTotal = ""
-                                                        viewModel.setVolumesEnabled(false, resetIfDisabled = true)
-                                                    }
-                                                } else {
-                                                    draftVolumesEnabled = true
-                                                    viewModel.setVolumesEnabled(true)
-                                                }
-                                            }
-                                        )
-                                    }
-
-                                    if (draftVolumesEnabled) {
-                                        OutlinedTextField(
-                                            value = draftSecondaryProgressTotal,
-                                            onValueChange = {
-                                                draftSecondaryProgressTotal = it.filter { ch -> ch.isDigit() || ch == '.' }
-                                            },
-                                            label = { Text("Total Volumes") },
-                                            placeholder = { Text("—") },
-                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                            singleLine = true,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-                                }
-
-                                // 18+ Adult Content Switch
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "18+ Adult Content",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                        Text(
-                                            text = "Obscures cover with blur when blur 18+ setting is enabled",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    Switch(
-                                        checked = draftIsAdult,
-                                        onCheckedChange = { draftIsAdult = it }
-                                    )
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -1156,6 +1086,33 @@ fun MediaDetailsScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showInlineDiscardDialog = false }) { Text("Keep Editing") }
+                }
+            )
+        }
+        // Disable Volume Tracking Confirmation
+        if (showDisableConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showDisableConfirmDialog = false },
+                title = { Text("Disable Volume Tracking?") },
+                text = { Text("Disabling volume tracking will reset your volume progress to 0 and remove the volume counter.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            if (isEditing) {
+                                draftVolumesEnabled = false
+                                draftSecondaryProgressTotal = ""
+                            }
+                            viewModel.setVolumesEnabled(false, resetIfDisabled = true)
+                            showDisableConfirmDialog = false
+                        }
+                    ) {
+                        Text("Disable & Reset", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDisableConfirmDialog = false }) {
+                        Text("Cancel")
+                    }
                 }
             )
         }

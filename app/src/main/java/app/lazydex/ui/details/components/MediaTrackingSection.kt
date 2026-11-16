@@ -13,15 +13,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
@@ -33,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,6 +68,8 @@ fun MediaTrackingSection(
     onEndDateClick: () -> Unit,
     onNotesChange: (String) -> Unit,
     modifier: Modifier = Modifier,
+    isEditing: Boolean = false,
+    onNotesClick: () -> Unit = {},
 ) {
     val unitLabel = when (mediaType) {
         MediaType.MANGA, MediaType.NOVEL -> "Ch."
@@ -195,10 +199,10 @@ fun MediaTrackingSection(
             }
         }
 
-        // Personal Notes Section
+        // Personal Notes Section (Matching Matrix Card 1:1)
         Surface(
-            shape = MaterialTheme.shapes.medium,
-            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.4f),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 6.dp),
@@ -207,25 +211,67 @@ fun MediaTrackingSection(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    text = "Notes",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                OutlinedTextField(
-                    value = localNotes,
-                    onValueChange = {
-                        localNotes = it
-                        onNotesChange(it)
-                    },
-                    placeholder = { Text("Write personal notes or comments...") },
-                    minLines = 2,
-                    maxLines = 6,
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                )
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "NOTES",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    if (!isEditing && notes.isNotBlank()) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit notes",
+                            modifier = Modifier
+                                .size(16.dp)
+                                .clickable { onNotesClick() },
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+
+                if (isEditing) {
+                    BasicTextField(
+                        value = localNotes,
+                        onValueChange = {
+                            localNotes = it
+                            onNotesChange(it)
+                        },
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
+                        decorationBox = { innerTextField ->
+                            if (localNotes.isBlank()) {
+                                Text(
+                                    text = "Write personal notes or comments...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                )
+                            }
+                            innerTextField()
+                        }
+                    )
+                } else {
+                    Text(
+                        text = if (notes.isNotBlank()) notes else "Tap to write personal notes...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (notes.isNotBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNotesClick() }
+                            .padding(vertical = 2.dp)
+                    )
+                }
             }
         }
     }

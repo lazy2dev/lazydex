@@ -531,6 +531,10 @@ class MediaDetailsViewModel(
         _uiState.value = _uiState.value.copy(author = author)
     }
 
+    fun updateIsAdult(isAdult: Boolean) {
+        _uiState.value = _uiState.value.copy(isAdult = isAdult)
+    }
+
     fun updateDescription(description: String) {
         _uiState.value = _uiState.value.copy(description = description)
     }
