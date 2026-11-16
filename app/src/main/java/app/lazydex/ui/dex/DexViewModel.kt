@@ -1,7 +1,10 @@
 package app.lazydex.ui.dex
 
+import java.io.File
+import java.util.UUID
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.lazydex.data.cache.CoverCache
 import app.lazydex.data.local.LibraryDisplayMode
 import app.lazydex.data.local.LibraryGroupMode
 import app.lazydex.data.local.ThemePreferences
@@ -112,6 +115,7 @@ class DexViewModel(
     private val themePreferences: ThemePreferences,
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val syncEngine: AnilistSyncEngine? = null,
+    private val coverCache: CoverCache? = null,
 ) : ViewModel() {
 
     @OptIn(FlowPreview::class)
@@ -367,6 +371,56 @@ class DexViewModel(
     fun setGridColumns(columns: Int) {
         viewModelScope.launch {
             themePreferences.setGridColumns(columns)
+        }
+    }
+
+    fun quickAdd(
+        title: String,
+        mediaType: MediaType,
+        format: String = "",
+        status: UserStatus = UserStatus.CURRENT,
+        currentProgress: Int = 0,
+        totalItems: Int? = null,
+        coverImagePath: String = "",
+        coverImageUrl: String? = null,
+        onCreated: (MediaItem) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val id = UUID.randomUUID().toString()
+            var finalImagePath = coverImagePath.trim()
+
+            if (finalImagePath.isNotBlank()) {
+                val srcFile = File(finalImagePath)
+                if (srcFile.exists()) {
+                    coverCache?.let { cache ->
+                        val destFile = cache.getCustomCoverFile(id)
+                        try {
+                            srcFile.copyTo(destFile, overwrite = true)
+                            finalImagePath = destFile.absolutePath
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+
+            val newItem = MediaItem(
+                id = id,
+                title = title.trim(),
+                type = mediaType.name,
+                format = format.trim(),
+                userStatus = status,
+                currentProgress = currentProgress,
+                progress = currentProgress.toDouble(),
+                totalItems = totalItems,
+                progressTotal = totalItems?.toDouble(),
+                coverImagePath = finalImagePath,
+                coverImageUrl = coverImageUrl?.trim()?.ifBlank { null },
+                lastUpdated = now,
+                dateAdded = now,
+                progressIncreasedAt = if (status == UserStatus.CURRENT) now else null
+            )
+            val added = repository.add(newItem)
+            onCreated(added)
         }
     }
 

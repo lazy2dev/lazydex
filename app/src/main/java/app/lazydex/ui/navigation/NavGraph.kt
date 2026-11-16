@@ -1,7 +1,18 @@
 package app.lazydex.ui.navigation
 
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -44,9 +55,18 @@ fun LazyDexNavGraph(
     navController: NavHostController,
     modifier: Modifier = Modifier
 ) {
+    val slideDistance = with(LocalDensity.current) { 32.dp.roundToPx() }
+    val moveSpec = tween<IntOffset>(durationMillis = 300, easing = FastOutSlowInEasing)
+    val inFadeSpec = tween<Float>(durationMillis = 210, delayMillis = 90, easing = LinearOutSlowInEasing)
+    val outFadeSpec = tween<Float>(durationMillis = 90, easing = FastOutLinearInEasing)
+
     NavHost(
         navController = navController,
         startDestination = MainShellRoute,
+        enterTransition = { slideInHorizontally(moveSpec) { slideDistance } + fadeIn(inFadeSpec) },
+        exitTransition = { slideOutHorizontally(moveSpec) { -slideDistance } + fadeOut(outFadeSpec) },
+        popEnterTransition = { slideInHorizontally(moveSpec) { -slideDistance } + fadeIn(inFadeSpec) },
+        popExitTransition = { slideOutHorizontally(moveSpec) { slideDistance } + fadeOut(outFadeSpec) },
         modifier = modifier
     ) {
         composable<MainShellRoute> {

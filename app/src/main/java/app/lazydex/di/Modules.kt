@@ -168,7 +168,7 @@ val extensionModule = module {
 }
 
 val viewModelModule = module {
-    viewModel { DexViewModel(get(), get(), syncEngine = getOrNull()) }
+    viewModel { DexViewModel(get(), get(), syncEngine = getOrNull(), coverCache = getOrNull()) }
     viewModel { HistoryViewModel(get(), get()) }
     viewModel { StatisticsViewModel(get(), getOrNull()) }
     viewModel { BrowserViewModel(get(), get(), get()) }
