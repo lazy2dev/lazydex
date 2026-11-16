@@ -14,16 +14,25 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -39,6 +48,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -66,7 +76,20 @@ fun MediaInfoHeader(
     isUpdatingCover: Boolean = false,
     isObscured: Boolean = false,
     topPadding: Dp = 0.dp,
+    isEditing: Boolean = false,
+    onTitleChange: (String) -> Unit = {},
+    onAuthorChange: (String) -> Unit = {},
 ) {
+    var isEditingTitle by remember { mutableStateOf(false) }
+    var isEditingAuthor by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isEditing) {
+        if (!isEditing) {
+            isEditingTitle = false
+            isEditingAuthor = false
+        }
+    }
+
     Box(modifier = modifier) {
         val backdropGradientColors = listOf(
             Color.Transparent,
@@ -137,18 +160,66 @@ fun MediaInfoHeader(
                     }
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = title.ifBlank { "Untitled" },
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (isEditing && isEditingTitle) {
+                        OutlinedTextField(
+                            value = title,
+                            onValueChange = onTitleChange,
+                            label = { Text("Title") },
+                            singleLine = true,
+                            trailingIcon = {
+                                IconButton(onClick = { isEditingTitle = false }) {
+                                    Icon(Icons.Default.Check, contentDescription = "Done")
+                                }
+                            },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { isEditingTitle = false }),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        val displayTitle = if (title.isBlank()) {
+                            if (isEditing) "Tap to enter title" else "Untitled"
+                        } else {
+                            title
+                        }
+                        Text(
+                            text = displayTitle,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                            color = if (title.isBlank() && isEditing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            modifier = if (isEditing) {
+                                Modifier.clickable { isEditingTitle = true }
+                            } else {
+                                Modifier
+                            }
+                        )
+                    }
 
-                    if (author.isNotBlank()) {
+                    if (isEditing && isEditingAuthor) {
+                        OutlinedTextField(
+                            value = author,
+                            onValueChange = onAuthorChange,
+                            label = { Text("Author") },
+                            singleLine = true,
+                            trailingIcon = {
+                                IconButton(onClick = { isEditingAuthor = false }) {
+                                    Icon(Icons.Default.Check, contentDescription = "Done")
+                                }
+                            },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { isEditingAuthor = false }),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else if (author.isNotBlank() || isEditing) {
                         Row(
-                            modifier = Modifier.alpha(0.78f),
+                            modifier = Modifier
+                                .alpha(0.78f)
+                                .then(if (isEditing) Modifier.clickable { isEditingAuthor = true } else Modifier),
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -159,9 +230,9 @@ fun MediaInfoHeader(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = author,
+                                text = if (author.isBlank() && isEditing) "Tap to enter author" else author,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (author.isBlank() && isEditing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
