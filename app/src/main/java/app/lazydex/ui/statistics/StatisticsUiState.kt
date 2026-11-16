@@ -2,6 +2,7 @@ package app.lazydex.ui.statistics
 
 import androidx.compose.ui.graphics.Color
 import app.lazydex.domain.model.MediaType
+import app.lazydex.domain.model.TypeConfig
 import app.lazydex.domain.model.UserStatus
 
 enum class StatsDateRangePreset(val shortLabel: String) {
@@ -120,6 +121,7 @@ data class StatBarItem(
 
 data class StatisticsUiState(
     val isLoading: Boolean = false,
+    val topLevelTypes: List<TypeConfig> = emptyList(),
     val selectedType: MediaType? = null,
     val typeCounts: Map<MediaType?, Int> = emptyMap(),
     val dateRange: DateRangeUiState = DateRangeUiState(),

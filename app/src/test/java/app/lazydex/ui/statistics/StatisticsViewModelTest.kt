@@ -7,6 +7,7 @@ import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.MediaStats
 import app.lazydex.domain.model.StatusFilter
+import app.lazydex.domain.model.TypeConfig
 import app.lazydex.domain.model.UserStatus
 import app.lazydex.domain.repository.MediaRepository
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +51,14 @@ class StatisticsViewModelTest {
             MediaType.entries.associateWith { type -> items.count { it.mediaType == type } }
         )
         override fun observeStatusCounts(mediaType: MediaType?): Flow<Map<StatusFilter, Int>> = flowOf(emptyMap())
+        override fun observeTopLevelTypes(): Flow<List<TypeConfig>> = flowOf(
+            listOf(
+                TypeConfig(id = "NOVEL", name = "Novel"),
+                TypeConfig(id = "MANGA", name = "Manga"),
+                TypeConfig(id = "ANIME", name = "Anime"),
+                TypeConfig(id = "GAME", name = "Game")
+            )
+        )
         override fun observeDistinctGenres(mediaType: MediaType?): Flow<List<String>> = flowOf(emptyList())
         override fun observeDistinctTags(mediaType: MediaType?): Flow<List<String>> = flowOf(emptyList())
         override fun observeActivityPoints(startMs: Long?, endMs: Long?): Flow<List<ActivityDatePoint>> = flowOf(
@@ -146,6 +155,8 @@ class StatisticsViewModelTest {
         }
 
         val state = viewModel.uiState.value
+        assertEquals(4, state.topLevelTypes.size)
+        assertEquals("NOVEL", state.topLevelTypes[0].id)
         assertEquals(4, state.overview.totalCount)
         assertEquals(2, state.overview.completedCount)
         assertEquals(1, state.overview.inProgressCount)

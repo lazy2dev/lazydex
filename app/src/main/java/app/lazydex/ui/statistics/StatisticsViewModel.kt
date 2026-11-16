@@ -8,6 +8,7 @@ import app.lazydex.domain.model.ActivityDatePoint
 import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.MediaStats
+import app.lazydex.domain.model.TypeConfig
 import app.lazydex.domain.model.UserStatus
 import app.lazydex.domain.repository.MediaRepository
 import app.lazydex.ui.components.color
@@ -73,15 +74,28 @@ class StatisticsViewModel(
             repository.observeTypeCounts(),
             repository.observeActivityPoints(resolvedRange.startMs, resolvedRange.endMs),
             _selectedType,
-            blurAdultCoversFlow
-        ) { allItems, typeCountsMap, activityPoints, selectedType, blurAdultCovers ->
+            blurAdultCoversFlow,
+            repository.observeTopLevelTypes()
+        ) { args: Array<Any?> ->
+            @Suppress("UNCHECKED_CAST")
+            val allItems = args[0] as List<MediaItem>
+            @Suppress("UNCHECKED_CAST")
+            val typeCountsMap = args[1] as Map<MediaType, Int>
+            @Suppress("UNCHECKED_CAST")
+            val activityPoints = args[2] as List<ActivityDatePoint>
+            val selectedType = args[3] as MediaType?
+            val blurAdultCovers = args[4] as Boolean
+            @Suppress("UNCHECKED_CAST")
+            val topLevelTypes = args[5] as List<TypeConfig>
+
             computeUiState(
                 allItems = allItems,
                 typeCountsMap = typeCountsMap,
                 activityPoints = activityPoints,
                 selectedType = selectedType,
                 resolvedRange = resolvedRange,
-                blurAdultCovers = blurAdultCovers
+                blurAdultCovers = blurAdultCovers,
+                topLevelTypes = topLevelTypes
             )
         }.flowOn(computeDispatcher)
     }.stateIn(
@@ -116,7 +130,8 @@ class StatisticsViewModel(
         activityPoints: List<ActivityDatePoint>,
         selectedType: MediaType?,
         resolvedRange: ResolvedDateRange,
-        blurAdultCovers: Boolean
+        blurAdultCovers: Boolean,
+        topLevelTypes: List<TypeConfig> = emptyList()
     ): StatisticsUiState {
         val isAllTime = resolvedRange.preset == StatsDateRangePreset.ALL_TIME
         val rangeItems = StatisticsCalculator.filterItemsByRange(
@@ -217,6 +232,7 @@ class StatisticsViewModel(
 
         return StatisticsUiState(
             isLoading = false,
+            topLevelTypes = topLevelTypes,
             selectedType = selectedType,
             typeCounts = tabCounts,
             dateRange = resolvedRange.toUiState(),

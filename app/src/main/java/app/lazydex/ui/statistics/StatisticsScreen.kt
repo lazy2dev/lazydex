@@ -34,11 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -46,6 +42,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -61,8 +58,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.lazydex.domain.model.MediaType
+import app.lazydex.domain.model.TypeConfig
+import app.lazydex.ui.components.DexTypeTabs
 import app.lazydex.ui.components.EmptyState
-import app.lazydex.ui.components.Pill
 import app.lazydex.ui.components.color
 import app.lazydex.ui.components.icon
 import app.lazydex.ui.statistics.components.ActivityHeatmapBlock
@@ -94,21 +92,33 @@ fun StatisticsScreen(
         mutableStateOf<ActivityHeatmapDay?>(null)
     }
 
-    val mediaTypes = remember {
-        listOf(
-            null to "All",
-            MediaType.NOVEL to "Novels",
-            MediaType.MANGA to "Manga",
-            MediaType.ANIME to "Anime",
-            MediaType.GAME to "Games",
-            MediaType.MOVIE to "Movies",
-            MediaType.TV to "TV"
-        )
+    val tabs = remember(uiState.topLevelTypes) {
+        if (uiState.topLevelTypes.isNotEmpty()) {
+            uiState.topLevelTypes
+        } else {
+            listOf(
+                TypeConfig(id = "NOVEL", name = "Novel", unitName = "Chapter"),
+                TypeConfig(id = "MANGA", name = "Manga", unitName = "Chapter"),
+                TypeConfig(id = "ANIME", name = "Anime", unitName = "Episode"),
+                TypeConfig(id = "GAME", name = "Game", unitName = "Hour")
+            )
+        }
     }
 
-    val selectedTabIndex = remember(uiState.selectedType) {
-        val idx = mediaTypes.indexOfFirst { it.first == uiState.selectedType }
-        if (idx >= 0) idx else 0
+    val selectedTabIndex = remember(uiState.selectedType, tabs) {
+        if (uiState.selectedType != null) {
+            val idx = tabs.indexOfFirst { it.id.equals(uiState.selectedType?.name, ignoreCase = true) }
+            if (idx >= 0) idx else 0
+        } else {
+            0
+        }
+    }
+
+    LaunchedEffect(tabs) {
+        if (tabs.isNotEmpty() && uiState.selectedType == null) {
+            val firstType = MediaType.fromString(tabs.first().id) ?: MediaType.NOVEL
+            viewModel.selectType(firstType)
+        }
     }
 
     val accentColor = uiState.selectedType?.color() ?: MaterialTheme.colorScheme.primary
@@ -145,47 +155,19 @@ fun StatisticsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            ScrollableTabRow(
-                selectedTabIndex = selectedTabIndex,
-                edgePadding = 0.dp,
-                containerColor = MaterialTheme.colorScheme.background,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                divider = {},
-                indicator = { tabPositions ->
-                    if (selectedTabIndex < tabPositions.size) {
-                        TabRowDefaults.SecondaryIndicator(
-                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
-                            color = accentColor
-                        )
-                    }
+            DexTypeTabs(
+                tabs = tabs,
+                selectedIndex = selectedTabIndex,
+                getItemCount = { tab ->
+                    val type = MediaType.fromString(tab.id)
+                    uiState.typeCounts[type] ?: 0
+                },
+                onTabItemClick = { index ->
+                    val tab = tabs.getOrNull(index)
+                    val type = tab?.let { MediaType.fromString(it.id) } ?: MediaType.NOVEL
+                    viewModel.selectType(type)
                 }
-            ) {
-                mediaTypes.forEachIndexed { index, (mediaType, label) ->
-                    val isSelected = selectedTabIndex == index
-                    val count = uiState.typeCounts[mediaType] ?: 0
-                    Tab(
-                        selected = isSelected,
-                        onClick = { viewModel.selectType(mediaType) },
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = label,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                if (count > 0) {
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Pill(
-                                        text = "$count",
-                                        fontSize = 10.sp
-                                    )
-                                }
-                            }
-                        }
-                    )
-                }
-            }
-            HorizontalDivider()
+            )
 
             val overview = uiState.overview
             val hasBoundedFilter = uiState.dateRange.preset != StatsDateRangePreset.ALL_TIME
