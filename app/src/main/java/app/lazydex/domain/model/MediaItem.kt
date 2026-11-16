@@ -49,6 +49,7 @@ data class MediaItem(
     val isAdult: Boolean = false,
     val repeat: Int = 0,
     val durationMinutes: Int? = null,
+    val averageScore: Int? = null,
     val progressIncreasedAt: Long? = null
 ) {
     val typeId: String get() = when {
@@ -117,6 +118,7 @@ data class MediaItem(
         isAdult: Boolean = false,
         repeat: Int = 0,
         durationMinutes: Int? = null,
+        averageScore: Int? = null,
         progressIncreasedAt: Long? = null
     ) : this(
         id = id,
@@ -161,6 +163,7 @@ data class MediaItem(
         isAdult = isAdult,
         repeat = repeat,
         durationMinutes = durationMinutes,
+        averageScore = averageScore,
         progressIncreasedAt = progressIncreasedAt
     )
 
@@ -197,6 +200,7 @@ data class MediaItem(
         deletedAt: Long? = null,
         isDeleted: Boolean = deletedAt != null,
         isAdult: Boolean = false,
+        averageScore: Int? = null,
         progressIncreasedAt: Long? = null,
         mediaType: MediaType = resolveMediaType(typeId)
     ) : this(
@@ -254,6 +258,7 @@ data class MediaItem(
         deletedAt = deletedAt,
         isDeleted = isDeleted,
         isAdult = isAdult,
+        averageScore = averageScore,
         progressIncreasedAt = progressIncreasedAt
     )
 

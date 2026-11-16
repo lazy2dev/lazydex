@@ -3,6 +3,9 @@ package app.lazydex.ui.settings
 import android.content.SharedPreferences
 import app.lazydex.data.local.DisplayPreferences
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
+import app.lazydex.data.tracker.sync.SyncProgress
+import app.lazydex.data.tracker.sync.TrackerSyncEngine
+import kotlinx.coroutines.Job
 import org.junit.Assert.assertNull
 import app.lazydex.data.local.LibraryDisplayMode
 import app.lazydex.data.local.ThemePreferences
@@ -16,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -478,6 +482,59 @@ class SettingsViewModelTest {
         assertFalse(tokenStore.autoSyncProgressFromTrackers)
 
         collectJob.cancel()
+    }
+
+    @Test
+    fun testSyncAniListForwardsProgressAndMessage() = runTest {
+        val repo = FakeRepository()
+        val prefs = FakeThemePreferences()
+        val fakePrefs = FakeTrackingSharedPreferences()
+        val tokenStore = AnilistTokenStore(fakePrefs)
+        val fakeEngine = FakeSyncEngine()
+
+        val viewModel = SettingsViewModel(
+            repository = repo,
+            themePreferences = prefs,
+            localCoversDir = tempCoversDir,
+            cacheDir = tempCacheDir,
+            tokenStore = tokenStore,
+            syncEngine = fakeEngine,
+            ioDispatcher = testDispatcher
+        )
+
+        val collectJob = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+
+        viewModel.syncAniList()
+        assertTrue("launchSync must be triggered on engine", fakeEngine.launchSyncCalled)
+
+        fakeEngine.progressFlow.value = SyncProgress(
+            isSyncing = true,
+            current = 10,
+            total = 100,
+            message = "Fetching MANGA chunk 1..."
+        )
+
+        val trackingState = viewModel.uiState.value.tracking
+        assertTrue(trackingState.isSyncing)
+        assertEquals(10, trackingState.syncCurrent)
+        assertEquals(100, trackingState.syncTotal)
+        assertEquals("Fetching MANGA chunk 1...", trackingState.syncMessage)
+
+        collectJob.cancel()
+    }
+
+    private class FakeSyncEngine : TrackerSyncEngine {
+        val progressFlow = MutableStateFlow(SyncProgress())
+        var launchSyncCalled = false
+
+        override val syncProgress: StateFlow<SyncProgress> = progressFlow.asStateFlow()
+        override fun launchSync(): Job {
+            launchSyncCalled = true
+            return Job().apply { complete() }
+        }
+        override fun cancelSync() {}
     }
 
     private class FakeTrackingSharedPreferences : SharedPreferences {

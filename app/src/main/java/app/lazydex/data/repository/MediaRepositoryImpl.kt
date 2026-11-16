@@ -871,6 +871,7 @@ class MediaRepositoryImpl(
             isAdult = isAdult,
             repeat = repeat,
             durationMinutes = durationMinutes,
+            averageScore = averageScore,
             progressIncreasedAt = progressIncreasedAt
         )
     }
@@ -918,6 +919,7 @@ class MediaRepositoryImpl(
             isAdult = isAdult,
             repeat = userData?.repeat ?: 0,
             durationMinutes = durationMinutes,
+            averageScore = averageScore,
             progressIncreasedAt = userData?.progressIncreasedAt
         )
     }
@@ -948,6 +950,7 @@ class MediaRepositoryImpl(
             avgChapterLength = avgChapterLength,
             lengthUnitOverride = lengthUnitOverride,
             playbackSpeed = playbackSpeed,
+            averageScore = averageScore,
             createdAt = dateAdded,
             updatedAt = lastUpdated,
             deletedAt = deletedAt

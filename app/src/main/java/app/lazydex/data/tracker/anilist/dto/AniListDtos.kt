@@ -112,7 +112,8 @@ data class AniListMedia(
     val bannerImage: String? = null,
     val title: AniListTitle? = null,
     val description: String? = null,
-    val startDate: AniListFuzzyDate? = null
+    val startDate: AniListFuzzyDate? = null,
+    val averageScore: Int? = null
 )
 
 @Serializable

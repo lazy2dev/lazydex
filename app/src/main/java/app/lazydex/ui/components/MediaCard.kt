@@ -20,13 +20,18 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -45,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import app.lazydex.data.local.LibraryDisplayMode
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.MediaType
+import app.lazydex.domain.model.StatusFilter
 import app.lazydex.domain.model.UserStatus
 import app.lazydex.ui.theme.StatusCompleted
 import app.lazydex.ui.theme.StatusDropped
@@ -68,6 +74,7 @@ data class MediaCardUiState(
     val isDirtyLocal: Boolean = false,
     val scoreRaw: Int? = null,
     val userStatus: UserStatus = UserStatus.PLANNING,
+    val averageScore: Int? = null,
     val lastUpdated: Long = 0L,
     val mediaType: MediaType = MediaType.NOVEL,
 )
@@ -101,6 +108,7 @@ fun MediaItem.toMediaCardUiState(
         isDirtyLocal = isDirtyLocal,
         scoreRaw = calcScoreRaw,
         userStatus = userStatus,
+        averageScore = averageScore,
         lastUpdated = lastUpdated,
         mediaType = mediaType,
     )
@@ -135,6 +143,7 @@ fun MediaCardUiState.toMediaItem(): MediaItem {
         secondaryProgressTotal = secondaryProgressTotal,
         userStatus = userStatus,
         rating = calcRating,
+        averageScore = averageScore,
         lastUpdated = lastUpdated,
         dateAdded = lastUpdated
     )
@@ -209,6 +218,14 @@ fun resolveHasSecondaryProgress(
     }
 }
 
+fun formatProgress(value: Double): String {
+    return if (value % 1.0 == 0.0) {
+        value.toLong().toString()
+    } else {
+        value.toString().removeSuffix(".0")
+    }
+}
+
 fun resolveUnitPrefix(mediaType: MediaType, isSecondary: Boolean = false): String {
     return if (isSecondary) {
         when (mediaType) {
@@ -230,17 +247,31 @@ fun resolveUnitPrefix(mediaType: MediaType, isSecondary: Boolean = false): Strin
 private fun CardStartBadges(
     item: MediaItem,
     showProgressBadge: Boolean,
+    showScoreBadge: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val displayProgress = if (item.progress > 0.0) item.progress else item.currentProgress.toDouble()
-    if (!showProgressBadge || displayProgress <= 0.0) return
+    val hasProgress = showProgressBadge && displayProgress > 0.0
+    val rating = item.rating
+    val hasScore = showScoreBadge && rating != null
+
+    if (!hasProgress && !hasScore) return
 
     BadgeGroup(modifier = modifier) {
-        Badge(
-            text = formatProgress(displayProgress),
-            color = MaterialTheme.colorScheme.tertiary,
-            textColor = MaterialTheme.colorScheme.onTertiary,
-        )
+        if (hasProgress) {
+            Badge(
+                text = formatProgress(displayProgress),
+                color = MaterialTheme.colorScheme.tertiary,
+                textColor = MaterialTheme.colorScheme.onTertiary,
+            )
+        }
+        if (hasScore) {
+            Badge(
+                text = "★ %.1f".format(rating),
+                color = getRatingColor(rating),
+                textColor = Color.White,
+            )
+        }
     }
 }
 
@@ -266,6 +297,8 @@ fun MediaCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
+    onIncrementProgress: ((String) -> Unit)? = null,
+    onOpenProgressDialog: ((MediaItem) -> Unit)? = null,
     isSelected: Boolean = false,
     displayMode: LibraryDisplayMode? = null,
     isGridView: Boolean = true,
@@ -273,12 +306,16 @@ fun MediaCard(
     showStatusBadge: Boolean = true,
     showScoreBadge: Boolean = true,
     blurAdultCovers: Boolean = false,
+    activeTypeName: String? = null,
+    activeStatusFilter: StatusFilter? = null,
 ) {
     MediaCard(
         item = uiState.toMediaItem(),
         onClick = onClick,
         modifier = modifier,
         onLongClick = onLongClick,
+        onIncrementProgress = onIncrementProgress,
+        onOpenProgressDialog = onOpenProgressDialog,
         isSelected = isSelected,
         displayMode = displayMode,
         isGridView = isGridView,
@@ -289,6 +326,8 @@ fun MediaCard(
         hasSecondaryProgress = uiState.hasSecondaryProgress,
         isDirtyLocal = uiState.isDirtyLocal,
         blurAdultCovers = blurAdultCovers,
+        activeTypeName = activeTypeName,
+        activeStatusFilter = activeStatusFilter,
     )
 }
 
@@ -298,6 +337,8 @@ fun MediaCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
+    onIncrementProgress: ((String) -> Unit)? = null,
+    onOpenProgressDialog: ((MediaItem) -> Unit)? = null,
     isSelected: Boolean = false,
     displayMode: LibraryDisplayMode? = null,
     isGridView: Boolean = true,
@@ -308,6 +349,8 @@ fun MediaCard(
     hasSecondaryProgress: Boolean? = null,
     isDirtyLocal: Boolean = false,
     blurAdultCovers: Boolean = false,
+    activeTypeName: String? = null,
+    activeStatusFilter: StatusFilter? = null,
 ) {
     val effectiveMode = displayMode ?: if (isGridView) LibraryDisplayMode.COMPACT_GRID else LibraryDisplayMode.LIST
     val isAdultObscured = item.isAdult && blurAdultCovers
@@ -316,90 +359,137 @@ fun MediaCard(
 
     when (effectiveMode) {
         LibraryDisplayMode.LIST -> {
-            val displayTimestamp = item.progressIncreasedAt ?: item.dateAdded
-            val relativeTime = remember(displayTimestamp) { getRelativeTime(displayTimestamp) }
             val resolvedFormat = remember(item.typeId, item.extraData, item.mediaType, formatName) {
                 resolveFormatName(item.typeId, item.getExtra("format"), item.mediaType, formatName)
             }
-            val resolvedHasSecondary = remember(item.typeId, item.secondaryProgress, item.secondaryProgressTotal, hasSecondaryProgress) {
-                resolveHasSecondaryProgress(
-                    typeId = item.typeId,
-                    secondaryProgress = item.secondaryProgress,
-                    secondaryProgressTotal = item.secondaryProgressTotal,
-                    hasSecondaryOverride = hasSecondaryProgress,
-                )
-            }
             val displayProgress = if (item.progress > 0.0) item.progress else item.currentProgress.toDouble()
             val displayProgressTotal = item.progressTotal ?: item.totalItems?.toDouble()
-            val displaySecondaryProgress = item.secondaryProgress
-            val displaySecondaryProgressTotal = item.secondaryProgressTotal
+            val isCompleted = (item.userStatus == UserStatus.COMPLETED) ||
+                (displayProgressTotal != null && displayProgressTotal > 0 && displayProgress >= displayProgressTotal)
+            val isDropped = item.userStatus == UserStatus.DROPPED
+            val isPaused = item.userStatus == UserStatus.PAUSED
 
-            val primaryUnitPrefix = remember(item.mediaType) { resolveUnitPrefix(item.mediaType, isSecondary = false) }
-            val secondaryUnitPrefix = remember(item.mediaType) { resolveUnitPrefix(item.mediaType, isSecondary = true) }
+            val rating = item.rating
+            val avgScore = item.averageScore
 
-            Row(
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+                } else {
+                    Color.Transparent
+                },
                 modifier = modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else Color.Transparent)
                     .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(contentAlignment = Alignment.TopEnd) {
-                    CoverImage(
-                        coverImagePath = item.coverImagePath,
-                        title = item.title,
-                        coverImageUrl = item.coverImageUrl,
-                        shape = RoundedCornerShape(4.dp),
-                        isObscured = isAdultObscured,
-                        modifier = Modifier
-                            .size(width = 54.dp, height = 78.dp)
-                            .graphicsLayer {
-                                if (isSelected) alpha = 0.76f
-                            }
-                    )
-                    if (isSelected) {
-                        Box(
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 1. Cover Image (68 x 96dp vertical poster)
+                    Box(
+                        modifier = Modifier.size(width = 68.dp, height = 96.dp),
+                        contentAlignment = Alignment.TopStart
+                    ) {
+                        CoverImage(
+                            coverImagePath = item.coverImagePath,
+                            title = item.title,
+                            coverImageUrl = item.coverImageUrl,
+                            shape = RoundedCornerShape(8.dp),
+                            isObscured = isAdultObscured,
                             modifier = Modifier
-                                .padding(2.dp)
-                                .size(18.dp)
-                                .background(MaterialTheme.colorScheme.primary, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = "Selected",
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(12.dp)
-                            )
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    if (isSelected) alpha = 0.76f
+                                }
+                        )
+
+                        // Capsule Badge: Community averageScore & user status indicator
+                        if (avgScore != null || isCompleted || isDropped || isPaused) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color.Black.copy(alpha = 0.72f),
+                                modifier = Modifier.padding(4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (avgScore != null) {
+                                        Text(
+                                            text = "🙂 $avgScore%",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                    if (isCompleted) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = "Completed",
+                                            tint = StatusCompleted,
+                                            modifier = Modifier.size(11.dp)
+                                        )
+                                    } else if (isDropped) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Dropped",
+                                            tint = StatusDropped,
+                                            modifier = Modifier.size(11.dp)
+                                        )
+                                    } else if (isPaused) {
+                                        Icon(
+                                            imageVector = Icons.Default.Pause,
+                                            contentDescription = "Paused",
+                                            tint = StatusOnHold,
+                                            modifier = Modifier.size(11.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (isSelected) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(4.dp)
+                                    .size(20.dp)
+                                    .background(MaterialTheme.colorScheme.primary, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Selected",
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
                         }
                     }
-                }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
 
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 78.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Row 1: Title + Sync Status Affordance + Relative Time
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    // 2. Middle Column: Title at top, Format & Score + Progress bar at bottom
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(96.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 text = item.title,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 14.sp,
-                                maxLines = 1,
+                                maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.weight(1f, fill = false)
@@ -414,66 +504,105 @@ fun MediaCard(
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = relativeTime,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (resolvedFormat.isNotBlank()) {
+                                        Text(
+                                            text = resolvedFormat,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    val scoreText = if (rating != null) {
+                                        val formatted = if (rating % 1.0 == 0.0) rating.toInt().toString() else "%.1f".format(rating)
+                                        "Score: $formatted"
+                                    } else {
+                                        "Score: ?"
+                                    }
+                                    Text(
+                                        text = scoreText,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                val progressCountText = "${formatProgress(displayProgress)} / ${displayProgressTotal?.takeIf { it > 0 }?.let { formatProgress(it) } ?: "?"}"
+                                Text(
+                                    text = progressCountText,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            // Progress Bar ONLY in Middle Column (does NOT go below cover or right side)
+                            val progressFraction = remember(displayProgress, displayProgressTotal, isCompleted) {
+                                if (isCompleted) 1f
+                                else if (displayProgressTotal != null && displayProgressTotal > 0) {
+                                    (displayProgress / displayProgressTotal).toFloat().coerceIn(0f, 1f)
+                                } else if (displayProgress > 0) 1f
+                                else 0f
+                            }
+                            if (progressFraction > 0f) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(3.dp)
+                                        .clip(RoundedCornerShape(1.5.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(progressFraction)
+                                            .fillMaxHeight()
+                                            .background(MaterialTheme.colorScheme.primary)
+                                    )
+                                }
+                            }
+                        }
                     }
 
-                    // Row 2: Badges: Format Badge [ Manhwa ] [ In Progress ]
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // 3. Right Column: dedicated '+' button centered vertically
+                    Box(
+                        modifier = Modifier
+                            .height(96.dp)
+                            .width(36.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        if (resolvedFormat.isNotBlank()) {
-                            Badge(
-                                text = resolvedFormat,
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                                textColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                shape = RoundedCornerShape(4.dp),
-                            )
+                        if (!isCompleted && onIncrementProgress != null) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .combinedClickable(
+                                        onClick = { onIncrementProgress(item.id) },
+                                        onLongClick = { onOpenProgressDialog?.invoke(item) }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Increment progress",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
                         }
-                        if (showStatusBadge) {
-                            Badge(
-                                text = item.userStatus.displayName,
-                                color = statusColor.copy(alpha = 0.15f),
-                                textColor = statusColor,
-                                shape = RoundedCornerShape(4.dp),
-                            )
-                        }
-                        val rating = item.rating
-                        if (showScoreBadge && rating != null) {
-                            Badge(
-                                text = "%.1f".format(rating),
-                                color = getRatingColor(rating).copy(alpha = 0.15f),
-                                textColor = getRatingColor(rating),
-                                shape = RoundedCornerShape(4.dp),
-                            )
-                        }
-                    }
-
-                    // Row 3: Primary Counter (Chapters/Episodes)
-                    val primaryText = "$primaryUnitPrefix ${formatProgress(displayProgress)} / ${displayProgressTotal?.takeIf { it > 0 }?.let { formatProgress(it) } ?: "?"}"
-                    Text(
-                        text = primaryText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(vertical = 2.dp)
-                    )
-
-                    // Row 4: Secondary Counter (Volumes/Seasons) - ONLY if hasSecondaryProgress == true
-                    if (resolvedHasSecondary) {
-                        val secondaryText = "$secondaryUnitPrefix ${formatProgress(displaySecondaryProgress)} / ${displaySecondaryProgressTotal?.takeIf { it > 0 }?.let { formatProgress(it) } ?: "?"}"
-                        Text(
-                            text = secondaryText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(vertical = 1.dp)
-                        )
                     }
                 }
             }
@@ -544,6 +673,7 @@ fun MediaCard(
                     CardStartBadges(
                         item = item,
                         showProgressBadge = showProgressBadge,
+                        showScoreBadge = showScoreBadge,
                         modifier = Modifier.align(Alignment.TopStart),
                     )
 
@@ -608,6 +738,7 @@ fun MediaCard(
                     CardStartBadges(
                         item = item,
                         showProgressBadge = showProgressBadge,
+                        showScoreBadge = showScoreBadge,
                         modifier = Modifier.align(Alignment.TopStart),
                     )
 

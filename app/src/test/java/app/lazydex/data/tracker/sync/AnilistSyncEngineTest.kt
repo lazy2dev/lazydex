@@ -1493,6 +1493,25 @@ class AnilistSyncEngineTest {
         assertEquals(originalHistoryTimestamp, userDataAfterSync.progressIncreasedAt)
     }
 
+    @Test
+    fun `launchSync returns active job when already syncing and cancels cleanly`() = runTest(testDispatcher) {
+        responseHandler = { _, _ ->
+            createResponse(200, """{"data": {"MediaListCollection": {"hasNextChunk": false, "lists": []}}}""")
+        }
+
+        val job1 = engine.launchSync()
+        assertTrue(job1.isActive)
+
+        // Single-flight: second call returns the same running Job
+        val job2 = engine.launchSync()
+        assertEquals(job1, job2)
+
+        engine.cancelSync()
+        assertFalse(job1.isActive)
+        assertEquals("Cancelled", engine.syncProgress.value.message)
+        assertFalse(engine.syncProgress.value.isSyncing)
+    }
+
     // --- Fakes ---
 
     class FakeMediaItemDao : MediaItemDao {
@@ -1550,6 +1569,7 @@ class AnilistSyncEngineTest {
                 avgChapterLength = e.avgChapterLength,
                 lengthUnitOverride = e.lengthUnitOverride,
                 playbackSpeed = e.playbackSpeed,
+                averageScore = e.averageScore,
                 createdAt = e.createdAt,
                 catalogUpdatedAt = e.updatedAt,
                 userUpdatedAt = u?.updatedAt,

@@ -36,6 +36,7 @@ data class MediaItemEntity(
     val avgChapterLength: Int? = null,
     val lengthUnitOverride: String? = null,
     @ColumnInfo(defaultValue = "1.0") val playbackSpeed: Double = 1.0,
+    val averageScore: Int? = null,
     val createdAt: Long,
     val updatedAt: Long,
     val deletedAt: Long? = null

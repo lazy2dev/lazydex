@@ -76,15 +76,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.lazydex.data.local.LibraryDisplayMode
-import app.lazydex.data.local.LibraryGroupMode
 import app.lazydex.domain.model.StatusFilter
 import app.lazydex.ui.components.ChangeStatusDialog
 import app.lazydex.ui.components.DexBottomActionMenu
 import app.lazydex.ui.components.DexSettingsSheet
 import app.lazydex.ui.components.EmptyState
 import app.lazydex.ui.components.MediaCard
+import app.lazydex.domain.model.MediaType
+import app.lazydex.ui.details.components.TrackProgressSelector
 import app.lazydex.ui.components.VerticalFastScroller
 import app.lazydex.ui.components.VerticalGridFastScroller
+import app.lazydex.domain.model.MediaItem
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.pager.HorizontalPager
@@ -109,6 +111,7 @@ fun DexScreen(
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     var showQuickFilterSheet by rememberSaveable { mutableStateOf(false) }
     var showChangeStatusDialog by rememberSaveable { mutableStateOf(false) }
+    var progressDialogItem by remember { mutableStateOf<MediaItem?>(null) }
     val haptic = LocalHapticFeedback.current
     val filterSheetState = rememberModalBottomSheetState()
 
@@ -118,10 +121,6 @@ fun DexScreen(
 
     val searchFocusRequester = remember { FocusRequester() }
 
-    val activeParent = remember(uiState.topLevelTypes, uiState.selectedTypeId) {
-        uiState.topLevelTypes.firstOrNull { it.id == uiState.selectedTypeId }
-    }
-
     LaunchedEffect(searchQuery != null) {
         if (searchQuery != null) {
             searchFocusRequester.requestFocus()
@@ -129,7 +128,6 @@ fun DexScreen(
     }
 
     val isFilterActive = uiState.selectedFormatId != null ||
-            uiState.selectedStatus != StatusFilter.ALL ||
             uiState.selectedGenres.isNotEmpty() ||
             uiState.selectedTags.isNotEmpty() ||
             uiState.authorQuery.isNotBlank() ||
@@ -137,40 +135,37 @@ fun DexScreen(
             uiState.maxRating != null ||
             uiState.dateRangeStart != null
 
+    val tabs = uiState.topLevelTypes
+    val initialTabIndex = remember(tabs, uiState.selectedTypeId) {
+        if (uiState.selectedTypeId != null) {
+            tabs.indexOfFirst { it.id == uiState.selectedTypeId }.takeIf { it != -1 } ?: 0
+        } else {
+            0
+        }
+    }
+    val pagerState = rememberPagerState(
+        initialPage = initialTabIndex.coerceIn(0, (tabs.size - 1).coerceAtLeast(0))
+    ) { tabs.size }
+
+    val itemsByTabId = remember(uiState.items, tabs) {
+        tabs.associate { tab ->
+            tab.id to getItemsForType(uiState.items, tab.id)
+        }
+    }
+
     val filterPillText = remember(
-        uiState.groupMode,
         uiState.selectedStatus,
         uiState.perStatusCounts,
-        uiState.totalCount,
         uiState.selectedTypeId,
-        uiState.selectedFormatId,
-        uiState.formatsForSelectedType,
         uiState.items
     ) {
         val tabItems = getItemsForType(uiState.items, uiState.selectedTypeId)
-        when (uiState.groupMode) {
-            LibraryGroupMode.BY_STATUS -> {
-                val count = if (uiState.selectedStatus == StatusFilter.ALL) {
-                    uiState.perStatusCounts[StatusFilter.ALL] ?: tabItems.size
-                } else {
-                    uiState.perStatusCounts[uiState.selectedStatus] ?: 0
-                }
-                "${uiState.selectedStatus.displayName} $count"
-            }
-            LibraryGroupMode.BY_DEFAULT -> {
-                val formatName = uiState.formatsForSelectedType.firstOrNull { it.id == uiState.selectedFormatId }?.name
-                val label = formatName ?: "All"
-                val count = if (uiState.selectedFormatId != null) {
-                    tabItems.count { it.format.equals(uiState.selectedFormatId, ignoreCase = true) || it.typeId.equals(uiState.selectedFormatId, ignoreCase = true) }
-                } else {
-                    tabItems.size
-                }
-                "$label $count"
-            }
-            LibraryGroupMode.UNGROUPED -> {
-                "All ${tabItems.size}"
-            }
+        val count = if (uiState.selectedStatus == StatusFilter.ALL) {
+            uiState.perStatusCounts[StatusFilter.ALL] ?: tabItems.size
+        } else {
+            uiState.perStatusCounts[uiState.selectedStatus] ?: 0
         }
+        "${uiState.selectedStatus.displayName} $count"
     }
 
     Scaffold(
@@ -290,7 +285,17 @@ fun DexScreen(
             }
         },
         floatingActionButton = {
-            if (!uiState.isSelectionMode) {
+            val activeTab = tabs.getOrNull(pagerState.currentPage)
+            val activeTabItemsCount = activeTab?.let { itemsByTabId[it.id]?.size } ?: 0
+            val isCurrentTabEmpty = activeTabItemsCount == 0
+            val isDefaultFilter = uiState.selectedStatus == StatusFilter.ALL
+
+            val shouldShowQuickFilter = !uiState.isSelectionMode && 
+                uiState.totalCount > 0 && 
+                tabs.isNotEmpty() && 
+                (!isCurrentTabEmpty || !isDefaultFilter)
+
+            if (shouldShowQuickFilter) {
                 Surface(
                     onClick = { showQuickFilterSheet = true },
                     shape = RoundedCornerShape(16.dp),
@@ -335,18 +340,6 @@ fun DexScreen(
             }
         }
 
-        val tabs = uiState.topLevelTypes
-        val initialTabIndex = remember(tabs, uiState.selectedTypeId) {
-            if (uiState.selectedTypeId != null) {
-                tabs.indexOfFirst { it.id == uiState.selectedTypeId }.takeIf { it != -1 } ?: 0
-            } else {
-                0
-            }
-        }
-        val pagerState = rememberPagerState(
-            initialPage = initialTabIndex.coerceIn(0, (tabs.size - 1).coerceAtLeast(0))
-        ) { tabs.size }
-
         // Initial sync when tabs are loaded (matches Komikku LaunchedEffect(categories))
         LaunchedEffect(tabs) {
             if (tabs.isNotEmpty()) {
@@ -368,12 +361,6 @@ fun DexScreen(
                 if (activeTab != null && activeTab.id != uiState.selectedTypeId) {
                     viewModel.selectTypeId(activeTab.id)
                 }
-            }
-        }
-
-        val itemsByTabId = remember(uiState.items, tabs) {
-            tabs.associate { tab ->
-                tab.id to getItemsForType(uiState.items, tab.id)
             }
         }
 
@@ -408,24 +395,22 @@ fun DexScreen(
                         .fillMaxSize()
                         .padding(innerPadding)
                 ) {
-                    if (uiState.showTypeTabs || !searchQuery.isNullOrEmpty()) {
-                        DexTypeTabs(
-                            tabs = tabs,
-                            selectedIndex = pagerState.currentPage,
-                            getItemCount = { tab ->
-                                if (uiState.showItemCount || !searchQuery.isNullOrEmpty()) {
-                                    itemsByTabId[tab.id]?.size ?: 0
-                                } else {
-                                    null
-                                }
-                            },
-                            onTabItemClick = { index ->
-                                coroutineScope.launch {
-                                    pagerState.animateScrollToPage(index)
-                                }
+                    DexTypeTabs(
+                        tabs = tabs,
+                        selectedIndex = pagerState.currentPage,
+                        getItemCount = { tab ->
+                            if (uiState.showItemCount || !searchQuery.isNullOrEmpty()) {
+                                itemsByTabId[tab.id]?.size ?: 0
+                            } else {
+                                null
                             }
-                        )
-                    }
+                        },
+                        onTabItemClick = { index ->
+                            coroutineScope.launch {
+                                pagerState.animateScrollToPage(index)
+                            }
+                        }
+                    )
 
                     HorizontalPager(
                         state = pagerState,
@@ -489,12 +474,16 @@ fun DexScreen(
                                                 item = item,
                                                 onClick = { onItemClick(item.id) },
                                                 onLongClick = { onItemLongClick(item.id) },
+                                                onIncrementProgress = { id -> viewModel.incrementProgress(id, 1.0) },
+                                                onOpenProgressDialog = { mediaItem -> progressDialogItem = mediaItem },
                                                 isSelected = item.id in uiState.selectedIds,
                                                 displayMode = uiState.displayMode,
                                                 showProgressBadge = uiState.showProgressBadge,
                                                 showStatusBadge = uiState.showStatusBadge,
                                                 showScoreBadge = uiState.showScoreBadge,
                                                 blurAdultCovers = uiState.blurAdultCovers,
+                                                activeTypeName = tab.name,
+                                                activeStatusFilter = uiState.selectedStatus,
                                             )
                                         }
                                     }
@@ -532,12 +521,16 @@ fun DexScreen(
                                                 item = item,
                                                 onClick = { onItemClick(item.id) },
                                                 onLongClick = { onItemLongClick(item.id) },
+                                                onIncrementProgress = { id -> viewModel.incrementProgress(id, 1.0) },
+                                                onOpenProgressDialog = { mediaItem -> progressDialogItem = mediaItem },
                                                 isSelected = item.id in uiState.selectedIds,
                                                 displayMode = uiState.displayMode,
                                                 showProgressBadge = uiState.showProgressBadge,
                                                 showStatusBadge = uiState.showStatusBadge,
                                                 showScoreBadge = uiState.showScoreBadge,
                                                 blurAdultCovers = uiState.blurAdultCovers,
+                                                activeTypeName = tab.name,
+                                                activeStatusFilter = uiState.selectedStatus,
                                             )
                                         }
                                     }
@@ -560,31 +553,25 @@ fun DexScreen(
                     }
                 }
             },
-            selectedType = uiState.selectedType,
-            selectedStatus = uiState.selectedStatus,
+            selectedFormatId = uiState.selectedFormatId,
+            availableFormats = uiState.formatsForSelectedType,
+            onSelectFormatId = { viewModel.selectFormatId(it) },
             selectedGenres = uiState.selectedGenres,
             availableGenres = uiState.availableGenres,
             selectedTags = uiState.selectedTags,
             availableTags = uiState.availableTags,
             authorQuery = uiState.authorQuery,
-            minRating = uiState.minRating,
-            maxRating = uiState.maxRating,
             sortField = uiState.sortField,
             sortDirection = uiState.sortDirection,
-            onSelectType = { viewModel.selectType(it) },
-            onSelectStatus = { viewModel.selectStatus(it) },
             onToggleGenre = { viewModel.toggleGenre(it) },
             onToggleTag = { viewModel.toggleTag(it) },
             onSetAuthorQuery = { viewModel.setAuthorQuery(it) },
-            onSetRatingRange = { min, max -> viewModel.setRatingRange(min, max) },
             onSelectSortField = { viewModel.selectSortField(it) },
             onSelectSortDirection = { viewModel.selectSortDirection(it) },
             displayMode = uiState.displayMode,
             onSelectDisplayMode = { viewModel.setDisplayMode(it) },
             gridColumns = uiState.gridColumns,
             onSelectGridColumns = { viewModel.setGridColumns(it) },
-            showTypeTabs = uiState.showTypeTabs,
-            onToggleTypeTabs = { viewModel.setShowTypeTabs(it) },
             showProgressBadge = uiState.showProgressBadge,
             onToggleProgressBadge = { viewModel.setShowProgressBadge(it) },
             showStatusBadge = uiState.showStatusBadge,
@@ -593,8 +580,6 @@ fun DexScreen(
             onToggleScoreBadge = { viewModel.setShowScoreBadge(it) },
             showItemCount = uiState.showItemCount,
             onToggleShowItemCount = { viewModel.setShowItemCount(it) },
-            groupMode = uiState.groupMode,
-            onSelectGroupMode = { viewModel.setGroupMode(it) },
             onClearAll = { viewModel.clearFilters() }
         )
     }
@@ -620,76 +605,63 @@ fun DexScreen(
                     .padding(bottom = 32.dp)
             ) {
                 Text(
-                    text = when (uiState.groupMode) {
-                        LibraryGroupMode.BY_STATUS -> "Filter by Status"
-                        LibraryGroupMode.BY_DEFAULT -> "Filter by Format"
-                        LibraryGroupMode.UNGROUPED -> "Library"
-                    },
+                    text = "Filter by Status",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(bottom = 12.dp, start = 8.dp)
                 )
 
                 val quickFilterTabItems = getItemsForType(uiState.items, uiState.selectedTypeId)
-                when (uiState.groupMode) {
-                    LibraryGroupMode.BY_STATUS -> {
-                        StatusFilter.entries.forEach { status ->
-                            val count = if (status == StatusFilter.ALL) {
-                                uiState.perStatusCounts[StatusFilter.ALL] ?: quickFilterTabItems.size
-                            } else {
-                                uiState.perStatusCounts[status] ?: 0
-                            }
-                            DexFilterSelectRow(
-                                label = status.displayName,
-                                isSelected = uiState.selectedStatus == status,
-                                count = count,
-                                onClick = {
-                                    viewModel.selectStatus(status)
-                                    showQuickFilterSheet = false
-                                }
-                            )
+                StatusFilter.entries.forEach { status ->
+                    val count = if (status == StatusFilter.ALL) {
+                        uiState.perStatusCounts[StatusFilter.ALL] ?: quickFilterTabItems.size
+                    } else {
+                        uiState.perStatusCounts[status] ?: 0
+                    }
+                    DexFilterSelectRow(
+                        label = status.displayName,
+                        isSelected = uiState.selectedStatus == status,
+                        count = count,
+                        onClick = {
+                            viewModel.selectStatus(status)
+                            showQuickFilterSheet = false
                         }
-                    }
-                    LibraryGroupMode.BY_DEFAULT -> {
-                        val isAllSelected = uiState.selectedFormatId == null
-                        DexFilterSelectRow(
-                            label = "All ${activeParent?.name ?: ""}".trim(),
-                            isSelected = isAllSelected,
-                            count = quickFilterTabItems.size,
-                            onClick = {
-                                viewModel.selectFormatId(null)
-                                showQuickFilterSheet = false
-                            }
-                        )
-
-                        uiState.formatsForSelectedType.forEach { formatConfig ->
-                            val isSelected = uiState.selectedFormatId == formatConfig.id
-                            val formatCount = quickFilterTabItems.count {
-                                it.format.equals(formatConfig.id, ignoreCase = true) ||
-                                it.typeId.equals(formatConfig.id, ignoreCase = true)
-                            }
-                            DexFilterSelectRow(
-                                label = formatConfig.name,
-                                isSelected = isSelected,
-                                count = formatCount,
-                                onClick = {
-                                    viewModel.selectFormatId(formatConfig.id)
-                                    showQuickFilterSheet = false
-                                }
-                            )
-                        }
-                    }
-                    LibraryGroupMode.UNGROUPED -> {
-                        Text(
-                            text = "Library ungrouped. Total items: ${quickFilterTabItems.size}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 8.dp)
-                        )
-                    }
+                    )
                 }
             }
         }
+    }
+
+    progressDialogItem?.let { item ->
+        val repeatLabel = when (item.mediaType) {
+            MediaType.ANIME, MediaType.TV, MediaType.MOVIE -> "Rewatches"
+            MediaType.GAME -> "Replays"
+            else -> "Rereads"
+        }
+        val title = when (item.mediaType) {
+            MediaType.MANGA, MediaType.NOVEL -> "Chapters Read"
+            MediaType.ANIME, MediaType.TV -> "Episodes Watched"
+            MediaType.GAME -> "Hours Played"
+            else -> "Progress"
+        }
+        TrackProgressSelector(
+            title = title,
+            currentProgress = item.currentProgress,
+            total = item.totalItems,
+            hasSecondaryProgress = item.secondaryProgress > 0.0 || (item.secondaryProgressTotal != null && item.secondaryProgressTotal > 0.0),
+            secondaryUnitName = if (item.mediaType == MediaType.MANGA) "Volume" else null,
+            currentVolume = item.secondaryProgress,
+            totalVolumes = item.secondaryProgressTotal,
+            repeatCount = item.repeat,
+            repeatLabel = repeatLabel,
+            onConfirmed = { progress, total, volume, totalVolumes, repeat ->
+                viewModel.updateProgressDetailed(item.id, progress, total, volume, totalVolumes, repeat)
+                progressDialogItem = null
+            },
+            onDismissRequest = {
+                progressDialogItem = null
+            }
+        )
     }
 }
 

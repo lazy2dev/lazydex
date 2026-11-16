@@ -88,6 +88,7 @@ query (${'$'}userId: Int, ${'$'}type: MediaType, ${'$'}chunk: Int) {
           startDate { year month day }
           coverImage { large extraLarge }
           bannerImage
+          averageScore
           title { userPreferred english romaji native }
         }
       }
@@ -164,6 +165,7 @@ query (${'$'}search: String, ${'$'}type: MediaType, ${'$'}perPage: Int) {
       episodes
       chapters
       volumes
+      averageScore
       startDate { year month day }
     }
   }

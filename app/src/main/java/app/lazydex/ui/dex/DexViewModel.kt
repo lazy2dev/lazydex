@@ -8,7 +8,7 @@ import app.lazydex.data.cache.CoverCache
 import app.lazydex.data.local.LibraryDisplayMode
 import app.lazydex.data.local.LibraryGroupMode
 import app.lazydex.data.local.ThemePreferences
-import app.lazydex.data.tracker.sync.AnilistSyncEngine
+import app.lazydex.data.tracker.sync.TrackerSyncEngine
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.SortDirection
@@ -114,7 +114,7 @@ class DexViewModel(
     private val repository: MediaRepository,
     private val themePreferences: ThemePreferences,
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
-    private val syncEngine: AnilistSyncEngine? = null,
+    private val syncEngine: TrackerSyncEngine? = null,
     private val coverCache: CoverCache? = null,
 ) : ViewModel() {
 
@@ -124,7 +124,7 @@ class DexViewModel(
         return combine(engine.syncProgress.map { it.isSyncing }.distinctUntilChanged()) { data, isSyncing ->
             data to isSyncing
         }.debounce { (_, isSyncing) ->
-            if (isSyncing) 1500L else 0L
+            if (isSyncing) 300L else 0L
         }.map { (data, _) -> data }
     }
 
@@ -146,8 +146,23 @@ class DexViewModel(
     private val selectedTypeId = MutableStateFlow<String?>(null)
     private val selectedFormatId = MutableStateFlow<String?>(null)
 
-    val topLevelTypes: StateFlow<List<TypeConfig>> = repository.observeTopLevelTypes()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val typeCounts = repository.observeTypeCounts()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    val topLevelTypes: StateFlow<List<TypeConfig>> = combine(
+        repository.observeTopLevelTypes(),
+        typeCounts
+    ) { types, counts ->
+        types.filter { type ->
+            val mediaType = when (type.id.uppercase()) {
+                "MANGA" -> MediaType.MANGA
+                "ANIME" -> MediaType.ANIME
+                "GAME" -> MediaType.GAME
+                else -> MediaType.NOVEL
+            }
+            (counts[mediaType] ?: 0) > 0
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val formatsForSelectedType: StateFlow<List<TypeConfig>> = selectedTypeId.flatMapLatest { typeId ->
         if (typeId != null) repository.observeFormats(typeId) else flowOf(emptyList())
@@ -165,10 +180,19 @@ class DexViewModel(
     private val dateRangeStart = MutableStateFlow<Long?>(null)
     private val dateRangeEnd = MutableStateFlow<Long?>(null)
 
-    private val selectedType: StateFlow<MediaType?> = mutableFilterState.map { it.mediaType }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-    private val selectedStatus: StateFlow<StatusFilter> = mutableFilterState.map { it.status }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StatusFilter.ALL)
+    private val tabStatusFilters = MutableStateFlow<Map<String, StatusFilter>>(emptyMap())
+
+    private val selectedType: StateFlow<MediaType?> = selectedTypeId.map { id ->
+        id?.let { resolveMediaType(it) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    private val selectedStatus: StateFlow<StatusFilter> = combine(
+        selectedTypeId,
+        tabStatusFilters
+    ) { typeId, filters ->
+        val key = typeId ?: "ALL"
+        filters[key] ?: StatusFilter.ALL
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StatusFilter.ALL)
 
     private val availableGenres = selectedType.flatMapLatest { type ->
         repository.observeDistinctGenres(type)
@@ -182,28 +206,25 @@ class DexViewModel(
         formatId ?: typeId
     }
 
-    private val dbFiltered = selectedStatus.flatMapLatest { stat ->
-        repository.observeFilteredByTypeId(null, stat)
-    }.throttleDuringSync()
-    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val dbFiltered = repository.observeFilteredByTypeId(null, StatusFilter.ALL)
+        .throttleDuringSync()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val perStatusCounts = selectedType.flatMapLatest { type ->
         repository.observeStatusCounts(type)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     private val filterState = combine(
-        mutableFilterState,
+        selectedType,
+        selectedStatus,
         perStatusCounts
-    ) { mfs, sc ->
-        FilterBundle(mfs.mediaType, mfs.status, mfs.genres, mfs.tags, sc)
+    ) { type, stat, sc ->
+        FilterBundle(type, stat, emptySet(), emptySet(), sc)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FilterBundle(null, StatusFilter.ALL, emptySet(), emptySet(), emptyMap()))
 
     private val advancedFilterState = combine(
         authorQuery, minRating, maxRating, dateRangeStart, dateRangeEnd
     ) { aq, min, max, ds, de -> AdvancedFilterBundle(aq, min, max, ds, de) }
-
-    private val typeCounts = repository.observeTypeCounts()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     private val metadataState = combine(
         availableGenres, availableTags, typeCounts
@@ -211,6 +232,7 @@ class DexViewModel(
 
     private val sortedItems: Flow<List<MediaItem>> = combine(
         dbFiltered,
+        tabStatusFilters,
         selectedFormatId,
         mutableFilterState.map { it.genres to it.tags }.distinctUntilChanged(),
         advancedFilterState,
@@ -219,17 +241,24 @@ class DexViewModel(
     ) { args: Array<Any?> ->
         @Suppress("UNCHECKED_CAST")
         val items = args[0] as List<MediaItem>
-        val selFormatId = args[1] as String?
         @Suppress("UNCHECKED_CAST")
-        val genresAndTags = args[2] as Pair<Set<String>, Set<String>>
-        val afs = args[3] as AdvancedFilterBundle
-        val search = args[4] as String?
-        val ss = args[5] as SortBundle
+        val statusFilters = args[1] as Map<String, StatusFilter>
+        val selFormatId = args[2] as String?
+        @Suppress("UNCHECKED_CAST")
+        val genresAndTags = args[3] as Pair<Set<String>, Set<String>>
+        val afs = args[4] as AdvancedFilterBundle
+        val search = args[5] as String?
+        val ss = args[6] as SortBundle
 
         val selectedGenres = genresAndTags.first
         val selectedTags = genresAndTags.second
         val q = search?.trim()
         val filtered = items.filter { item ->
+            val itemTabId = item.mediaType.name.uppercase()
+            val targetStatus = statusFilters[itemTabId] ?: StatusFilter.ALL
+            val expectedUserStatus = targetStatus.toUserStatus()
+            if (expectedUserStatus != null && item.userStatus != expectedUserStatus) return@filter false
+
             (selFormatId == null || item.format.equals(selFormatId, ignoreCase = true) || item.typeId.equals(selFormatId, ignoreCase = true)) &&
             (selectedGenres.isEmpty() || item.genres.any { it.lowercase() in selectedGenres }) &&
             (selectedTags.isEmpty() || item.tags.any { it.lowercase() in selectedTags }) &&
@@ -286,9 +315,9 @@ class DexViewModel(
             sortField = sortPair.first,
             sortDirection = sortPair.second,
             selectedGenres = fs.selectedGenres,
-            availableGenres = if (fs.mediaType != null) meta.genres else emptyList(),
+            availableGenres = meta.genres,
             selectedTags = fs.selectedTags,
-            availableTags = if (fs.mediaType != null) meta.tags else emptyList(),
+            availableTags = meta.tags,
             authorQuery = afs.authorQuery,
             minRating = afs.minRating,
             maxRating = afs.maxRating,
@@ -318,7 +347,6 @@ class DexViewModel(
             isSelectionMode = ids.isNotEmpty()
         )
     }
-    .throttleDuringSync()
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DexUiState())
 
     fun selectTypeId(typeId: String?) {
@@ -342,8 +370,32 @@ class DexViewModel(
         viewModelScope.launch {
             val item = repository.getById(id) ?: return@launch
             if (kotlin.math.abs(item.progress - progress) > 1e-6) {
-                repository.update(item.copy(progress = progress, currentProgress = progress.toInt()))
+                val delta = progress - item.progress
+                repository.incrementProgress(id, delta)
             }
+        }
+    }
+
+    fun updateProgressDetailed(
+        id: String,
+        newProgress: Int,
+        newTotal: Int?,
+        newVolume: Double,
+        newTotalVolumes: Double?,
+        newRepeat: Int
+    ) {
+        viewModelScope.launch {
+            val item = repository.getById(id) ?: return@launch
+            val updated = item.copy(
+                currentProgress = newProgress,
+                progress = newProgress.toDouble(),
+                totalItems = newTotal,
+                progressTotal = newTotal?.toDouble(),
+                secondaryProgress = newVolume,
+                secondaryProgressTotal = newTotalVolumes,
+                repeat = newRepeat
+            )
+            repository.update(updated)
         }
     }
 
@@ -453,9 +505,11 @@ class DexViewModel(
     }
 
     fun selectStatus(status: StatusFilter) {
-        mutableFilterState.update { current ->
-            val newStatus = if (current.status == status) StatusFilter.ALL else status
-            current.copy(status = newStatus)
+        val currentTab = selectedTypeId.value ?: "ALL"
+        tabStatusFilters.update { current ->
+            val existing = current[currentTab] ?: StatusFilter.ALL
+            val newStatus = if (existing == status) StatusFilter.ALL else status
+            current + (currentTab to newStatus)
         }
     }
 
@@ -586,8 +640,9 @@ class DexViewModel(
     }
 
     fun clearFilters() {
-        mutableFilterState.update { MutableFilterState() }
-        selectedTypeId.value = null
+        val currentType = selectedTypeId.value?.let { resolveMediaType(it) }
+        mutableFilterState.update { it.copy(mediaType = currentType, genres = emptySet(), tags = emptySet()) }
+        tabStatusFilters.value = emptyMap()
         selectedFormatId.value = null
         authorQuery.value = ""
         minRating.value = null

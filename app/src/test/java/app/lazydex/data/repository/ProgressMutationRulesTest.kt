@@ -792,6 +792,7 @@ class ProgressMutationRulesTest {
                 avgChapterLength = e.avgChapterLength,
                 lengthUnitOverride = e.lengthUnitOverride,
                 playbackSpeed = e.playbackSpeed,
+                averageScore = e.averageScore,
                 createdAt = e.createdAt,
                 catalogUpdatedAt = e.updatedAt,
                 userUpdatedAt = u?.updatedAt,

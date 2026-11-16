@@ -87,6 +87,7 @@ class MediaCardTest {
             secondaryProgressTotal = null,
             userStatus = UserStatus.CURRENT,
             rating = 8.5,
+            averageScore = 84,
             lastUpdated = 1000L,
             dateAdded = 500L,
         )
@@ -99,6 +100,7 @@ class MediaCardTest {
         assertEquals(200.0, uiState.progressTotal!!, 0.001)
         assertFalse(uiState.hasSecondaryProgress)
         assertEquals(170, uiState.scoreRaw)
+        assertEquals(84, uiState.averageScore)
         assertFalse(uiState.isDirtyLocal)
     }
 
@@ -118,6 +120,7 @@ class MediaCardTest {
             isDirtyLocal = true,
             scoreRaw = 180,
             userStatus = UserStatus.CURRENT,
+            averageScore = 88,
             lastUpdated = 2000L,
             mediaType = MediaType.NOVEL,
         )
@@ -130,6 +133,7 @@ class MediaCardTest {
         assertEquals(16.0, item.secondaryProgress, 0.001)
         assertEquals(18.0, item.secondaryProgressTotal!!, 0.001)
         assertEquals(9.0, item.rating!!, 0.001)
+        assertEquals(88, item.averageScore)
         assertEquals(UserStatus.CURRENT, item.userStatus)
     }
 
@@ -155,5 +159,28 @@ class MediaCardTest {
         assertTrue("Adult item with blur enabled must be obscured", adultItem.isAdult && true)
         assertFalse("Adult item with blur disabled must not be obscured", adultItem.isAdult && false)
         assertFalse("Non-adult item must never be obscured", nonAdultItem.isAdult && true)
+    }
+
+    @Test
+    fun `format badge deduplication correctly identifies generic parent type names`() {
+        val activeAnimeTab = "Anime"
+        val genericAnimeFormat = resolveFormatName(typeId = "typ_anime")
+        val movieFormat = resolveFormatName(typeId = "typ_anime", extraFormat = "MOVIE")
+
+        // Generic "Anime" matches active "Anime" tab -> should be suppressed
+        assertTrue(genericAnimeFormat.equals(activeAnimeTab, ignoreCase = true))
+
+        // Distinct "Movie" does NOT match active "Anime" tab -> should be shown
+        assertFalse(movieFormat.equals(activeAnimeTab, ignoreCase = true))
+
+        val activeNovelTab = "Novel"
+        val genericNovelFormat = resolveFormatName(typeId = "typ_novel")
+        val lightNovelFormat = resolveFormatName(typeId = "typ_novel_ln")
+
+        // Generic "Novel" matches active "Novel" tab -> should be suppressed
+        assertTrue(genericNovelFormat.equals(activeNovelTab, ignoreCase = true))
+
+        // Distinct "Light Novel" does NOT match active "Novel" tab -> should be shown
+        assertFalse(lightNovelFormat.equals(activeNovelTab, ignoreCase = true))
     }
 }

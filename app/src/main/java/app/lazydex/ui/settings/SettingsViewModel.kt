@@ -12,7 +12,7 @@ import app.lazydex.data.local.ThemePreferences
 import app.lazydex.data.local.ThemePreset
 import app.lazydex.data.tracker.anilist.AnilistApi
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
-import app.lazydex.data.tracker.sync.AnilistSyncEngine
+import app.lazydex.data.tracker.sync.TrackerSyncEngine
 import app.lazydex.domain.repository.MediaRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +39,7 @@ data class TrackingSettingsUiState(
     val isSyncing: Boolean = false,
     val syncCurrent: Int = 0,
     val syncTotal: Int = 0,
+    val syncMessage: String? = null,
     val syncError: String? = null,
     val backgroundSyncEnabled: Boolean = true,
     val strictAdultContent: Boolean = false,
@@ -80,7 +81,7 @@ class SettingsViewModel(
     private val cacheDir: File,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val tokenStore: AnilistTokenStore? = null,
-    private val syncEngine: AnilistSyncEngine? = null,
+    private val syncEngine: TrackerSyncEngine? = null,
     private val client: AnilistApi? = null,
 ) : ViewModel() {
 
@@ -126,6 +127,7 @@ class SettingsViewModel(
                                 isSyncing = progress.isSyncing,
                                 syncCurrent = progress.current,
                                 syncTotal = progress.total,
+                                syncMessage = progress.message,
                                 syncError = progress.error
                             )
                         )
@@ -470,20 +472,7 @@ class SettingsViewModel(
 
     fun syncAniList() {
         val engine = syncEngine ?: return
-        viewModelScope.launch {
-            try {
-                engine.syncAll()
-            } catch (e: Exception) {
-                _uiState.update { current ->
-                    current.copy(
-                        tracking = current.tracking.copy(
-                            isSyncing = false,
-                            syncError = e.message ?: "Sync failed"
-                        )
-                    )
-                }
-            }
-        }
+        engine.launchSync()
     }
 
     fun logoutAniList() {

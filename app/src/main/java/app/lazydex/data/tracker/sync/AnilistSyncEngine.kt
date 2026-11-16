@@ -13,12 +13,17 @@ import app.lazydex.data.tracker.anilist.TokenBucketLimiter
 import app.lazydex.data.tracker.anilist.dto.AniListFuzzyDateInput
 import app.lazydex.data.tracker.anilist.dto.AniListMediaListEntry
 import app.lazydex.domain.model.UserStatus
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import kotlinx.serialization.encodeToString
@@ -61,7 +66,7 @@ open class AnilistSyncEngine(
     private val batchSize: Int = DEFAULT_BATCH_SIZE,
     private val timeProvider: () -> Long = System::currentTimeMillis,
     private val transactionRunner: (suspend (suspend () -> Unit) -> Unit)? = null
-) {
+) : TrackerSyncEngine {
     companion object {
         const val PROVIDER_ID = "anilist"
         const val DEFAULT_BATCH_SIZE = 50
@@ -70,7 +75,25 @@ open class AnilistSyncEngine(
     }
 
     private val _syncProgress = MutableStateFlow(SyncProgress())
-    val syncProgress: StateFlow<SyncProgress> = _syncProgress.asStateFlow()
+    override val syncProgress: StateFlow<SyncProgress> = _syncProgress.asStateFlow()
+
+    private val syncScope = CoroutineScope(SupervisorJob() + ioDispatcher)
+    private var activeSyncJob: Job? = null
+
+    @Synchronized
+    override fun launchSync(): Job {
+        activeSyncJob?.let { job ->
+            if (job.isActive) return job
+        }
+        return syncScope.launch {
+            syncAll()
+        }.also { activeSyncJob = it }
+    }
+
+    override fun cancelSync() {
+        activeSyncJob?.cancel()
+        _syncProgress.value = SyncProgress(isSyncing = false, message = "Cancelled")
+    }
 
     private val inFlightMutations = ConcurrentHashMap<String, Long>()
 
@@ -243,6 +266,9 @@ open class AnilistSyncEngine(
                 pulledCount = pulledCount,
                 unlinkedCount = 0
             )
+        } catch (e: CancellationException) {
+            _syncProgress.value = SyncProgress(isSyncing = false, message = "Cancelled")
+            throw e
         } catch (e: Throwable) {
             val errorMsg = e.message ?: "Sync failed"
             _syncProgress.value = SyncProgress(
@@ -487,6 +513,7 @@ open class AnilistSyncEngine(
                         isAdult = updatedIsAdult,
                         genres = updatedGenres,
                         tags = updatedTags,
+                        averageScore = entry.media?.averageScore ?: localItem.averageScore,
                         lengthUnitOverride = localItem.lengthUnitOverride
                     )
                     mediaItemDao.upsert(updatedMediaItem)
@@ -595,6 +622,7 @@ open class AnilistSyncEngine(
                     avgChapterLength = null,
                     lengthUnitOverride = null,
                     playbackSpeed = 1.0,
+                    averageScore = entry.media?.averageScore,
                     createdAt = now,
                     updatedAt = remoteUpdatedMs ?: now,
                     deletedAt = null

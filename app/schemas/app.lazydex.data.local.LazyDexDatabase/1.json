@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "82c2743ff5b4e1dc2899534d751173ae",
+    "identityHash": "1df449c0b71e341e52514a571664a9d7",
     "entities": [
       {
         "tableName": "media_items",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `type` TEXT NOT NULL, `format` TEXT NOT NULL DEFAULT '', `countryOfOrigin` TEXT, `title` TEXT NOT NULL, `titleEnglish` TEXT, `titleRomaji` TEXT, `titleNative` TEXT, `coverImagePath` TEXT NOT NULL DEFAULT '', `coverImageUrl` TEXT, `bannerImage` TEXT, `description` TEXT NOT NULL DEFAULT '', `author` TEXT NOT NULL DEFAULT '', `progressTotal` REAL, `secondaryProgressTotal` REAL, `genres` TEXT NOT NULL DEFAULT '[]', `tags` TEXT NOT NULL DEFAULT '[]', `isAdult` INTEGER NOT NULL DEFAULT 0, `durationMinutes` INTEGER, `avgChapterLength` INTEGER, `lengthUnitOverride` TEXT, `playbackSpeed` REAL NOT NULL DEFAULT 1.0, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `type` TEXT NOT NULL, `format` TEXT NOT NULL DEFAULT '', `countryOfOrigin` TEXT, `title` TEXT NOT NULL, `titleEnglish` TEXT, `titleRomaji` TEXT, `titleNative` TEXT, `coverImagePath` TEXT NOT NULL DEFAULT '', `coverImageUrl` TEXT, `bannerImage` TEXT, `description` TEXT NOT NULL DEFAULT '', `author` TEXT NOT NULL DEFAULT '', `progressTotal` REAL, `secondaryProgressTotal` REAL, `genres` TEXT NOT NULL DEFAULT '[]', `tags` TEXT NOT NULL DEFAULT '[]', `isAdult` INTEGER NOT NULL DEFAULT 0, `durationMinutes` INTEGER, `avgChapterLength` INTEGER, `lengthUnitOverride` TEXT, `playbackSpeed` REAL NOT NULL DEFAULT 1.0, `averageScore` INTEGER, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -147,6 +147,12 @@
             "affinity": "REAL",
             "notNull": true,
             "defaultValue": "1.0"
+          },
+          {
+            "fieldPath": "averageScore",
+            "columnName": "averageScore",
+            "affinity": "INTEGER",
+            "notNull": false
           },
           {
             "fieldPath": "createdAt",
@@ -912,12 +918,12 @@
     "views": [
       {
         "viewName": "active_media_items",
-        "createSql": "CREATE VIEW `${VIEW_NAME}` AS SELECT \n            m.id,\n            m.type,\n            m.format,\n            m.countryOfOrigin,\n            m.title,\n            m.titleEnglish,\n            m.titleRomaji,\n            m.titleNative,\n            m.coverImagePath,\n            m.coverImageUrl,\n            m.bannerImage,\n            m.description,\n            m.author,\n            COALESCE(u.userStatus, 'PLANNING') AS userStatus,\n            COALESCE(u.progress, 0.0) AS progress,\n            m.progressTotal,\n            COALESCE(u.secondaryProgress, 0.0) AS secondaryProgress,\n            m.secondaryProgressTotal,\n            u.scoreRaw,\n            COALESCE(u.repeat, 0) AS repeat,\n            COALESCE(u.notes, '') AS notes,\n            m.genres,\n            m.tags,\n            COALESCE(u.isPrivate, 0) AS isPrivate,\n            m.isAdult,\n            u.startYear,\n            u.startMonth,\n            u.startDay,\n            u.endYear,\n            u.endMonth,\n            u.endDay,\n            m.durationMinutes,\n            m.avgChapterLength,\n            m.lengthUnitOverride,\n            m.playbackSpeed,\n            m.createdAt,\n            m.updatedAt AS catalogUpdatedAt,\n            u.updatedAt AS userUpdatedAt,\n            u.progressIncreasedAt,\n            m.deletedAt\n        FROM media_items m\n        LEFT JOIN user_data u ON u.mediaId = m.id\n        WHERE m.deletedAt IS NULL"
+        "createSql": "CREATE VIEW `${VIEW_NAME}` AS SELECT \n            m.id,\n            m.type,\n            m.format,\n            m.countryOfOrigin,\n            m.title,\n            m.titleEnglish,\n            m.titleRomaji,\n            m.titleNative,\n            m.coverImagePath,\n            m.coverImageUrl,\n            m.bannerImage,\n            m.description,\n            m.author,\n            COALESCE(u.userStatus, 'PLANNING') AS userStatus,\n            COALESCE(u.progress, 0.0) AS progress,\n            m.progressTotal,\n            COALESCE(u.secondaryProgress, 0.0) AS secondaryProgress,\n            m.secondaryProgressTotal,\n            u.scoreRaw,\n            COALESCE(u.repeat, 0) AS repeat,\n            COALESCE(u.notes, '') AS notes,\n            m.genres,\n            m.tags,\n            COALESCE(u.isPrivate, 0) AS isPrivate,\n            m.isAdult,\n            u.startYear,\n            u.startMonth,\n            u.startDay,\n            u.endYear,\n            u.endMonth,\n            u.endDay,\n            m.durationMinutes,\n            m.avgChapterLength,\n            m.lengthUnitOverride,\n            m.playbackSpeed,\n            m.averageScore,\n            m.createdAt,\n            m.updatedAt AS catalogUpdatedAt,\n            u.updatedAt AS userUpdatedAt,\n            u.progressIncreasedAt,\n            m.deletedAt\n        FROM media_items m\n        LEFT JOIN user_data u ON u.mediaId = m.id\n        WHERE m.deletedAt IS NULL"
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '82c2743ff5b4e1dc2899534d751173ae')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '1df449c0b71e341e52514a571664a9d7')"
     ]
   }
 }

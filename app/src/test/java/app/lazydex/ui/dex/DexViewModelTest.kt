@@ -17,6 +17,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -69,11 +70,20 @@ class DexViewModelTest {
         override fun observeById(id: String): Flow<MediaItem?> = flowOf(itemsFlow.value.find { it.id == id })
         override fun observeCount(): Flow<Int> = flowOf(itemsFlow.value.size)
         override fun observeStats(): Flow<MediaStats> = flowOf(MediaStats(0, 0, 0, null, 0, 0, 0, 0, 0))
-        override fun observeTypeCounts(): Flow<Map<MediaType, Int>> = flowOf(emptyMap())
+        override fun observeTypeCounts(): Flow<Map<MediaType, Int>> = itemsFlow.map { list ->
+            list.groupBy { it.mediaType }.mapValues { it.value.size }
+        }
         override fun observeStatusCounts(mediaType: MediaType?): Flow<Map<StatusFilter, Int>> = flowOf(emptyMap())
         override fun observeDistinctGenres(mediaType: MediaType?): Flow<List<String>> = flowOf(emptyList())
         override fun observeDistinctTags(mediaType: MediaType?): Flow<List<String>> = flowOf(emptyList())
-        override fun observeTopLevelTypes(): Flow<List<TypeConfig>> = flowOf(emptyList())
+        override fun observeTopLevelTypes(): Flow<List<TypeConfig>> = flowOf(
+            listOf(
+                TypeConfig(id = "NOVEL", name = "Novel"),
+                TypeConfig(id = "MANGA", name = "Manga"),
+                TypeConfig(id = "ANIME", name = "Anime"),
+                TypeConfig(id = "GAME", name = "Game")
+            )
+        )
         override fun observeFormats(parentId: String): Flow<List<TypeConfig>> = flowOf(emptyList())
 
         override suspend fun getById(id: String): MediaItem? = itemsFlow.value.find { it.id == id }
@@ -422,6 +432,59 @@ class DexViewModelTest {
         val afterItems = viewModel.uiState.value.items
 
         assertTrue("Items list reference must remain identical on tab switch", initialItems === afterItems)
+    }
+
+    @Test
+    fun `topLevelTypes prunes empty categories and keeps only categories with items`() = runTest(testDispatcher) {
+        val animeOnly = listOf(
+            MediaItem(id = "a1", type = "ANIME", title = "Anime 1", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L)
+        )
+        repository.itemsFlow.value = animeOnly
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        val types = viewModel.uiState.value.topLevelTypes
+        assertEquals(1, types.size)
+        assertEquals("ANIME", types[0].id)
+    }
+
+    @Test
+    fun `topLevelTypes emits empty list when entire library has zero items`() = runTest(testDispatcher) {
+        repository.itemsFlow.value = emptyList()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        val types = viewModel.uiState.value.topLevelTypes
+        assertTrue(types.isEmpty())
+    }
+
+    @Test
+    fun `per-tab status filter isolation preserves independent filter per category`() = runTest(testDispatcher) {
+        val mixedItems = listOf(
+            MediaItem(id = "m1", type = "MANGA", title = "Manga Plan", userStatus = UserStatus.PLANNING, lastUpdated = 1L, dateAdded = 1L),
+            MediaItem(id = "m2", type = "MANGA", title = "Manga Curr", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L),
+            MediaItem(id = "a1", type = "ANIME", title = "Anime Plan", userStatus = UserStatus.PLANNING, lastUpdated = 1L, dateAdded = 1L),
+            MediaItem(id = "a2", type = "ANIME", title = "Anime Curr", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L)
+        )
+        repository.itemsFlow.value = mixedItems
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        // 1. On Manga tab, select CURRENT
+        viewModel.selectTypeId("MANGA")
+        viewModel.selectStatus(StatusFilter.CURRENT)
+        advanceUntilIdle()
+        assertEquals(StatusFilter.CURRENT, viewModel.uiState.value.selectedStatus)
+
+        // 2. Switch to Anime tab: should default to ALL (not CURRENT)
+        viewModel.selectTypeId("ANIME")
+        advanceUntilIdle()
+        assertEquals(StatusFilter.ALL, viewModel.uiState.value.selectedStatus)
+
+        // 3. Switch back to Manga tab: should restore CURRENT
+        viewModel.selectTypeId("MANGA")
+        advanceUntilIdle()
+        assertEquals(StatusFilter.CURRENT, viewModel.uiState.value.selectedStatus)
     }
 }
 

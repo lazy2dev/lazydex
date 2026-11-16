@@ -208,6 +208,7 @@ fun SettingsTrackingScreen(
                     isImporting = tracking.isSyncing,
                     syncCurrent = tracking.syncCurrent,
                     syncTotal = tracking.syncTotal,
+                    syncMessage = tracking.syncMessage,
                     errorMessage = tracking.syncError,
                     onImportNow = { viewModel.syncAniList() }
                 )
@@ -286,6 +287,7 @@ private fun AniListImportCard(
     isImporting: Boolean,
     syncCurrent: Int,
     syncTotal: Int,
+    syncMessage: String? = null,
     errorMessage: String?,
     onImportNow: () -> Unit,
     modifier: Modifier = Modifier
@@ -363,17 +365,18 @@ private fun AniListImportCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val statusLabel = when {
+                        isImporting && syncTotal == 0 -> syncMessage ?: "Connecting to AniList..."
+                        isImporting -> "${syncMessage ?: "Importing items"}: $syncCurrent / $syncTotal items"
+                        else -> "Last import completed: $syncCurrent / $syncTotal items"
+                    }
                     Text(
-                        text = if (isImporting) {
-                            "Importing items: $syncCurrent / $syncTotal items"
-                        } else {
-                            "Last import completed: $syncCurrent / $syncTotal items"
-                        },
+                        text = statusLabel,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "$percent%",
+                        text = if (isImporting && syncTotal == 0) "..." else "$percent%",
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
