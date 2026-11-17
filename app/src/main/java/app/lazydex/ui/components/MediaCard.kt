@@ -2,6 +2,7 @@
 
 package app.lazydex.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -84,7 +85,13 @@ fun MediaItem.toMediaCardUiState(
     hasSecondaryProgress: Boolean? = null,
     isDirtyLocal: Boolean = false,
 ): MediaCardUiState {
-    val resolvedFormat = resolveFormatName(typeId, getExtra("format"), mediaType, formatName)
+    val resolvedFormat = resolveFormatName(
+        typeId = typeId,
+        extraFormat = format.ifBlank { getExtra("format") },
+        mediaType = mediaType,
+        customFormat = formatName,
+        countryOfOrigin = countryOfOrigin,
+    )
     val resolvedSecondary = resolveHasSecondaryProgress(
         typeId = typeId,
         secondaryProgress = secondaryProgress,
@@ -116,6 +123,31 @@ fun MediaItem.toMediaCardUiState(
 
 fun MediaCardUiState.toMediaItem(): MediaItem {
     val calcRating = scoreRaw?.let { it / 20.0 }
+    val resolvedDomainFormat = when (formatName?.uppercase()) {
+        "TV" -> "TV"
+        "TV SHORT" -> "TV_SHORT"
+        "MOVIE" -> "MOVIE"
+        "SPECIAL" -> "SPECIAL"
+        "OVA" -> "OVA"
+        "ONA" -> "ONA"
+        "LIGHT NOVEL" -> "LIGHT_NOVEL"
+        "WEB NOVEL" -> "WEB_NOVEL"
+        "ONE SHOT" -> "ONE_SHOT"
+        "MANHWA" -> "MANHWA"
+        "MANHUA" -> "MANHUA"
+        "PC" -> "PC"
+        "ANDROID" -> "ANDROID"
+        "CONSOLE" -> "CONSOLE"
+        "WEB" -> "WEB"
+        "CROSS PLATFORM" -> "CROSS_PLATFORM"
+        else -> when (mediaType) {
+            MediaType.NOVEL -> "NOVEL"
+            MediaType.MANGA -> "MANGA"
+            MediaType.MOVIE -> "MOVIE"
+            MediaType.TV, MediaType.ANIME -> "TV"
+            MediaType.GAME -> "PC"
+        }
+    }
     return MediaItem(
         id = id,
         type = when (mediaType) {
@@ -124,13 +156,7 @@ fun MediaCardUiState.toMediaItem(): MediaItem {
             MediaType.ANIME, MediaType.MOVIE, MediaType.TV -> "ANIME"
             MediaType.GAME -> "GAME"
         },
-        format = when (mediaType) {
-            MediaType.NOVEL -> "NOVEL"
-            MediaType.MANGA -> "MANGA"
-            MediaType.MOVIE -> "MOVIE"
-            MediaType.TV, MediaType.ANIME -> "TV"
-            MediaType.GAME -> "PC"
-        },
+        format = resolvedDomainFormat,
         countryOfOrigin = null,
         title = title,
         coverImagePath = coverPath,
@@ -154,10 +180,17 @@ fun resolveFormatName(
     extraFormat: String? = null,
     mediaType: MediaType? = null,
     customFormat: String? = null,
+    countryOfOrigin: String? = null,
 ): String {
     if (!customFormat.isNullOrBlank()) return customFormat
-    if (!extraFormat.isNullOrBlank()) {
-        return when (extraFormat.uppercase()) {
+
+    val isKorean = countryOfOrigin.equals("KR", ignoreCase = true)
+    val isChinese = countryOfOrigin.equals("CN", ignoreCase = true) || countryOfOrigin.equals("TW", ignoreCase = true)
+
+    val cleanExtra = extraFormat?.trim()?.takeIf { it.isNotEmpty() }
+
+    if (cleanExtra != null) {
+        return when (val upper = cleanExtra.uppercase()) {
             "TV" -> "TV"
             "TV_SHORT" -> "TV Short"
             "MOVIE" -> "Movie"
@@ -165,37 +198,71 @@ fun resolveFormatName(
             "OVA" -> "OVA"
             "ONA" -> "ONA"
             "MUSIC" -> "Music"
-            "MANGA" -> "Manga"
-            "NOVEL" -> "Light Novel"
-            "ONE_SHOT" -> "One Shot"
-            "WEB_NOVEL" -> "Web Novel"
-            "LIGHT_NOVEL" -> "Light Novel"
+            "MANGA" -> when {
+                isKorean -> "Manhwa"
+                isChinese -> "Manhua"
+                else -> "Manga"
+            }
             "MANHWA" -> "Manhwa"
             "MANHUA" -> "Manhua"
+            "ONE_SHOT" -> "One Shot"
+            "DOUJINSHI" -> "Doujinshi"
+            "LIGHT_NOVEL", "LN" -> "Light Novel"
+            "WEB_NOVEL", "WN" -> "Web Novel"
+            "NOVEL" -> when {
+                isKorean || isChinese -> "Web Novel"
+                else -> "Light Novel"
+            }
             "PC" -> "PC"
             "ANDROID" -> "Android"
             "CONSOLE" -> "Console"
             "CROSS_PLATFORM" -> "Cross Platform"
-            else -> extraFormat.replace('_', ' ').split(" ").joinToString(" ") { word ->
+            "WEB" -> "Web"
+            "ANIME" -> "TV"
+            "GAME" -> "PC"
+            else -> cleanExtra.replace('_', ' ').split(" ").joinToString(" ") { word ->
                 word.lowercase().replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
             }
         }
     }
+
     return when (typeId.uppercase()) {
         "TYP_NOVEL_LN", "LIGHT_NOVEL" -> "Light Novel"
         "TYP_NOVEL_CN", "TYP_NOVEL_KR", "WEB_NOVEL" -> "Web Novel"
-        "TYP_NOVEL", "NOVEL" -> "Novel"
+        "TYP_NOVEL", "NOVEL" -> when {
+            isKorean || isChinese -> "Web Novel"
+            else -> "Novel"
+        }
         "TYP_MANHWA", "MANHWA" -> "Manhwa"
         "TYP_MANHUA", "MANHUA" -> "Manhua"
-        "TYP_MANGA_JP", "TYP_MANGA", "MANGA" -> "Manga"
-        "TYP_ANIME_SERIES", "TV" -> "TV Series"
+        "TYP_MANGA_JP", "TYP_MANGA", "MANGA" -> when {
+            isKorean -> "Manhwa"
+            isChinese -> "Manhua"
+            else -> "Manga"
+        }
+        "TYP_ANIME_SERIES", "TV" -> "TV"
         "TYP_ANIME_MOVIE", "MOVIE" -> "Movie"
         "TYP_ANIME_OVA", "OVA" -> "OVA"
-        "TYP_ANIME", "ANIME" -> "Anime"
+        "TYP_ANIME", "ANIME" -> "TV"
         "TYP_MOVIE" -> "Movie"
         "TYP_TV" -> "TV"
-        "TYP_GAME", "GAME", "PC" -> "Game"
-        else -> mediaType?.displayName ?: ""
+        "TYP_GAME", "GAME", "PC" -> "PC"
+        else -> when (mediaType) {
+            MediaType.ANIME -> "TV"
+            MediaType.GAME -> "PC"
+            MediaType.MANGA -> when {
+                isKorean -> "Manhwa"
+                isChinese -> "Manhua"
+                else -> "Manga"
+            }
+            MediaType.NOVEL -> when {
+                isKorean || isChinese -> "Web Novel"
+                else -> "Novel"
+            }
+            MediaType.MOVIE -> "Movie"
+            MediaType.TV -> "TV"
+            null -> ""
+        }
     }
 }
 
@@ -359,8 +426,14 @@ fun MediaCard(
 
     when (effectiveMode) {
         LibraryDisplayMode.LIST -> {
-            val resolvedFormat = remember(item.typeId, item.extraData, item.mediaType, formatName) {
-                resolveFormatName(item.typeId, item.getExtra("format"), item.mediaType, formatName)
+            val resolvedFormat = remember(item.typeId, item.format, item.extraData, item.mediaType, item.countryOfOrigin, formatName) {
+                resolveFormatName(
+                    typeId = item.typeId,
+                    extraFormat = item.format.ifBlank { item.getExtra("format") },
+                    mediaType = item.mediaType,
+                    customFormat = formatName,
+                    countryOfOrigin = item.countryOfOrigin,
+                )
             }
             val displayProgress = if (item.progress > 0.0) item.progress else item.currentProgress.toDouble()
             val displayProgressTotal = item.progressTotal ?: item.totalItems?.toDouble()
@@ -373,23 +446,25 @@ fun MediaCard(
             val avgScore = item.averageScore
 
             Surface(
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = if (isSelected) {
                     MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
                 } else {
-                    Color.Transparent
+                    MaterialTheme.colorScheme.surfaceContainerLow
                 },
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f)),
                 modifier = modifier
                     .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
                     .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                        .padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 1. Cover Image (68 x 96dp vertical poster)
+                    // 1. Cover Image (68 x 96dp vertical poster, unmasked & clean)
                     Box(
                         modifier = Modifier.size(width = 68.dp, height = 96.dp),
                         contentAlignment = Alignment.TopStart
@@ -406,52 +481,6 @@ fun MediaCard(
                                     if (isSelected) alpha = 0.76f
                                 }
                         )
-
-                        // Capsule Badge: Community averageScore & user status indicator
-                        if (avgScore != null || isCompleted || isDropped || isPaused) {
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = Color.Black.copy(alpha = 0.72f),
-                                modifier = Modifier.padding(4.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (avgScore != null) {
-                                        Text(
-                                            text = "🙂 $avgScore%",
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White
-                                        )
-                                    }
-                                    if (isCompleted) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = "Completed",
-                                            tint = StatusCompleted,
-                                            modifier = Modifier.size(11.dp)
-                                        )
-                                    } else if (isDropped) {
-                                        Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = "Dropped",
-                                            tint = StatusDropped,
-                                            modifier = Modifier.size(11.dp)
-                                        )
-                                    } else if (isPaused) {
-                                        Icon(
-                                            imageVector = Icons.Default.Pause,
-                                            contentDescription = "Paused",
-                                            tint = StatusOnHold,
-                                            modifier = Modifier.size(11.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
 
                         if (isSelected) {
                             Box(
@@ -474,7 +503,7 @@ fun MediaCard(
 
                     Spacer(modifier = Modifier.width(12.dp))
 
-                    // 2. Middle Column: Title at top, Format & Score + Progress bar at bottom
+                    // 2. Middle Column: Title, Metadata (Format • Status • Score), Progress
                     Column(
                         modifier = Modifier
                             .weight(1f)
@@ -505,6 +534,83 @@ fun MediaCard(
                             }
                         }
 
+                        // Row 2: Metadata Row (Eliminates the empty gap)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (resolvedFormat.isNotBlank()) {
+                                Text(
+                                    text = resolvedFormat,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            if (showStatusBadge) {
+                                if (resolvedFormat.isNotBlank()) {
+                                    Text(
+                                        text = "•",
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                }
+                                val statusColor = item.userStatus.color()
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = statusColor.copy(alpha = 0.14f)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = item.userStatus.icon(),
+                                            contentDescription = item.userStatus.displayName,
+                                            tint = statusColor,
+                                            modifier = Modifier.size(10.dp)
+                                        )
+                                        Text(
+                                            text = item.userStatus.displayName,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = statusColor
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (showScoreBadge && avgScore != null) {
+                                if (resolvedFormat.isNotBlank() || showStatusBadge) {
+                                    Text(
+                                        text = "•",
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                }
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "★",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.tertiary
+                                    )
+                                    Text(
+                                        text = "$avgScore%",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
+                        // Row 3: Progress & Personal Score
                         Column(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -514,30 +620,17 @@ fun MediaCard(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (resolvedFormat.isNotBlank()) {
-                                        Text(
-                                            text = resolvedFormat,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                    val scoreText = if (rating != null) {
-                                        val formatted = if (rating % 1.0 == 0.0) rating.toInt().toString() else "%.1f".format(rating)
-                                        "Score: $formatted"
-                                    } else {
-                                        "Score: ?"
-                                    }
-                                    Text(
-                                        text = scoreText,
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                val scoreText = if (rating != null) {
+                                    val formatted = if (rating % 1.0 == 0.0) rating.toInt().toString() else "%.1f".format(rating)
+                                    "Score: $formatted"
+                                } else {
+                                    "Score: ?"
                                 }
+                                Text(
+                                    text = scoreText,
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
 
                                 val progressCountText = "${formatProgress(displayProgress)} / ${displayProgressTotal?.takeIf { it > 0 }?.let { formatProgress(it) } ?: "?"}"
                                 Text(
@@ -548,7 +641,7 @@ fun MediaCard(
                                 )
                             }
 
-                            // Progress Bar ONLY in Middle Column (does NOT go below cover or right side)
+                            // Progress Bar ONLY in Middle Column
                             val progressFraction = remember(displayProgress, displayProgressTotal, isCompleted) {
                                 if (isCompleted) 1f
                                 else if (displayProgressTotal != null && displayProgressTotal > 0) {
@@ -568,7 +661,7 @@ fun MediaCard(
                                         modifier = Modifier
                                             .fillMaxWidth(progressFraction)
                                             .fillMaxHeight()
-                                            .background(MaterialTheme.colorScheme.primary)
+                                            .background(if (isCompleted) StatusCompleted else MaterialTheme.colorScheme.primary)
                                     )
                                 }
                             }
@@ -581,7 +674,7 @@ fun MediaCard(
                     Box(
                         modifier = Modifier
                             .height(96.dp)
-                            .width(36.dp),
+                            .width(40.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         if (!isCompleted && onIncrementProgress != null) {
@@ -589,6 +682,7 @@ fun MediaCard(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
                                     .combinedClickable(
                                         onClick = { onIncrementProgress(item.id) },
                                         onLongClick = { onOpenProgressDialog?.invoke(item) }
@@ -598,8 +692,8 @@ fun MediaCard(
                                 Icon(
                                     imageVector = Icons.Default.Add,
                                     contentDescription = "Increment progress",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(22.dp)
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }

@@ -18,19 +18,26 @@ class MediaCardTest {
         assertEquals("Web Novel", resolveFormatName(typeId = "typ_novel_cn"))
         assertEquals("Novel", resolveFormatName(typeId = "typ_novel"))
         assertEquals("TV", resolveFormatName(typeId = "typ_tv"))
-        assertEquals("Anime", resolveFormatName(typeId = "typ_anime"))
+        assertEquals("TV", resolveFormatName(typeId = "typ_anime"))
         assertEquals("Manga", resolveFormatName(typeId = "typ_manga"))
         assertEquals("Movie", resolveFormatName(typeId = "typ_movie"))
-        assertEquals("Game", resolveFormatName(typeId = "typ_game"))
+        assertEquals("PC", resolveFormatName(typeId = "typ_game"))
     }
 
     @Test
     fun `resolveFormatName prioritizes AniList format and custom format`() {
         assertEquals("Custom Badging", resolveFormatName(typeId = "typ_manga", customFormat = "Custom Badging"))
         assertEquals("TV", resolveFormatName(typeId = "typ_anime", extraFormat = "TV"))
+        assertEquals("Movie", resolveFormatName(typeId = "typ_anime", extraFormat = "MOVIE"))
+        assertEquals("OVA", resolveFormatName(typeId = "typ_anime", extraFormat = "OVA"))
         assertEquals("Light Novel", resolveFormatName(typeId = "typ_novel", extraFormat = "NOVEL"))
+        assertEquals("Web Novel", resolveFormatName(typeId = "typ_novel", extraFormat = "NOVEL", countryOfOrigin = "KR"))
         assertEquals("One Shot", resolveFormatName(typeId = "typ_manga", extraFormat = "ONE_SHOT"))
+        assertEquals("Manhwa", resolveFormatName(typeId = "typ_manga", extraFormat = "MANGA", countryOfOrigin = "KR"))
+        assertEquals("Manhua", resolveFormatName(typeId = "typ_manga", extraFormat = "MANGA", countryOfOrigin = "CN"))
         assertEquals("TV Short", resolveFormatName(typeId = "typ_anime", extraFormat = "TV_SHORT"))
+        assertEquals("PC", resolveFormatName(typeId = "typ_game", extraFormat = "PC"))
+        assertEquals("Console", resolveFormatName(typeId = "typ_game", extraFormat = "CONSOLE"))
     }
 
     @Test
@@ -162,25 +169,20 @@ class MediaCardTest {
     }
 
     @Test
-    fun `format badge deduplication correctly identifies generic parent type names`() {
-        val activeAnimeTab = "Anime"
-        val genericAnimeFormat = resolveFormatName(typeId = "typ_anime")
+    fun `format badge resolves to sub-format rather than generic type`() {
+        val animeFormat = resolveFormatName(typeId = "typ_anime")
         val movieFormat = resolveFormatName(typeId = "typ_anime", extraFormat = "MOVIE")
 
-        // Generic "Anime" matches active "Anime" tab -> should be suppressed
-        assertTrue(genericAnimeFormat.equals(activeAnimeTab, ignoreCase = true))
+        assertEquals("TV", animeFormat)
+        assertEquals("Movie", movieFormat)
 
-        // Distinct "Movie" does NOT match active "Anime" tab -> should be shown
-        assertFalse(movieFormat.equals(activeAnimeTab, ignoreCase = true))
-
-        val activeNovelTab = "Novel"
-        val genericNovelFormat = resolveFormatName(typeId = "typ_novel")
+        val novelFormat = resolveFormatName(typeId = "typ_novel")
         val lightNovelFormat = resolveFormatName(typeId = "typ_novel_ln")
 
-        // Generic "Novel" matches active "Novel" tab -> should be suppressed
-        assertTrue(genericNovelFormat.equals(activeNovelTab, ignoreCase = true))
+        assertEquals("Novel", novelFormat)
+        assertEquals("Light Novel", lightNovelFormat)
 
-        // Distinct "Light Novel" does NOT match active "Novel" tab -> should be shown
-        assertFalse(lightNovelFormat.equals(activeNovelTab, ignoreCase = true))
+        val gameFormat = resolveFormatName(typeId = "typ_game")
+        assertEquals("PC", gameFormat)
     }
 }
