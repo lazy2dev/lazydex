@@ -1,10 +1,16 @@
 package app.lazydex.ui.dex
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -64,6 +70,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -91,7 +98,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import app.lazydex.ui.components.DexTypeTabs
+import app.lazydex.domain.model.resolveMediaType
 import app.lazydex.ui.dex.DexViewModel.Companion.getItemsForType
 import kotlinx.coroutines.launch
 
@@ -232,11 +239,30 @@ fun DexScreen(
                                 }
                             )
                         } else {
-                            Text(
-                                text = "Dex",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Dex",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 20.sp,
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
+                                val activeIndex = pagerState.currentPage.coerceIn(0, tabs.lastIndex.coerceAtLeast(0))
+                                val activeTab = tabs.getOrNull(activeIndex)
+                                if (activeTab != null && tabs.size > 1) {
+                                    Text(
+                                        text = " · ",
+                                        fontWeight = FontWeight.Normal,
+                                        fontSize = 20.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                    Text(
+                                        text = activeTab.name,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 20.sp,
+                                        color = MaterialTheme.colorScheme.onBackground
+                                    )
+                                }
+                            }
                         }
                     },
                     navigationIcon = {
@@ -354,14 +380,22 @@ fun DexScreen(
             }
         }
 
-        // Notify ViewModel when active page changes (unidirectional, never cancels running scroll animation)
-        LaunchedEffect(pagerState.currentPage, tabs) {
-            if (tabs.isNotEmpty()) {
-                val activeTab = tabs.getOrNull(pagerState.currentPage)
-                if (activeTab != null && activeTab.id != uiState.selectedTypeId) {
-                    viewModel.selectTypeId(activeTab.id)
+        // Synchronize in-memory active page index for real-time bottom nav carousel animations
+        LaunchedEffect(pagerState.currentPage) {
+            viewModel.setActivePageIndex(pagerState.currentPage)
+        }
+
+        // Notify ViewModel when active page settles (unidirectional, never cancels running scroll animation)
+        LaunchedEffect(pagerState, tabs) {
+            snapshotFlow { pagerState.settledPage }
+                .collect { settledPage ->
+                    if (tabs.isNotEmpty()) {
+                        val activeTab = tabs.getOrNull(settledPage)
+                        if (activeTab != null && activeTab.id != uiState.selectedTypeId) {
+                            viewModel.selectTypeId(activeTab.id)
+                        }
+                    }
                 }
-            }
         }
 
         when {
@@ -390,28 +424,11 @@ fun DexScreen(
                 }
             }
             else -> {
-                Column(
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding)
                 ) {
-                    DexTypeTabs(
-                        tabs = tabs,
-                        selectedIndex = pagerState.currentPage,
-                        getItemCount = { tab ->
-                            if (uiState.showItemCount || !searchQuery.isNullOrEmpty()) {
-                                itemsByTabId[tab.id]?.size ?: 0
-                            } else {
-                                null
-                            }
-                        },
-                        onTabItemClick = { index ->
-                            coroutineScope.launch {
-                                pagerState.animateScrollToPage(index)
-                            }
-                        }
-                    )
-
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier.fillMaxSize(),

@@ -1,5 +1,12 @@
 package app.lazydex.ui.statistics
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +24,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.LibraryBooks
@@ -47,7 +56,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,7 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.TypeConfig
-import app.lazydex.ui.components.DexTypeTabs
+import app.lazydex.domain.model.resolveMediaType
 import app.lazydex.ui.components.EmptyState
 import app.lazydex.ui.components.color
 import app.lazydex.ui.components.icon
@@ -82,6 +93,7 @@ fun StatisticsScreen(
     viewModel: StatisticsViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
     var showDateSheet by remember { mutableStateOf(false) }
     var showCustomDateDialog by remember { mutableStateOf(false) }
     var selectedHeatmapDay by remember(
@@ -92,33 +104,70 @@ fun StatisticsScreen(
         mutableStateOf<ActivityHeatmapDay?>(null)
     }
 
-    val tabs = remember(uiState.topLevelTypes) {
-        if (uiState.topLevelTypes.isNotEmpty()) {
+    val tabs = remember(uiState.topLevelTypes, uiState.typeCounts) {
+        val baseTypes = if (uiState.topLevelTypes.isNotEmpty()) {
             uiState.topLevelTypes
         } else {
             listOf(
                 TypeConfig(id = "NOVEL", name = "Novel", unitName = "Chapter"),
                 TypeConfig(id = "MANGA", name = "Manga", unitName = "Chapter"),
                 TypeConfig(id = "ANIME", name = "Anime", unitName = "Episode"),
-                TypeConfig(id = "GAME", name = "Game", unitName = "Hour")
+                TypeConfig(id = "GAME", name = "Game", unitName = "Hour"),
+                TypeConfig(id = "MOVIE", name = "Movie", unitName = "Movie"),
+                TypeConfig(id = "TV", name = "TV", unitName = "Episode")
             )
+        }
+        baseTypes.filter { tab ->
+            val mediaType = resolveMediaType(tab.id)
+            val count = uiState.typeCounts[mediaType] ?: 0
+            count > 0
         }
     }
 
-    val selectedTabIndex = remember(uiState.selectedType, tabs) {
+    val initialTabIndex = remember(tabs, uiState.selectedType) {
         if (uiState.selectedType != null) {
-            val idx = tabs.indexOfFirst { it.id.equals(uiState.selectedType?.name, ignoreCase = true) }
-            if (idx >= 0) idx else 0
+            tabs.indexOfFirst { resolveMediaType(it.id) == uiState.selectedType }.takeIf { it != -1 } ?: 0
         } else {
             0
         }
     }
+    val pagerState = rememberPagerState(
+        initialPage = initialTabIndex.coerceIn(0, (tabs.size - 1).coerceAtLeast(0))
+    ) { tabs.size }
 
     LaunchedEffect(tabs) {
-        if (tabs.isNotEmpty() && uiState.selectedType == null) {
-            val firstType = MediaType.fromString(tabs.first().id) ?: MediaType.NOVEL
-            viewModel.selectType(firstType)
+        if (tabs.isNotEmpty()) {
+            val targetIndex = if (uiState.selectedType != null) {
+                tabs.indexOfFirst { resolveMediaType(it.id) == uiState.selectedType }.takeIf { it != -1 } ?: 0
+            } else {
+                0
+            }
+            if (targetIndex != pagerState.currentPage) {
+                pagerState.scrollToPage(targetIndex)
+            }
+            val activeTab = tabs.getOrNull(targetIndex)
+            val targetType = activeTab?.let { resolveMediaType(it.id) }
+            if (targetType != null && targetType != uiState.selectedType) {
+                viewModel.selectType(targetType)
+            }
         }
+    }
+
+    LaunchedEffect(pagerState.currentPage) {
+        viewModel.setActivePageIndex(pagerState.currentPage)
+    }
+
+    LaunchedEffect(pagerState, tabs) {
+        snapshotFlow { pagerState.settledPage }
+            .collect { settledPage ->
+                if (tabs.isNotEmpty()) {
+                    val activeTab = tabs.getOrNull(settledPage)
+                    val activeType = activeTab?.let { resolveMediaType(it.id) }
+                    if (activeType != null && activeType != uiState.selectedType) {
+                        viewModel.selectType(activeType)
+                    }
+                }
+            }
     }
 
     val accentColor = uiState.selectedType?.color() ?: MaterialTheme.colorScheme.primary
@@ -127,11 +176,30 @@ fun StatisticsScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = "Statistics",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Statistics",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        val activeIndex = pagerState.currentPage.coerceIn(0, tabs.lastIndex.coerceAtLeast(0))
+                        val activeTab = tabs.getOrNull(activeIndex)
+                        if (activeTab != null && tabs.size > 1) {
+                            Text(
+                                text = " · ",
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 20.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                            Text(
+                                text = activeTab.name,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 20.sp,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                    }
                 },
                 actions = {
                     DateRangeHeaderPill(
@@ -150,29 +218,15 @@ fun StatisticsScreen(
         containerColor = MaterialTheme.colorScheme.background,
         modifier = modifier
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            DexTypeTabs(
-                tabs = tabs,
-                selectedIndex = selectedTabIndex,
-                getItemCount = { tab ->
-                    val type = MediaType.fromString(tab.id)
-                    uiState.typeCounts[type] ?: 0
-                },
-                onTabItemClick = { index ->
-                    val tab = tabs.getOrNull(index)
-                    val type = tab?.let { MediaType.fromString(it.id) } ?: MediaType.NOVEL
-                    viewModel.selectType(type)
-                }
-            )
-
             val overview = uiState.overview
             val hasBoundedFilter = uiState.dateRange.preset != StatsDateRangePreset.ALL_TIME
 
-            if (overview.totalCount == 0 && !uiState.isLoading) {
+            if (tabs.isEmpty() || (overview.totalCount == 0 && !uiState.isLoading)) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
@@ -199,11 +253,19 @@ fun StatisticsScreen(
                     }
                 }
             } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.Top
+                ) { page ->
+                    if (page !in ((pagerState.currentPage - 1)..(pagerState.currentPage + 1))) {
+                        return@HorizontalPager
+                    }
+                    LazyColumn(
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
                     // 1. Komikku Overview Tonal Block
                     item(key = "overview") {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -326,6 +388,7 @@ fun StatisticsScreen(
             }
         }
     }
+}
 
     if (showDateSheet) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)

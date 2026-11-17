@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
@@ -46,6 +47,13 @@ class StatisticsViewModel(
 
     private val _selectedType = MutableStateFlow<MediaType?>(null)
     private val _dateRangeSelection = MutableStateFlow(DateRangeSelection())
+
+    private val _activePageIndex = MutableStateFlow(0)
+    val activePageIndex: StateFlow<Int> = _activePageIndex.asStateFlow()
+
+    fun setActivePageIndex(index: Int) {
+        _activePageIndex.value = index
+    }
 
     private val blurAdultCoversFlow: Flow<Boolean> =
         themePreferences?.displayPreferences?.map { it.blurAdultCovers }?.distinctUntilChanged()

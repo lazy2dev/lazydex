@@ -10,10 +10,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.Gamepad
 import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.SmartDisplay
-import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,8 +34,8 @@ import app.lazydex.ui.theme.TypeTvColor
 fun MediaType.icon(): ImageVector = when (this) {
     MediaType.NOVEL -> Icons.Default.AutoStories
     MediaType.MANGA -> Icons.AutoMirrored.Filled.MenuBook
-    MediaType.ANIME -> Icons.Default.SmartDisplay
-    MediaType.GAME -> Icons.Default.SportsEsports
+    MediaType.ANIME -> Icons.Default.VideoLibrary
+    MediaType.GAME -> Icons.Default.Gamepad
     MediaType.MOVIE -> Icons.Default.Movie
     MediaType.TV -> Icons.Default.Tv
 }

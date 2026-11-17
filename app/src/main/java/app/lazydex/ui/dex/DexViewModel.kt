@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -145,6 +146,13 @@ class DexViewModel(
 
     private val selectedTypeId = MutableStateFlow<String?>(null)
     private val selectedFormatId = MutableStateFlow<String?>(null)
+
+    private val _activePageIndex = MutableStateFlow(0)
+    val activePageIndex: StateFlow<Int> = _activePageIndex.asStateFlow()
+
+    fun setActivePageIndex(index: Int) {
+        _activePageIndex.value = index
+    }
 
     private val typeCounts = repository.observeTypeCounts()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
