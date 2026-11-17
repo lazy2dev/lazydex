@@ -13,6 +13,7 @@ import app.lazydex.data.tracker.anilist.TokenBucketLimiter
 import app.lazydex.data.tracker.service.DelayedTrackingStore
 import app.lazydex.data.tracker.sync.AnilistSyncEngine
 import app.lazydex.data.tracker.sync.TrackChapter
+import app.lazydex.data.tracker.sync.TrackerSyncEngine
 import app.lazydex.domain.repository.MediaRepository
 import app.lazydex.scraper.MetadataScraper
 import app.lazydex.scraper.SafeDns
@@ -28,6 +29,7 @@ import okhttp3.OkHttpClient
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
+import org.koin.dsl.bind
 import org.koin.dsl.module
 import java.io.File
 import java.time.Duration
@@ -102,7 +104,7 @@ val trackerModule = module {
             mediaLinkDao = get(),
             tokenStore = get()
         )
-    }
+    } bind TrackerSyncEngine::class
     single {
         TrackChapter(
             syncEngine = get(),
@@ -180,10 +182,10 @@ val viewModelModule = module {
             okHttpClient = get(),
             cacheDir = get(named("cacheDir")),
             mediaLinkDao = get(),
-            syncEngine = get(),
-            tokenStore = get(),
-            client = get(),
-            themePreferences = get(),
+            syncEngine = getOrNull(),
+            tokenStore = getOrNull(),
+            client = getOrNull(),
+            themePreferences = getOrNull(),
             coverCache = getOrNull(),
         )
     }
@@ -193,9 +195,9 @@ val viewModelModule = module {
             themePreferences = get(),
             localCoversDir = get(named("coversDir")),
             cacheDir = get(named("cacheDir")),
-            tokenStore = get(),
-            syncEngine = get(),
-            client = get()
+            tokenStore = getOrNull(),
+            syncEngine = getOrNull(),
+            client = getOrNull()
         )
     }
     viewModel { app.lazydex.ui.settings.extensions.ExtensionViewModel(get()) }
