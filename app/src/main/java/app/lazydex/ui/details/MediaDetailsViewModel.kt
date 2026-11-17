@@ -106,6 +106,7 @@ data class MediaDetailsUiState(
     val isSearchingTracker: Boolean = false,
     val lastUpdated: Long = System.currentTimeMillis(),
     val isAdult: Boolean = false,
+    val averageScore: Int? = null,
     val blurAdultCovers: Boolean = false,
     val seedColor: Color? = null,
     val coverTheming: Boolean = true,
@@ -148,7 +149,12 @@ data class MediaDetailsUiState(
         return !url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)
     }
 
-    val canSave: Boolean get() = !isTitleBlank && !isProgressInvalid && !isTotalInvalid && !isUrlInvalid && !isScraping && !isSaving
+    val isAverageScoreInvalid: Boolean get() {
+        val s = averageScore ?: return false
+        return s < 0 || s > 100
+    }
+
+    val canSave: Boolean get() = !isTitleBlank && !isProgressInvalid && !isTotalInvalid && !isUrlInvalid && !isAverageScoreInvalid && !isScraping && !isSaving
 }
 
 class MediaDetailsViewModel(
@@ -338,6 +344,7 @@ class MediaDetailsViewModel(
                         endDate = item.endDate,
                         lastUpdated = item.lastUpdated,
                         isAdult = item.isAdult,
+                        averageScore = item.averageScore,
                         isNew = false,
                         isLoading = false,
                     )
@@ -510,6 +517,10 @@ class MediaDetailsViewModel(
         _uiState.value = _uiState.value.copy(rating = rating)
     }
 
+    fun updateAverageScore(score: Int?) {
+        _uiState.value = _uiState.value.copy(averageScore = score)
+    }
+
     fun updateRepeat(repeat: Int) {
         _uiState.value = _uiState.value.copy(repeat = repeat.coerceAtLeast(0))
     }
@@ -607,6 +618,7 @@ class MediaDetailsViewModel(
         state.isProgressInvalid -> "Progress cannot exceed total items"
         state.isTotalInvalid -> "Total items cannot be negative"
         state.isUrlInvalid -> "Source URL must start with http:// or https://"
+        state.isAverageScoreInvalid -> "Average score must be between 0 and 100"
         else -> null
     }
 
@@ -620,9 +632,13 @@ class MediaDetailsViewModel(
         description: String,
         isAdult: Boolean = _uiState.value.isAdult,
         secondaryProgressTotal: String = _uiState.value.secondaryProgressTotal,
+        averageScore: String = _uiState.value.averageScore?.toString() ?: "",
     ): Boolean {
         val current = _uiState.value
         if (current.isScraping || current.isSaving) return false
+
+        val parsedAvgScore = averageScore.trim().takeIf { it.isNotEmpty() }?.toIntOrNull()
+        val avgScoreInvalid = averageScore.trim().isNotEmpty() && (parsedAvgScore == null || parsedAvgScore !in 0..100)
 
         val unchanged = current.sourceUrl.trim() == sourceUrl.trim() &&
             current.mediaType == mediaType &&
@@ -632,7 +648,8 @@ class MediaDetailsViewModel(
             current.totalItems.trim() == totalItems.trim() &&
             current.secondaryProgressTotal.trim() == secondaryProgressTotal.trim() &&
             current.description.trim() == description.trim() &&
-            current.isAdult == isAdult
+            current.isAdult == isAdult &&
+            current.averageScore == parsedAvgScore
         if (unchanged) return true
 
         val candidate = current.copy(
@@ -645,8 +662,13 @@ class MediaDetailsViewModel(
             secondaryProgressTotal = secondaryProgressTotal,
             description = description,
             isAdult = isAdult,
+            averageScore = parsedAvgScore,
             errorMsg = null,
         )
+        if (avgScoreInvalid) {
+            _uiState.value = candidate.copy(errorMsg = "Average score must be between 0 and 100")
+            return false
+        }
         val validationError = validateMetadata(candidate)
         if (validationError != null) {
             _uiState.value = candidate.copy(errorMsg = validationError)
@@ -749,6 +771,7 @@ class MediaDetailsViewModel(
                     startDate = state.startDate,
                     endDate = state.endDate,
                     isAdult = state.isAdult,
+                    averageScore = state.averageScore,
                 )
                 val candidateWithVolume = if (state.volumesEnabled) {
                     candidate.withExtra("volumes_enabled", "true")
@@ -817,6 +840,7 @@ class MediaDetailsViewModel(
                     lastUpdated = now,
                     dateAdded = now,
                     isAdult = state.isAdult,
+                    averageScore = state.averageScore,
                     progressIncreasedAt = if (progressVal > 0 || ((state.parsedSecondaryProgress ?: 0.0) > 0.0)) now else null
                 )
                 val itemWithVolume = if (state.volumesEnabled) {

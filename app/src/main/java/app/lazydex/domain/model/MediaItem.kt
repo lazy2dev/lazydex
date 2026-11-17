@@ -400,6 +400,7 @@ data class MediaItem(
         if (genres != old.genres) return true
         if (tags != old.tags) return true
         if (isAdult != old.isAdult) return true
+        if (averageScore != old.averageScore) return true
         if (durationMinutes != old.durationMinutes) return true
         if (avgChapterLength != old.avgChapterLength) return true
         if (lengthUnitOverride != old.lengthUnitOverride) return true

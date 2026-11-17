@@ -102,13 +102,18 @@ fun MediaInfoHeader(
     onToggleAdult: () -> Unit = {},
     isNew: Boolean = false,
     onMediaTypeSelect: (MediaType) -> Unit = {},
+    averageScore: Int? = null,
+    onAverageScoreChange: (String) -> Unit = {},
 ) {
     var draftTotalInput by remember(totalItems) { mutableStateOf(totalItems?.toString() ?: "") }
+    var draftAverageScoreInput by remember(averageScore) { mutableStateOf(averageScore?.toString() ?: "") }
     var isFormatMenuExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(isEditing) {
         if (!isEditing) {
             isFormatMenuExpanded = false
+            draftTotalInput = totalItems?.toString() ?: ""
+            draftAverageScoreInput = averageScore?.toString() ?: ""
         }
     }
 
@@ -464,6 +469,77 @@ fun MediaInfoHeader(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                        }
+
+                        // Average Score / Community Rating
+                        if (isEditing) {
+                            Text(
+                                text = "•",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = "★",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.tertiary
+                                )
+                                BasicTextField(
+                                    value = draftAverageScoreInput,
+                                    onValueChange = { input ->
+                                        val digits = input.filter { it.isDigit() }.take(3)
+                                        draftAverageScoreInput = digits
+                                        onAverageScoreChange(digits)
+                                    },
+                                    singleLine = true,
+                                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                        color = if (draftAverageScoreInput.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    ),
+                                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                                    decorationBox = { innerTextField ->
+                                        if (draftAverageScoreInput.isBlank()) {
+                                            Text(
+                                                text = "—",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                )
+                                Text(
+                                    text = "%",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f)
+                                )
+                            }
+                        } else if (averageScore != null) {
+                            Text(
+                                text = "•",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = "★",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.tertiary
+                                )
+                                Text(
+                                    text = "$averageScore%",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
 
                         // 18+ Adult Badge

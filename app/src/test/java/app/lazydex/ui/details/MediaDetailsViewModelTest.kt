@@ -1166,5 +1166,87 @@ class MediaDetailsViewModelTest {
         assertNotNull(vm.uiState.value.scrapeError)
         assertNull(vm.uiState.value.errorMsg)
     }
+
+    @Test
+    fun commitMetadataEdits_updatesAverageScoreSuccessfully() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "item-score-1",
+            type = "ANIME",
+            format = "TV",
+            title = "Frieren",
+            currentProgress = 12,
+            totalItems = 28,
+            userStatus = UserStatus.CURRENT,
+            lastUpdated = 1000L,
+            dateAdded = 500L,
+            averageScore = 85
+        )
+        repo.items.add(existing)
+
+        val vm = createViewModel(
+            repository = repo,
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+        vm.initialize("item-score-1", null)
+        assertEquals(85, vm.uiState.value.averageScore)
+
+        val ok = vm.commitMetadataEdits(
+            sourceUrl = "",
+            mediaType = MediaType.ANIME,
+            formatId = "TV",
+            title = "Frieren",
+            author = "Madhouse",
+            totalItems = "28",
+            description = "Fantasy",
+            averageScore = "92"
+        )
+
+        assertTrue(ok)
+        assertEquals(92, vm.uiState.value.averageScore)
+        val saved = repo.items.single()
+        assertEquals(92, saved.averageScore)
+    }
+
+    @Test
+    fun commitMetadataEdits_invalidAverageScore_returnsFalseWithoutSaving() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "item-score-2",
+            type = "ANIME",
+            format = "TV",
+            title = "Test",
+            currentProgress = 0,
+            userStatus = UserStatus.PLANNING,
+            lastUpdated = 1000L,
+            dateAdded = 500L,
+            averageScore = 50
+        )
+        repo.items.add(existing)
+
+        val vm = createViewModel(
+            repository = repo,
+            okHttpClient = OkHttpClient(),
+            cacheDir = File(".")
+        )
+        vm.initialize("item-score-2", null)
+
+        val ok = vm.commitMetadataEdits(
+            sourceUrl = "",
+            mediaType = MediaType.ANIME,
+            formatId = "TV",
+            title = "Test",
+            author = "",
+            totalItems = "",
+            description = "",
+            averageScore = "150"
+        )
+
+        assertFalse(ok)
+        assertEquals("Average score must be between 0 and 100", vm.uiState.value.errorMsg)
+        val saved = repo.items.single()
+        assertEquals(50, saved.averageScore)
+    }
 }
 

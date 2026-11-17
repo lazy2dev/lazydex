@@ -361,11 +361,7 @@ private fun DisplayPage(
 ) {
     val displayModes = remember {
         listOf(
-            "Compact grid" to LibraryDisplayMode.COMPACT_GRID,
-            "Comfortable grid" to LibraryDisplayMode.COMFORTABLE_GRID,
-            "Cover-only grid" to LibraryDisplayMode.COVER_ONLY_GRID,
             "List" to LibraryDisplayMode.LIST,
-            "Panorama comfortable grid" to LibraryDisplayMode.PANORAMA_COMFORTABLE_GRID,
         )
     }
 

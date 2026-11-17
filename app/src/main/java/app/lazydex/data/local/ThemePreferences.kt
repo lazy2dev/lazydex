@@ -143,7 +143,7 @@ open class ThemePreferences(private val context: Context? = null) {
                 LibraryDisplayMode.LIST
             }
             DisplayPreferences(
-                displayMode = mode,
+                displayMode = LibraryDisplayMode.LIST,
                 gridColumns = preferences[GRID_COLUMNS_KEY] ?: 0,
                 showTypeTabs = preferences[SHOW_TYPE_TABS_KEY] ?: true,
                 showProgressBadge = preferences[SHOW_PROGRESS_BADGE_KEY] ?: true,

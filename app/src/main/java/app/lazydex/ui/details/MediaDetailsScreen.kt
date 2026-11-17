@@ -167,6 +167,7 @@ fun MediaDetailsScreen(
     var draftSecondaryProgressTotal by rememberSaveable { mutableStateOf(state.secondaryProgressTotal) }
     var draftVolumesEnabled by rememberSaveable { mutableStateOf(state.hasSecondaryProgress) }
     var draftIsAdult by rememberSaveable { mutableStateOf(state.isAdult) }
+    var draftAverageScore by rememberSaveable { mutableStateOf(state.averageScore?.toString() ?: "") }
     var draftSourceUrl by rememberSaveable { mutableStateOf(state.sourceUrl) }
     var draftMediaType by rememberSaveable { mutableStateOf(state.mediaType) }
 
@@ -182,6 +183,7 @@ fun MediaDetailsScreen(
             draftSecondaryProgressTotal = state.secondaryProgressTotal
             draftVolumesEnabled = state.hasSecondaryProgress
             draftIsAdult = state.isAdult
+            draftAverageScore = state.averageScore?.toString() ?: ""
             draftSourceUrl = state.sourceUrl
             draftMediaType = state.mediaType
         }
@@ -199,6 +201,7 @@ fun MediaDetailsScreen(
             draftVolumesEnabled = state.hasSecondaryProgress
             draftDescription = state.description
             draftIsAdult = state.isAdult
+            draftAverageScore = state.averageScore?.toString() ?: ""
             if (state.sourceUrl.isNotBlank()) {
                 draftSourceUrl = state.sourceUrl
             }
@@ -220,6 +223,7 @@ fun MediaDetailsScreen(
         draftSecondaryProgressTotal = state.secondaryProgressTotal
         draftVolumesEnabled = state.hasSecondaryProgress
         draftIsAdult = state.isAdult
+        draftAverageScore = state.averageScore?.toString() ?: ""
         draftSourceUrl = state.sourceUrl
         draftMediaType = state.mediaType
         isEditing = true
@@ -228,7 +232,7 @@ fun MediaDetailsScreen(
     val isDirty by remember(
         isEditing, draftTitle, draftAuthor, draftDescription, draftFormatId,
         draftTotalItems, draftSecondaryProgressTotal, draftVolumesEnabled,
-        draftIsAdult, draftSourceUrl, draftMediaType, state
+        draftIsAdult, draftAverageScore, draftSourceUrl, draftMediaType, state
     ) {
         derivedStateOf {
             if (!isEditing) false
@@ -241,6 +245,7 @@ fun MediaDetailsScreen(
                     draftSecondaryProgressTotal != state.secondaryProgressTotal ||
                     draftVolumesEnabled != state.hasSecondaryProgress ||
                     draftIsAdult != state.isAdult ||
+                    draftAverageScore != (state.averageScore?.toString() ?: "") ||
                     draftSourceUrl != state.sourceUrl ||
                     draftMediaType != state.mediaType
             }
@@ -271,6 +276,8 @@ fun MediaDetailsScreen(
     val progressNum = state.parsedProgress
     val totalInvalid = (draftTotalItems.trim().isNotEmpty() && (parsedDraftTotal == null || parsedDraftTotal < 0)) ||
         (progressNum != null && parsedDraftTotal != null && progressNum > parsedDraftTotal)
+    val parsedDraftAvgScore = draftAverageScore.trim().takeIf { it.isNotEmpty() }?.toIntOrNull()
+    val avgScoreInvalid = draftAverageScore.trim().isNotEmpty() && (parsedDraftAvgScore == null || parsedDraftAvgScore !in 0..100)
 
     fun tryCommit(): Boolean {
         if (state.isScraping) {
@@ -285,6 +292,7 @@ fun MediaDetailsScreen(
                 "Total items cannot be negative"
             }
             urlInvalid -> "Source URL must start with http:// or https://"
+            avgScoreInvalid -> "Average score must be between 0 and 100"
             else -> null
         }
         if (err != null) {
@@ -301,6 +309,7 @@ fun MediaDetailsScreen(
             description = draftDescription,
             isAdult = draftIsAdult,
             secondaryProgressTotal = if (draftVolumesEnabled) draftSecondaryProgressTotal else "",
+            averageScore = draftAverageScore,
         )
         if (!ok) {
             scope.launch { snackbarHostState.showSnackbar(viewModel.uiState.value.errorMsg ?: "Unable to save changes") }
@@ -386,78 +395,12 @@ fun MediaDetailsScreen(
                 TopAppBar(
                     modifier = Modifier.onGloballyPositioned { topBarHeightPx = it.size.height },
                     title = {
-                        if (isEditing) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(end = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                BasicTextField(
-                                    value = draftSourceUrl,
-                                    onValueChange = {
-                                        draftSourceUrl = it
-                                        viewModel.clearScrapeError()
-                                    },
-                                    singleLine = true,
-                                    textStyle = MaterialTheme.typography.titleMedium.copy(
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        fontSize = 16.sp
-                                    ),
-                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                                    keyboardActions = KeyboardActions(
-                                        onDone = {
-                                            if (draftSourceUrl.isNotBlank() && !urlInvalid && !state.isScraping) {
-                                                viewModel.clearScrapeError()
-                                                viewModel.updateSourceUrl(draftSourceUrl)
-                                                viewModel.scrapeUrl(draftSourceUrl)
-                                            }
-                                        }
-                                    ),
-                                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                    modifier = Modifier.weight(1f),
-                                    decorationBox = { innerTextField ->
-                                        Box(contentAlignment = Alignment.CenterStart) {
-                                            if (draftSourceUrl.isEmpty()) {
-                                                Text(
-                                                    text = "Source or scraper URL...",
-                                                    style = MaterialTheme.typography.titleMedium.copy(
-                                                        fontSize = 16.sp
-                                                    ),
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
-                                            innerTextField()
-                                        }
-                                    }
-                                )
-                                if (draftSourceUrl.isNotEmpty()) {
-                                    IconButton(
-                                        onClick = {
-                                            draftSourceUrl = ""
-                                            viewModel.clearScrapeError()
-                                        },
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Close,
-                                            contentDescription = "Clear URL",
-                                            modifier = Modifier.size(18.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
-                        } else {
-                            Text(
-                                text = state.title.ifBlank { "Media Details" },
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.alpha(titleAlpha)
-                            )
-                        }
+                        Text(
+                            text = (if (isEditing) draftTitle else state.title).ifBlank { "Media Details" },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.alpha(titleAlpha)
+                        )
                     },
                     navigationIcon = {
                         if (isEditing) {
@@ -642,7 +585,7 @@ fun MediaDetailsScreen(
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp).copy(alpha = if (isEditing) 1f else backgroundAlpha)
+                        containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp).copy(alpha = backgroundAlpha)
                     )
                 )
             },
@@ -699,7 +642,9 @@ fun MediaDetailsScreen(
                                 draftMediaType = it
                                 draftFormatId = null
                             }
-                        }
+                        },
+                        averageScore = if (isEditing) draftAverageScore.toIntOrNull() else state.averageScore,
+                        onAverageScoreChange = { draftAverageScore = it },
                     )
 
                     // 2. Action Row (In Library, Updated X, Sync, Edit)
