@@ -118,11 +118,11 @@ jobs:
       - name: Build APKs
         run: ./gradlew assembleRelease assembleDebug
 
-      - name: Upload Unsigned Release APK
+      - name: Upload Release APKs
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-unsigned
-          path: app/build/outputs/apk/release/app-release-unsigned.apk
+          name: app-release-apks
+          path: app/build/outputs/apk/release/*.apk
           retention-days: 1
 
       - name: Upload Debug Fallback APK
@@ -148,21 +148,13 @@ jobs:
             echo "has_secrets=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Download Unsigned APK
-        if: steps.check_secrets.outputs.has_secrets == 'true'
+      - name: Download Release APKs
         uses: actions/download-artifact@v4
         with:
-          name: app-release-unsigned
+          name: app-release-apks
           path: release_apk
 
-      - name: Download Debug APK
-        if: steps.check_secrets.outputs.has_secrets == 'false'
-        uses: actions/download-artifact@v4
-        with:
-          name: app-debug
-          path: debug_apk
-
-      - name: Sign APK
+      - name: Sign APKs
         if: steps.check_secrets.outputs.has_secrets == 'true'
         uses: r0adkll/sign-android-release@f30bdd30588842ac76044ecdbd4b6d0e3e813478
         with:
@@ -174,23 +166,36 @@ jobs:
         env:
           BUILD_TOOLS_VERSION: '35.0.1'
 
-      - name: Rename Signed APK
-        if: steps.check_secrets.outputs.has_secrets == 'true'
+      - name: Prepare Release APK Artifacts
         run: |
-          # The sign action puts the signed apk under the releaseDirectory with suffix '-signed' or similar.
-          # Let's find it and rename it to the target version-tag-specific filename.
-          signed_file=$(find release_apk -name "*-signed.apk" | head -n 1)
-          if [ -n "$signed_file" ]; then
-            mv "$signed_file" "lazydex-${{ needs.prepare-build.outputs.VERSION_TAG }}.apk"
-          else
-            echo "Signed APK not found!" && exit 1
-          fi
+          mkdir -p final_apks
+          TAG="${{ needs.prepare-build.outputs.VERSION_TAG }}"
+          for f in release_apk/*.apk; do
+            [ -e "$f" ] || continue
+            fname=$(basename "$f")
+            if [[ "$fname" =~ "arm64-v8a" ]]; then
+              abi="arm64-v8a"
+            elif [[ "$fname" =~ "armeabi-v7a" ]]; then
+              abi="armeabi-v7a"
+            elif [[ "$fname" =~ "x86_64" ]]; then
+              abi="x86_64"
+            elif [[ "$fname" =~ "x86" ]]; then
+              abi="x86"
+            elif [[ "$fname" =~ "universal" ]]; then
+              abi="universal"
+            else
+              abi=""
+            fi
 
-      - name: Rename Fallback Debug APK
-        if: steps.check_secrets.outputs.has_secrets == 'false'
-        run: |
-          echo "::warning::Signing secrets are missing. Renaming Debug-signed APK as fallback."
-          mv debug_apk/app-debug.apk "lazydex-${{ needs.prepare-build.outputs.VERSION_TAG }}.apk"
+            if [ -n "$abi" ]; then
+              cp "$f" "final_apks/lazydex-${TAG}-${abi}.apk"
+            else
+              cp "$f" "final_apks/lazydex-${TAG}.apk"
+            fi
+          done
+          if [ -f "final_apks/lazydex-${TAG}-universal.apk" ]; then
+            cp "final_apks/lazydex-${TAG}-universal.apk" "final_apks/lazydex-${TAG}.apk"
+          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -206,7 +211,7 @@ jobs:
             ### 🔗 Full Changelog
             > https://github.com/lazy2dev/lazydex/compare/${{ needs.prepare-build.outputs.PREV_TAG_NAME }}...${{ needs.prepare-build.outputs.VERSION_TAG }}
           files: |
-            lazydex-${{ needs.prepare-build.outputs.VERSION_TAG }}.apk
-          draft: true
+            final_apks/*.apk
+          draft: false
           prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }}
