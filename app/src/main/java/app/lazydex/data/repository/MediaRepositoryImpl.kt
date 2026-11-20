@@ -8,12 +8,9 @@ import app.lazydex.data.local.dao.ActivityDao
 import app.lazydex.data.local.dao.AppSettingDao
 import app.lazydex.data.local.dao.MediaItemDao
 import app.lazydex.data.local.dao.MediaLinkDao
-import app.lazydex.data.local.dao.MediaPartDao
-import app.lazydex.data.local.dao.SyncOutboxDao
 import app.lazydex.data.local.entity.ActiveMediaItemView
 import app.lazydex.data.local.entity.ActivityEntity
 import app.lazydex.data.local.entity.MediaItemEntity
-import app.lazydex.data.local.entity.SyncOutboxEntity
 import app.lazydex.data.local.entity.UserDataEntity
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.service.DelayedTrackingUpdateJob
@@ -24,7 +21,6 @@ import app.lazydex.domain.model.ActivityLog
 import kotlin.math.abs
 import app.lazydex.domain.model.LengthUnit
 import app.lazydex.domain.model.MediaItem
-import app.lazydex.domain.model.MediaPart
 import app.lazydex.domain.model.MediaStats
 import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.ResolvedTypeConfig
@@ -56,10 +52,8 @@ class MediaRepositoryImpl(
     private val dao: MediaItemDao,
     private val linkDao: MediaLinkDao,
     private val activityDao: ActivityDao,
-    private val outboxDao: SyncOutboxDao,
     private val settingDao: AppSettingDao,
     private val localCoversDir: File,
-    private val partDao: MediaPartDao? = null,
     private val syncEngine: AnilistSyncEngine? = null,
     private val trackChapter: TrackChapter? = null,
     private val tokenStore: AnilistTokenStore? = null,
@@ -197,7 +191,9 @@ class MediaRepositoryImpl(
         TypeConfig(id = "NOVEL", name = "Novel", icon = "book", unitName = "Chapter", actionVerb = "Read", sortOrder = 0),
         TypeConfig(id = "MANGA", name = "Manga", icon = "image", unitName = "Chapter", actionVerb = "Read", sortOrder = 1),
         TypeConfig(id = "ANIME", name = "Anime", icon = "tv", unitName = "Episode", actionVerb = "Watch", sortOrder = 2),
-        TypeConfig(id = "GAME", name = "Game", icon = "gamepad", unitName = "Hour", actionVerb = "Play", sortOrder = 3)
+        TypeConfig(id = "MOVIE", name = "Movie", icon = "movie", unitName = "Movie", actionVerb = "Watch", sortOrder = 3),
+        TypeConfig(id = "TV", name = "TV", icon = "tv", unitName = "Episode", actionVerb = "Watch", sortOrder = 4),
+        TypeConfig(id = "GAME", name = "Game", icon = "gamepad", unitName = "Hour", actionVerb = "Play", sortOrder = 5)
     )
 
     private val staticFormats = mapOf(
@@ -268,6 +264,32 @@ class MediaRepositoryImpl(
                 hasAudioSpeed = false,
                 lengthUnit = LengthUnit.WORDS
             )
+            "MOVIE" -> ResolvedTypeConfig(
+                typeId = typeId,
+                topLevelId = "MOVIE",
+                displayName = format ?: "Movie",
+                icon = "movie",
+                unitName = "Movie",
+                secondaryUnitName = null,
+                actionVerb = "Watch",
+                hasParts = false,
+                hasCharEstimate = false,
+                hasAudioSpeed = false,
+                lengthUnit = LengthUnit.WORDS
+            )
+            "TV" -> ResolvedTypeConfig(
+                typeId = typeId,
+                topLevelId = "TV",
+                displayName = format ?: "TV",
+                icon = "tv",
+                unitName = "Episode",
+                secondaryUnitName = null,
+                actionVerb = "Watch",
+                hasParts = false,
+                hasCharEstimate = false,
+                hasAudioSpeed = false,
+                lengthUnit = LengthUnit.WORDS
+            )
             "GAME" -> ResolvedTypeConfig(
                 typeId = typeId,
                 topLevelId = "GAME",
@@ -296,10 +318,6 @@ class MediaRepositoryImpl(
             )
         }
     }
-
-    override fun observeParts(mediaId: String): Flow<List<MediaPart>> = emptyFlow()
-
-    override suspend fun setParts(mediaId: String, parts: List<MediaPart>) {}
 
     override fun observeActivity(mediaId: String): Flow<List<ActivityLog>> = activityDao.observeByMediaId(mediaId)
         .map { list -> list.map { it.toDomain() } }
@@ -458,16 +476,6 @@ class MediaRepositoryImpl(
                             timestamp = now
                         )
                     )
-
-                    outboxDao.insert(
-                        SyncOutboxEntity(
-                            id = UUID.randomUUID().toString(),
-                            mediaId = item.id,
-                            action = "UPDATE",
-                            payload = """{"userStatus":"${normalized.userStatus.name}"}""",
-                            createdAt = now
-                        )
-                    )
                 }
             }
         }
@@ -525,16 +533,6 @@ class MediaRepositoryImpl(
                         )
                     )
 
-                    outboxDao.insert(
-                        SyncOutboxEntity(
-                            id = UUID.randomUUID().toString(),
-                            mediaId = id,
-                            action = "UPDATE",
-                            payload = """{"userStatus":"${targetStatus.name}"}""",
-                            createdAt = now
-                        )
-                    )
-
                     delayedStore?.addStatus(id, targetStatus.name)
                 }
             }
@@ -568,15 +566,6 @@ class MediaRepositoryImpl(
                 if (dirtyRows > 0) {
                     shouldPush = true
                 }
-                outboxDao.insert(
-                    SyncOutboxEntity(
-                        id = UUID.randomUUID().toString(),
-                        mediaId = id,
-                        action = "UPDATE",
-                        payload = """{"repeat":$safeRepeat}""",
-                        createdAt = now
-                    )
-                )
             }
             if (shouldPush) {
                 syncEngine?.let { engine ->
@@ -707,16 +696,6 @@ class MediaRepositoryImpl(
                 )
             }
 
-            outboxDao.insert(
-                SyncOutboxEntity(
-                    id = UUID.randomUUID().toString(),
-                    mediaId = id,
-                    action = "UPDATE",
-                    payload = """{"progress":$clampedProgress,"userStatus":"$newStatus","repeat":$newRepeat}""",
-                    createdAt = now
-                )
-            )
-
             mediaEntity.toDomain(updatedUser)
         }
 
@@ -801,7 +780,9 @@ class MediaRepositoryImpl(
     private fun mediaTypeToDbType(mediaType: MediaType): String = when (mediaType) {
         MediaType.NOVEL -> "NOVEL"
         MediaType.MANGA -> "MANGA"
-        MediaType.ANIME, MediaType.MOVIE, MediaType.TV -> "ANIME"
+        MediaType.ANIME -> "ANIME"
+        MediaType.MOVIE -> "MOVIE"
+        MediaType.TV -> "TV"
         MediaType.GAME -> "GAME"
     }
 
@@ -811,14 +792,16 @@ class MediaRepositoryImpl(
             "NOVEL", "TYP_NOVEL" -> "NOVEL" to null
             "MANGA", "TYP_MANGA" -> "MANGA" to null
             "ANIME", "TYP_ANIME" -> "ANIME" to null
+            "MOVIE", "TYP_MOVIE" -> "MOVIE" to null
+            "TV", "TYP_TV" -> "TV" to null
             "GAME", "TYP_GAME" -> "GAME" to null
             "LIGHT_NOVEL", "TYP_NOVEL_LN" -> "NOVEL" to "LIGHT_NOVEL"
             "WEB_NOVEL", "TYP_NOVEL_CN", "TYP_NOVEL_KR" -> "NOVEL" to "WEB_NOVEL"
             "MANHWA", "TYP_MANHWA" -> "MANGA" to "MANHWA"
             "MANHUA", "TYP_MANHUA" -> "MANGA" to "MANHUA"
             "ONE_SHOT" -> "MANGA" to "ONE_SHOT"
-            "TV", "TYP_ANIME_SERIES" -> "ANIME" to "TV"
-            "MOVIE", "TYP_ANIME_MOVIE" -> "ANIME" to "MOVIE"
+            "TYP_ANIME_SERIES" -> "ANIME" to "TV"
+            "TYP_ANIME_MOVIE" -> "ANIME" to "MOVIE"
             "OVA", "TYP_ANIME_OVA" -> "ANIME" to "OVA"
             "PC" -> "GAME" to "PC"
             "ANDROID" -> "GAME" to "ANDROID"

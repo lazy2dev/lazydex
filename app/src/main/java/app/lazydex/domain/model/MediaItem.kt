@@ -58,6 +58,8 @@ data class MediaItem(
         format.equals("LIGHT_NOVEL", ignoreCase = true) -> "typ_novel_ln"
         format.equals("WEB_NOVEL", ignoreCase = true) && countryOfOrigin.equals("KR", ignoreCase = true) -> "typ_novel_kr"
         format.equals("WEB_NOVEL", ignoreCase = true) -> "typ_novel_cn"
+        type.equals("MOVIE", ignoreCase = true) -> "typ_movie"
+        type.equals("TV", ignoreCase = true) -> "typ_tv"
         type.equals("MANGA", ignoreCase = true) -> "typ_manga"
         type.equals("ANIME", ignoreCase = true) -> "typ_anime"
         type.equals("GAME", ignoreCase = true) -> "typ_game"
@@ -68,19 +70,23 @@ data class MediaItem(
         "MANGA" -> MediaType.MANGA
         "ANIME" -> MediaType.ANIME
         "GAME" -> MediaType.GAME
+        "MOVIE" -> MediaType.MOVIE
+        "TV" -> MediaType.TV
         else -> MediaType.NOVEL
     }
 
     val unitName: String get() = when (type.uppercase()) {
         "NOVEL", "MANGA" -> "Chapter"
         "ANIME" -> if (format.uppercase() == "MOVIE") "Minute" else "Episode"
+        "MOVIE" -> "Movie"
+        "TV" -> "Episode"
         "GAME" -> "Hour"
         else -> "Item"
     }
 
     val actionVerb: String get() = when (type.uppercase()) {
         "NOVEL", "MANGA" -> "Read"
-        "ANIME" -> "Watch"
+        "ANIME", "MOVIE", "TV" -> "Watch"
         "GAME" -> "Play"
         else -> "Consume"
     }
@@ -125,7 +131,9 @@ data class MediaItem(
         type = when (mediaType) {
             MediaType.NOVEL -> "NOVEL"
             MediaType.MANGA -> "MANGA"
-            MediaType.ANIME, MediaType.MOVIE, MediaType.TV -> "ANIME"
+            MediaType.ANIME -> "ANIME"
+            MediaType.MOVIE -> "MOVIE"
+            MediaType.TV -> "TV"
             MediaType.GAME -> "GAME"
         },
         format = when (mediaType) {
@@ -208,7 +216,9 @@ data class MediaItem(
         type = when (mediaType) {
             MediaType.NOVEL -> "NOVEL"
             MediaType.MANGA -> "MANGA"
-            MediaType.ANIME, MediaType.MOVIE, MediaType.TV -> "ANIME"
+            MediaType.ANIME -> "ANIME"
+            MediaType.MOVIE -> "MOVIE"
+            MediaType.TV -> "TV"
             MediaType.GAME -> "GAME"
         },
         format = when {

@@ -25,7 +25,6 @@ import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import app.lazydex.data.tracker.anilist.AnilistApi
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
-import app.lazydex.ui.navigation.ExtensionsRoute
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,12 +34,10 @@ class MainActivity : ComponentActivity() {
     private val themePreferences: ThemePreferences by inject()
     private val tokenStore: AnilistTokenStore by inject()
     private val client: AnilistApi by inject()
-    private val deepLinkRepoUrl = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        deepLinkRepoUrl.value = extractRepoUrl(intent?.data?.toString())
         handleAniListAuthIntent(intent)
 
         enableEdgeToEdge()
@@ -66,20 +63,6 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val navController = rememberNavController()
 
-                    LaunchedEffect(deepLinkRepoUrl.value) {
-                        val repoUrl = deepLinkRepoUrl.value ?: return@LaunchedEffect
-                        while (true) {
-                            val navigated = runCatching {
-                                navController.navigate(ExtensionsRoute(initialAddRepoUrl = repoUrl))
-                            }.isSuccess
-                            if (navigated) {
-                                deepLinkRepoUrl.value = null
-                                break
-                            }
-                            kotlinx.coroutines.delay(50)
-                        }
-                    }
-
                     LazyDexNavGraph(navController = navController)
                 }
             }
@@ -88,7 +71,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        deepLinkRepoUrl.value = extractRepoUrl(intent.data?.toString())
         handleAniListAuthIntent(intent)
     }
 
@@ -119,24 +101,6 @@ class MainActivity : ComponentActivity() {
             val fragmentOrQuery = raw.substringAfter('#', "").ifBlank { raw.substringAfter('?', "") }
             val match = Regex("""access_token=([^&]+)""").find(fragmentOrQuery)
             return match?.groupValues?.get(1)?.trim()
-        }
-        fun extractRepoUrl(raw: String?): String? {
-            if (raw.isNullOrBlank()) return null
-            if (!raw.startsWith("lazydex://add-repo", ignoreCase = true)) return null
-            val urlPart = raw.substringAfter("url=", "")
-            if (urlPart.isBlank()) return null
-            return if (urlPart.startsWith("http%3A", ignoreCase = true) ||
-                urlPart.startsWith("https%3A", ignoreCase = true) ||
-                (!urlPart.startsWith("http://", ignoreCase = true) && !urlPart.startsWith("https://", ignoreCase = true) && urlPart.contains("%"))
-            ) {
-                try {
-                    java.net.URLDecoder.decode(urlPart, "UTF-8")
-                } catch (_: Exception) {
-                    urlPart
-                }
-            } else {
-                urlPart
-            }
         }
     }
 }

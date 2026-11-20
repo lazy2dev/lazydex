@@ -4,7 +4,6 @@ import app.lazydex.domain.model.ActivityDatePoint
 import app.lazydex.domain.model.ActivityLog
 import app.lazydex.domain.model.LengthUnit
 import app.lazydex.domain.model.MediaItem
-import app.lazydex.domain.model.MediaPart
 import app.lazydex.domain.model.MediaStats
 import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.ResolvedTypeConfig
@@ -50,10 +49,6 @@ interface MediaRepository {
         hasAudioSpeed = false,
         lengthUnit = LengthUnit.WORDS
     )
-
-    /** Parts / Multi-Unit Breakdown */
-    fun observeParts(mediaId: String): Flow<List<MediaPart>> = emptyFlow()
-    suspend fun setParts(mediaId: String, parts: List<MediaPart>) {}
 
     /** Activity & Stats */
     fun observeActivity(mediaId: String): Flow<List<ActivityLog>> = emptyFlow()

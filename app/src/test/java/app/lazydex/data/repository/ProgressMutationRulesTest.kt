@@ -6,14 +6,12 @@ import app.lazydex.data.local.dao.AppSettingDao
 import app.lazydex.data.local.dao.MediaItemDao
 import app.lazydex.data.local.dao.MediaLinkDao
 import app.lazydex.data.local.dao.StatusCount
-import app.lazydex.data.local.dao.SyncOutboxDao
 import app.lazydex.data.local.dao.TypeCount
 import app.lazydex.data.local.entity.ActiveMediaItemView
 import app.lazydex.data.local.entity.ActivityEntity
 import app.lazydex.data.local.entity.AppSettingEntity
 import app.lazydex.data.local.entity.MediaItemEntity
 import app.lazydex.data.local.entity.MediaLinkEntity
-import app.lazydex.data.local.entity.SyncOutboxEntity
 import app.lazydex.data.local.entity.UserDataEntity
 import app.lazydex.data.tracker.anilist.AnilistApi
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
@@ -172,7 +170,6 @@ class ProgressMutationRulesTest {
         val itemDao = FakeMediaItemDao()
         val linkDao = FakeMediaLinkDao()
         val activityDao = FakeActivityDao()
-        val outboxDao = FakeSyncOutboxDao()
         val settingDao = FakeAppSettingDao()
         val syncEngine = FakeSyncEngine()
 
@@ -181,7 +178,6 @@ class ProgressMutationRulesTest {
             dao = itemDao,
             linkDao = linkDao,
             activityDao = activityDao,
-            outboxDao = outboxDao,
             settingDao = settingDao,
             localCoversDir = File(""),
             syncEngine = syncEngine,
@@ -240,7 +236,6 @@ class ProgressMutationRulesTest {
         val itemDao = FakeMediaItemDao()
         val linkDao = FakeMediaLinkDao()
         val activityDao = FakeActivityDao()
-        val outboxDao = FakeSyncOutboxDao()
         val settingDao = FakeAppSettingDao()
         val syncEngine = FakeSyncEngine()
 
@@ -249,7 +244,6 @@ class ProgressMutationRulesTest {
             dao = itemDao,
             linkDao = linkDao,
             activityDao = activityDao,
-            outboxDao = outboxDao,
             settingDao = settingDao,
             localCoversDir = File(""),
             syncEngine = syncEngine,
@@ -291,7 +285,6 @@ class ProgressMutationRulesTest {
         val itemDao = FakeMediaItemDao()
         val linkDao = FakeMediaLinkDao()
         val activityDao = FakeActivityDao()
-        val outboxDao = FakeSyncOutboxDao()
         val settingDao = FakeAppSettingDao()
         val syncEngine = FakeSyncEngine()
 
@@ -300,7 +293,6 @@ class ProgressMutationRulesTest {
             dao = itemDao,
             linkDao = linkDao,
             activityDao = activityDao,
-            outboxDao = outboxDao,
             settingDao = settingDao,
             localCoversDir = File(""),
             syncEngine = syncEngine,
@@ -369,7 +361,6 @@ class ProgressMutationRulesTest {
         val itemDao = FakeMediaItemDao()
         val linkDao = FakeMediaLinkDao()
         val activityDao = FakeActivityDao()
-        val outboxDao = FakeSyncOutboxDao()
         val settingDao = FakeAppSettingDao()
         val syncEngine = FakeSyncEngine()
 
@@ -380,7 +371,6 @@ class ProgressMutationRulesTest {
             dao = itemDao,
             linkDao = linkDao,
             activityDao = activityDao,
-            outboxDao = outboxDao,
             settingDao = settingDao,
             localCoversDir = File(""),
             syncEngine = syncEngine,
@@ -436,7 +426,6 @@ class ProgressMutationRulesTest {
         val itemDao = FakeMediaItemDao()
         val linkDao = FakeMediaLinkDao()
         val activityDao = FakeActivityDao()
-        val outboxDao = FakeSyncOutboxDao()
         val settingDao = FakeAppSettingDao()
 
         val repo = MediaRepositoryImpl(
@@ -444,7 +433,6 @@ class ProgressMutationRulesTest {
             dao = itemDao,
             linkDao = linkDao,
             activityDao = activityDao,
-            outboxDao = outboxDao,
             settingDao = settingDao,
             localCoversDir = File(""),
             syncEngine = null,
@@ -506,7 +494,6 @@ class ProgressMutationRulesTest {
         val itemDao = FakeMediaItemDao()
         val linkDao = FakeMediaLinkDao()
         val activityDao = FakeActivityDao()
-        val outboxDao = FakeSyncOutboxDao()
         val settingDao = FakeAppSettingDao()
 
         val repo = MediaRepositoryImpl(
@@ -514,7 +501,6 @@ class ProgressMutationRulesTest {
             dao = itemDao,
             linkDao = linkDao,
             activityDao = activityDao,
-            outboxDao = outboxDao,
             settingDao = settingDao,
             localCoversDir = File(""),
             syncEngine = null,
@@ -557,7 +543,6 @@ class ProgressMutationRulesTest {
             dao = FakeMediaItemDao(),
             linkDao = FakeMediaLinkDao(),
             activityDao = FakeActivityDao(),
-            outboxDao = FakeSyncOutboxDao(),
             settingDao = FakeAppSettingDao(),
             localCoversDir = File("")
         )
@@ -587,7 +572,6 @@ class ProgressMutationRulesTest {
         val itemDao = FakeMediaItemDao()
         val linkDao = FakeMediaLinkDao()
         val activityDao = FakeActivityDao()
-        val outboxDao = FakeSyncOutboxDao()
         val settingDao = FakeAppSettingDao()
         val syncEngine = FakeSyncEngine()
 
@@ -596,7 +580,6 @@ class ProgressMutationRulesTest {
             dao = itemDao,
             linkDao = linkDao,
             activityDao = activityDao,
-            outboxDao = outboxDao,
             settingDao = settingDao,
             localCoversDir = File(""),
             syncEngine = syncEngine,
@@ -665,7 +648,6 @@ class ProgressMutationRulesTest {
         val itemDao = FakeMediaItemDao()
         val linkDao = FakeMediaLinkDao()
         val activityDao = FakeActivityDao()
-        val outboxDao = FakeSyncOutboxDao()
         val settingDao = FakeAppSettingDao()
         val syncEngine = FakeSyncEngine()
 
@@ -674,7 +656,6 @@ class ProgressMutationRulesTest {
             dao = itemDao,
             linkDao = linkDao,
             activityDao = activityDao,
-            outboxDao = outboxDao,
             settingDao = settingDao,
             localCoversDir = File(""),
             syncEngine = syncEngine,
@@ -860,14 +841,6 @@ class ProgressMutationRulesTest {
             activities.add(activity)
         }
         override suspend fun delete(id: String) { activities.removeAll { it.id == id } }
-    }
-
-    class FakeSyncOutboxDao : SyncOutboxDao {
-        val entries = mutableListOf<SyncOutboxEntity>()
-        override suspend fun insert(entry: SyncOutboxEntity) { entries.add(entry) }
-        override suspend fun getAll(): List<SyncOutboxEntity> = entries
-        override suspend fun delete(id: String) { entries.removeAll { it.id == id } }
-        override suspend fun countForMedia(mediaId: String): Int = 0
     }
 
     class FakeAppSettingDao : AppSettingDao {

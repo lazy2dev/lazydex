@@ -173,6 +173,7 @@ class MediaDetailsViewModel(
 
     private val itemId: String? = savedStateHandle["itemId"]
     private val initialUrl: String? = savedStateHandle["initialUrl"]
+    private val initialTitle: String? = savedStateHandle["initialTitle"]
 
     private val _uiState = MutableStateFlow(MediaDetailsUiState())
     val uiState: StateFlow<MediaDetailsUiState> = _uiState.asStateFlow()
@@ -184,7 +185,7 @@ class MediaDetailsViewModel(
     private var formatObservationJob: Job? = null
 
     init {
-        initialize(itemId, initialUrl)
+        initialize(itemId, initialUrl, initialTitle)
         viewModelScope.launch {
             repository.observeTopLevelTypes().collect { types ->
                 _uiState.update { it.copy(availableTypes = types) }
@@ -219,7 +220,11 @@ class MediaDetailsViewModel(
         }
     }
 
-    fun initialize(id: String?, initialUrl: String?) {
+    fun initialize(id: String?, initialUrl: String?, initialTitle: String? = null) {
+        val effectiveTitle = initialTitle ?: this.initialTitle
+        if (!effectiveTitle.isNullOrBlank() && _uiState.value.title.isBlank()) {
+            _uiState.update { it.copy(title = effectiveTitle) }
+        }
         val effectiveUrl = initialUrl?.takeIf { it.isNotBlank() }
         val effectiveId = id?.takeIf { it.isNotBlank() }
 
@@ -579,21 +584,27 @@ class MediaDetailsViewModel(
 
                     val targetType = metadata.type ?: guessTypeFromUrl(trimmed) ?: _uiState.value.mediaType
                     val typeChanged = targetType != _uiState.value.mediaType
-                    _uiState.value = _uiState.value.copy(
-                        mediaType = targetType,
-                        formatId = if (typeChanged) null else _uiState.value.formatId,
-                        title = metadata.title.takeIf { it.isNotBlank() } ?: _uiState.value.title,
-                        description = metadata.description.takeIf { it.isNotBlank() } ?: _uiState.value.description,
-                        author = metadata.author.takeIf { it.isNotBlank() } ?: _uiState.value.author,
-                        coverImageUrl = metadata.imageUrl ?: _uiState.value.coverImageUrl,
-                        coverImagePath = downloadedCover?.absolutePath ?: _uiState.value.coverImagePath,
-                        genres = if (metadata.genres.isNotEmpty()) metadata.genres else _uiState.value.genres,
-                        tags = if (metadata.tags.isNotEmpty()) metadata.tags else _uiState.value.tags,
-                        isScraping = false,
-                        scrapeError = null,
-                        errorMsg = null,
-                        scrapeVersion = _uiState.value.scrapeVersion + 1,
-                    )
+                    _uiState.update { current ->
+                        current.copy(
+                            mediaType = targetType,
+                            formatId = if (typeChanged) null else current.formatId,
+                            title = metadata.title.takeIf { it.isNotBlank() } ?: current.title,
+                            alternativeTitles = if (metadata.alternativeTitles.isNotEmpty()) metadata.alternativeTitles else current.alternativeTitles,
+                            description = metadata.description.takeIf { it.isNotBlank() } ?: current.description,
+                            author = metadata.author.takeIf { it.isNotBlank() } ?: current.author,
+                            coverImageUrl = metadata.imageUrl.takeIf { it.isNotBlank() } ?: current.coverImageUrl,
+                            coverImagePath = downloadedCover?.absolutePath ?: current.coverImagePath,
+                            genres = if (metadata.genres.isNotEmpty()) metadata.genres else current.genres,
+                            tags = if (metadata.tags.isNotEmpty()) metadata.tags else current.tags,
+                            totalItems = metadata.totalItems?.toString() ?: current.totalItems,
+                            averageScore = metadata.averageScore?.toInt() ?: current.averageScore,
+                            startDate = metadata.startDate ?: current.startDate,
+                            isScraping = false,
+                            scrapeError = null,
+                            errorMsg = null,
+                            scrapeVersion = current.scrapeVersion + 1,
+                        )
+                    }
                     if (typeChanged) {
                         observeTypeFormats(targetType.name)
                     }
@@ -1172,10 +1183,11 @@ class MediaDetailsViewModel(
     private fun guessTypeFromUrl(url: String): MediaType? {
         val lower = url.lowercase()
         return when {
-            lower.contains("novelupdates.com") || lower.contains("royalroad.com") || lower.contains("wtr-lab.com") -> MediaType.NOVEL
-            lower.contains("mangadex.org") || lower.contains("manganato.com") -> MediaType.MANGA
+            lower.contains("novelupdates.com") || lower.contains("royalroad.com") || lower.contains("wtr-lab.com") || lower.contains("lightnovelpub.com") -> MediaType.NOVEL
+            lower.contains("mangadex.org") || lower.contains("manganato.com") || lower.contains("mangaupdates.com") || lower.contains("asuracomic.net") || lower.contains("reaperscans.com") -> MediaType.MANGA
             lower.contains("myanimelist.net/anime") || lower.contains("anilist.co/anime") -> MediaType.ANIME
             lower.contains("myanimelist.net/manga") || lower.contains("anilist.co/manga") -> MediaType.MANGA
+            lower.contains("imdb.com") -> if (lower.contains("/episodes") || lower.contains("tvseries") || (lower.contains("title/tt") && lower.contains("tv"))) MediaType.TV else MediaType.MOVIE
             lower.contains("steamcharts.com") || lower.contains("steampowered.com") || lower.contains("gog.com") -> MediaType.GAME
             else -> null
         }

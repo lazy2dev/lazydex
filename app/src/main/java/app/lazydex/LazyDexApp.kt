@@ -7,7 +7,6 @@ import app.lazydex.data.coil.CoverFetcher
 import app.lazydex.data.coil.CoverModelKeyer
 import app.lazydex.data.coil.MediaItemKeyer
 import app.lazydex.di.appModule
-import app.lazydex.extension.repository.ExtensionRepository
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -33,9 +32,6 @@ class LazyDexApp : Application(), SingletonImageLoader.Factory {
             androidContext(this@LazyDexApp)
             modules(appModule)
         }
-
-        // Eagerly resolve ExtensionRepository so installed sources are loaded and registered immediately
-        koinApp.koin.get<ExtensionRepository>()
 
         val delayedStore = koinApp.koin.get<app.lazydex.data.tracker.service.DelayedTrackingStore>()
         if (delayedStore.getItems().isNotEmpty()) {

@@ -9,13 +9,11 @@ import app.lazydex.data.local.dao.ActivityDao
 import app.lazydex.data.local.dao.AppSettingDao
 import app.lazydex.data.local.dao.MediaItemDao
 import app.lazydex.data.local.dao.MediaLinkDao
-import app.lazydex.data.local.dao.SyncOutboxDao
 import app.lazydex.data.local.entity.ActiveMediaItemView
 import app.lazydex.data.local.entity.ActivityEntity
 import app.lazydex.data.local.entity.AppSettingEntity
 import app.lazydex.data.local.entity.MediaItemEntity
 import app.lazydex.data.local.entity.MediaLinkEntity
-import app.lazydex.data.local.entity.SyncOutboxEntity
 import app.lazydex.data.local.entity.UserDataEntity
 
 fun SupportSQLiteDatabase.setupInitialTriggersAndSeeds() {
@@ -38,10 +36,7 @@ fun SupportSQLiteDatabase.setupInitialTriggersAndSeeds() {
         UserDataEntity::class,
         MediaLinkEntity::class,
         ActivityEntity::class,
-        SyncOutboxEntity::class,
-        AppSettingEntity::class,
-        app.lazydex.data.local.entity.ExtensionRepoEntity::class,
-        app.lazydex.data.local.entity.InstalledExtensionEntity::class
+        AppSettingEntity::class
     ],
     views = [
         ActiveMediaItemView::class
@@ -54,8 +49,5 @@ abstract class LazyDexDatabase : RoomDatabase() {
     abstract fun mediaItemDao(): MediaItemDao
     abstract fun mediaLinkDao(): MediaLinkDao
     abstract fun activityDao(): ActivityDao
-    abstract fun syncOutboxDao(): SyncOutboxDao
     abstract fun appSettingDao(): AppSettingDao
-    abstract fun extensionRepoDao(): app.lazydex.data.local.dao.ExtensionRepoDao
-    abstract fun installedExtensionDao(): app.lazydex.data.local.dao.InstalledExtensionDao
 }

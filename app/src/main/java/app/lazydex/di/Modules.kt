@@ -22,7 +22,6 @@ import app.lazydex.scraper.source.SourceRegistry
 import app.lazydex.ui.browser.BrowserViewModel
 import app.lazydex.ui.details.MediaDetailsViewModel
 import app.lazydex.ui.dex.DexViewModel
-import app.lazydex.ui.history.HistoryViewModel
 import app.lazydex.ui.settings.SettingsViewModel
 import app.lazydex.ui.statistics.StatisticsViewModel
 import okhttp3.OkHttpClient
@@ -59,13 +58,9 @@ val databaseModule = module {
     }
 
     single { get<LazyDexDatabase>().mediaItemDao() }
-    // mediaPartDao retired in V6
     single { get<LazyDexDatabase>().mediaLinkDao() }
     single { get<LazyDexDatabase>().activityDao() }
-    single { get<LazyDexDatabase>().syncOutboxDao() }
     single { get<LazyDexDatabase>().appSettingDao() }
-    single { get<LazyDexDatabase>().extensionRepoDao() }
-    single { get<LazyDexDatabase>().installedExtensionDao() }
 }
 
 val repositoryModule = module {
@@ -76,7 +71,6 @@ val repositoryModule = module {
             dao = get(),
             linkDao = get(),
             activityDao = get(),
-            outboxDao = get(),
             settingDao = get(),
             localCoversDir = get(named("coversDir")),
             syncEngine = getOrNull(),
@@ -147,31 +141,8 @@ val storageModule = module {
     single { app.lazydex.data.cache.CoverCache(androidContext()) }
 }
 
-val extensionModule = module {
-    single { app.lazydex.extension.manifest.ManifestParser() }
-    single { app.lazydex.extension.runtime.DexRuntimeEngine(androidContext()) }
-    single { app.lazydex.extension.runtime.JsRuntimeEngine(get()) }
-    single { app.lazydex.extension.runtime.LuaRuntimeEngine(get()) }
-    single { app.lazydex.extension.runtime.WasmRuntimeEngine(get()) }
-    single {
-        app.lazydex.extension.repository.ExtensionRepository(
-            context = androidContext(),
-            repoDao = get(),
-            installedDao = get(),
-            manifestParser = get(),
-            okHttpClient = get(),
-            dexEngine = get(),
-            jsEngine = get(),
-            luaEngine = get(),
-            wasmEngine = get(),
-            sourceRegistry = get()
-        )
-    }
-}
-
 val viewModelModule = module {
     viewModel { DexViewModel(get(), get(), syncEngine = getOrNull(), coverCache = getOrNull()) }
-    viewModel { HistoryViewModel(get(), get()) }
     viewModel { StatisticsViewModel(get(), getOrNull()) }
     viewModel { BrowserViewModel(get(), get(), get()) }
     viewModel {
@@ -200,7 +171,6 @@ val viewModelModule = module {
             client = getOrNull()
         )
     }
-    viewModel { app.lazydex.ui.settings.extensions.ExtensionViewModel(get()) }
 }
 
 val appModule = listOf(
@@ -209,7 +179,6 @@ val appModule = listOf(
     preferencesModule,
     trackerModule,
     scraperModule,
-    extensionModule,
     storageModule,
     viewModelModule
 )

@@ -33,7 +33,8 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -79,6 +80,7 @@ import org.koin.androidx.compose.koinViewModel
 fun BrowserScreen(
     onNavigateToCreateFromUrl: (String) -> Unit,
     onNavigateToManualAdd: () -> Unit = {},
+    onNavigateToCreateManual: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: BrowserViewModel = koinViewModel()
 ) {
@@ -153,6 +155,7 @@ fun BrowserScreen(
                 onSelectSource = { viewModel.selectSource(it) },
                 onNavigateToCreateFromUrl = onNavigateToCreateFromUrl,
                 onNavigateToManualAdd = onNavigateToManualAdd,
+                onNavigateToCreateManual = onNavigateToCreateManual,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
@@ -173,6 +176,7 @@ private fun MainBrowseView(
     onSelectSource: (Source) -> Unit,
     onNavigateToCreateFromUrl: (String) -> Unit,
     onNavigateToManualAdd: () -> Unit,
+    onNavigateToCreateManual: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val mediaTypes = listOf(
@@ -377,6 +381,56 @@ private fun MainBrowseView(
                     }
                 }
             }
+        } else if (uiState.searchQuery.isNotBlank() &&
+            !uiState.searchQuery.trim().startsWith("http://", ignoreCase = true) &&
+            !uiState.searchQuery.trim().startsWith("https://", ignoreCase = true)
+        ) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .clickable { onNavigateToCreateManual(uiState.searchQuery.trim()) }
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(14.dp)
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Create manual entry for \"${uiState.searchQuery.trim()}\"",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Text(
+                                text = "Paste a direct media URL (MAL, IMDb, MangaDex, etc.) to auto-scrape metadata, or tap to enter details manually.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // 4. Progress or Error indicator
@@ -552,20 +606,20 @@ private fun MainBrowseView(
                             .padding(horizontal = 24.dp, vertical = 48.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Extension,
+                            imageVector = Icons.Default.Language,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                             modifier = Modifier.size(48.dp)
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "No sources installed",
+                            text = "Universal Scraper Ready",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Add extension repositories in Settings -> Extensions to discover and install sources.",
+                            text = "Paste a link from MyAnimeList, AniList, MangaDex, IMDb, NovelUpdates, Royal Road, or any supported site into the search bar above to auto-scrape metadata, or type a title to create an entry manually.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center

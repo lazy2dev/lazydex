@@ -30,7 +30,8 @@ object MainShellRoute
 @Serializable
 data class MediaDetailsRoute(
     val itemId: String? = null,
-    val initialUrl: String? = null
+    val initialUrl: String? = null,
+    val initialTitle: String? = null
 )
 
 @Serializable
@@ -44,11 +45,6 @@ object DataAndStorageRoute
 
 @Serializable
 object AboutRoute
-
-@Serializable
-data class ExtensionsRoute(
-    val initialAddRepoUrl: String? = null
-)
 
 @Composable
 fun LazyDexNavGraph(
@@ -77,9 +73,6 @@ fun LazyDexNavGraph(
                 onNavigateToTracking = {
                     navController.navigate(TrackingRoute)
                 },
-                onNavigateToExtensions = {
-                    navController.navigate(ExtensionsRoute())
-                },
                 onNavigateToDataAndStorage = {
                     navController.navigate(DataAndStorageRoute)
                 },
@@ -89,18 +82,11 @@ fun LazyDexNavGraph(
                 onNavigateToAddItem = { initialUrl ->
                     navController.navigate(MediaDetailsRoute(itemId = null, initialUrl = initialUrl))
                 },
+                onNavigateToAddItemWithTitle = { title ->
+                    navController.navigate(MediaDetailsRoute(itemId = null, initialTitle = title))
+                },
                 onNavigateToEditItem = { itemId ->
                     navController.navigate(MediaDetailsRoute(itemId = itemId, initialUrl = null))
-                }
-            )
-        }
-
-        composable<ExtensionsRoute> { backStackEntry ->
-            val route = backStackEntry.toRoute<ExtensionsRoute>()
-            app.lazydex.ui.settings.extensions.ExtensionStoreScreen(
-                initialAddRepoUrl = route.initialAddRepoUrl,
-                onBack = {
-                    navController.popBackStack()
                 }
             )
         }

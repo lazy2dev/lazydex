@@ -98,10 +98,10 @@ enum class ShellTab {
 fun MainShellScreen(
     onNavigateToAppearance: () -> Unit,
     onNavigateToTracking: () -> Unit,
-    onNavigateToExtensions: () -> Unit,
     onNavigateToDataAndStorage: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onNavigateToAddItem: (String?) -> Unit,
+    onNavigateToAddItemWithTitle: (String) -> Unit = {},
     onNavigateToEditItem: (String) -> Unit,
     modifier: Modifier = Modifier,
     dexViewModel: DexViewModel = koinViewModel(),
@@ -317,6 +317,7 @@ fun MainShellScreen(
                             BrowserScreen(
                                 onNavigateToCreateFromUrl = { url -> onNavigateToAddItem(url) },
                                 onNavigateToManualAdd = { showQuickAddSheet = true },
+                                onNavigateToCreateManual = onNavigateToAddItemWithTitle,
                                 viewModel = browserViewModel,
                                 modifier = Modifier.fillMaxSize()
                             )
@@ -325,7 +326,6 @@ fun MainShellScreen(
                             SettingsMainScreen(
                                 onNavigateToAppearance = onNavigateToAppearance,
                                 onNavigateToTracking = onNavigateToTracking,
-                                onNavigateToExtensions = onNavigateToExtensions,
                                 onNavigateToDataAndStorage = onNavigateToDataAndStorage,
                                 onNavigateToAbout = onNavigateToAbout,
                                 modifier = Modifier.fillMaxSize()

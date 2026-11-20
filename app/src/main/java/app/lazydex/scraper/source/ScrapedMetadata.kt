@@ -11,5 +11,8 @@ data class ScrapedMetadata(
     val genres: List<String> = emptyList(),
     val tags: List<String> = emptyList(),
     val type: MediaType? = null,
-    val status: String? = null
+    val status: String? = null,
+    val totalItems: Int? = null,
+    val averageScore: Double? = null,
+    val startDate: Long? = null
 )
