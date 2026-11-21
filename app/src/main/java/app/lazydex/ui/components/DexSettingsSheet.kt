@@ -5,7 +5,6 @@
 
 package app.lazydex.ui.components
 
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -44,8 +43,13 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -59,6 +63,7 @@ import app.lazydex.domain.model.SortDirection
 import app.lazydex.domain.model.SortField
 import app.lazydex.domain.model.TypeConfig
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private object SettingsItemsPaddings {
@@ -147,8 +152,8 @@ fun DexSettingsSheet(
             HorizontalDivider()
 
             HorizontalPager(
-                modifier = Modifier.animateContentSize(),
                 state = pagerState,
+                userScrollEnabled = false,
                 verticalAlignment = Alignment.Top,
             ) { page ->
                 when (page) {
@@ -209,6 +214,22 @@ private fun FilterPage(
     onSetAuthorQuery: (String) -> Unit,
     onClearAll: () -> Unit,
 ) {
+    var showAllTags by rememberSaveable { mutableStateOf(false) }
+    var localAuthorQuery by rememberSaveable { mutableStateOf(authorQuery) }
+
+    LaunchedEffect(authorQuery) {
+        if (authorQuery != localAuthorQuery) {
+            localAuthorQuery = authorQuery
+        }
+    }
+
+    LaunchedEffect(localAuthorQuery) {
+        if (localAuthorQuery != authorQuery) {
+            delay(300L)
+            onSetAuthorQuery(localAuthorQuery)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -252,8 +273,11 @@ private fun FilterPage(
 
         // Tags if present
         if (availableTags.isNotEmpty()) {
+            val displayedTags = remember(availableTags, showAllTags) {
+                if (showAllTags || availableTags.size <= 15) availableTags else availableTags.take(15)
+            }
             SettingsChipRow(title = "Tags") {
-                availableTags.forEach { tag ->
+                displayedTags.forEach { tag ->
                     val isSelected = tag.lowercase() in selectedTags
                     FilterChip(
                         selected = isSelected,
@@ -261,17 +285,27 @@ private fun FilterPage(
                         label = { Text(tag) }
                     )
                 }
+                if (availableTags.size > 15) {
+                    FilterChip(
+                        selected = showAllTags,
+                        onClick = { showAllTags = !showAllTags },
+                        label = { Text(if (showAllTags) "Show less" else "+${availableTags.size - 15} more") }
+                    )
+                }
             }
         }
 
         // Author input
         OutlinedTextField(
-            value = authorQuery,
-            onValueChange = onSetAuthorQuery,
+            value = localAuthorQuery,
+            onValueChange = { localAuthorQuery = it },
             label = { Text("Filter by author") },
             trailingIcon = {
-                if (authorQuery.isNotEmpty()) {
-                    IconButton(onClick = { onSetAuthorQuery("") }) {
+                if (localAuthorQuery.isNotEmpty()) {
+                    IconButton(onClick = {
+                        localAuthorQuery = ""
+                        onSetAuthorQuery("")
+                    }) {
                         Icon(Icons.Default.Clear, contentDescription = "Clear")
                     }
                 }
@@ -287,7 +321,10 @@ private fun FilterPage(
 
         Spacer(modifier = Modifier.height(16.dp))
         TextButton(
-            onClick = onClearAll,
+            onClick = {
+                localAuthorQuery = ""
+                onClearAll()
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = SettingsItemsPaddings.Horizontal)
@@ -366,59 +403,31 @@ private fun DisplayPage(
     showItemCount: Boolean,
     onToggleShowItemCount: (Boolean) -> Unit,
 ) {
-    val displayModes = remember {
-        listOf(
-            "List" to LibraryDisplayMode.LIST,
-        )
-    }
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(vertical = 8.dp)
     ) {
-        SettingsChipRow(title = "Display mode") {
-            displayModes.forEach { (text, mode) ->
-                FilterChip(
-                    selected = displayMode == mode,
-                    onClick = { onSelectDisplayMode(mode) },
-                    label = { Text(text) },
-                )
-            }
-        }
-
-        if (displayMode == LibraryDisplayMode.LIST) {
-            SettingsChipRow(title = "List style") {
-                FilterChip(
-                    selected = listVariant == ListVariant.COMPACT,
-                    onClick = { onSelectListVariant(ListVariant.COMPACT) },
-                    label = { Text("Compact") }
-                )
-                FilterChip(
-                    selected = listVariant == ListVariant.DETAILED,
-                    onClick = { onSelectListVariant(ListVariant.DETAILED) },
-                    label = { Text("Detailed") }
-                )
-            }
-        }
-
-        if (displayMode != LibraryDisplayMode.LIST) {
-            SliderItem(
-                label = "Items per row",
-                value = gridColumns,
-                onChange = onSelectGridColumns
+        SettingsChipRow(title = "List style") {
+            FilterChip(
+                selected = listVariant == ListVariant.COMPACT,
+                onClick = { onSelectListVariant(ListVariant.COMPACT) },
+                label = { Text("Compact") }
+            )
+            FilterChip(
+                selected = listVariant == ListVariant.DETAILED,
+                onClick = { onSelectListVariant(ListVariant.DETAILED) },
+                label = { Text("Detailed") }
             )
         }
 
         HeadingItem(text = "Badges")
-        if (displayMode != LibraryDisplayMode.LIST) {
-            CheckboxItem(
-                label = "Progress badge",
-                checked = showProgressBadge,
-                onClick = { onToggleProgressBadge(!showProgressBadge) }
-            )
-        }
+        CheckboxItem(
+            label = "Progress badge",
+            checked = showProgressBadge,
+            onClick = { onToggleProgressBadge(!showProgressBadge) }
+        )
         CheckboxItem(
             label = "Status badge",
             checked = showStatusBadge,
@@ -430,7 +439,7 @@ private fun DisplayPage(
             onClick = { onToggleScoreBadge(!showScoreBadge) }
         )
 
-        HeadingItem(text = "Tabs")
+        HeadingItem(text = "Counters")
         CheckboxItem(
             label = "Show number of items",
             checked = showItemCount,

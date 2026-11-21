@@ -13,8 +13,8 @@ android {
         applicationId = "app.lazydex"
         minSdk = 26
         targetSdk = 35
-        versionCode = 64
-        versionName = "0.21.25"
+        versionCode = 65
+        versionName = "0.21.26"
     }
 
     buildTypes {

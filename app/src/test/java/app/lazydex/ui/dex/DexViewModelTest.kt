@@ -30,6 +30,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -519,6 +520,49 @@ class DexViewModelTest {
         viewModel.selectTypeId("MANGA")
         advanceUntilIdle()
         assertEquals(StatusFilter.CURRENT, viewModel.uiState.value.selectedStatus)
+    }
+
+    @Test
+    fun `clearFilters resets format, authorQuery, ratings, dates, genres and tags`() = runTest(testDispatcher) {
+        val testItem = MediaItem(
+            id = "m1",
+            type = "MANGA",
+            title = "Test Manga",
+            author = "Oda",
+            genres = listOf("Action"),
+            tags = listOf("Pirates"),
+            userStatus = UserStatus.CURRENT,
+            lastUpdated = 1L,
+            dateAdded = 1L
+        )
+        repository.itemsFlow.value = listOf(testItem)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.selectFormatId("MANGA")
+        viewModel.setAuthorQuery("Oda")
+        viewModel.toggleGenre("Action")
+        viewModel.toggleTag("Pirates")
+        viewModel.setRatingRange(8.0, 10.0)
+        viewModel.setDateRange(100L, 200L)
+        advanceUntilIdle()
+
+        assertEquals("MANGA", viewModel.uiState.value.selectedFormatId)
+        assertEquals("Oda", viewModel.uiState.value.authorQuery)
+        assertTrue(viewModel.uiState.value.selectedGenres.contains("action"))
+        assertTrue(viewModel.uiState.value.selectedTags.contains("pirates"))
+
+        viewModel.clearFilters()
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.selectedFormatId)
+        assertEquals("", viewModel.uiState.value.authorQuery)
+        assertTrue(viewModel.uiState.value.selectedGenres.isEmpty())
+        assertTrue(viewModel.uiState.value.selectedTags.isEmpty())
+        assertNull(viewModel.uiState.value.minRating)
+        assertNull(viewModel.uiState.value.maxRating)
+        assertNull(viewModel.uiState.value.dateRangeStart)
+        assertNull(viewModel.uiState.value.dateRangeEnd)
     }
 }
 

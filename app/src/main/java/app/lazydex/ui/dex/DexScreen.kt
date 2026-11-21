@@ -568,13 +568,7 @@ fun DexScreen(
     if (showFilterSheet) {
         DexSettingsSheet(
             sheetState = filterSheetState,
-            onDismissRequest = {
-                coroutineScope.launch { filterSheetState.hide() }.invokeOnCompletion {
-                    if (!filterSheetState.isVisible) {
-                        showFilterSheet = false
-                    }
-                }
-            },
+            onDismissRequest = { showFilterSheet = false },
             selectedFormatId = uiState.selectedFormatId,
             availableFormats = uiState.formatsForSelectedType,
             onSelectFormatId = { viewModel.selectFormatId(it) },

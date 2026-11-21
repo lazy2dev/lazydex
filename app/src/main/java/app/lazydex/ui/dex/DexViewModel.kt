@@ -227,13 +227,19 @@ class DexViewModel(
     private val filterState = combine(
         selectedType,
         selectedStatus,
+        mutableFilterState,
         perStatusCounts
-    ) { type, stat, sc ->
-        FilterBundle(type, stat, emptySet(), emptySet(), sc)
+    ) { type, stat, mfs, sc ->
+        FilterBundle(type, stat, mfs.genres, mfs.tags, sc)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FilterBundle(null, StatusFilter.ALL, emptySet(), emptySet(), emptyMap()))
 
+    @OptIn(FlowPreview::class)
     private val advancedFilterState = combine(
-        authorQuery, minRating, maxRating, dateRangeStart, dateRangeEnd
+        authorQuery.debounce { if (it.isBlank()) 0L else 300L },
+        minRating,
+        maxRating,
+        dateRangeStart,
+        dateRangeEnd
     ) { aq, min, max, ds, de -> AdvancedFilterBundle(aq, min, max, ds, de) }
 
     private val metadataState = combine(
