@@ -147,7 +147,15 @@ class DexViewModel(
         .flowOn(defaultDispatcher)
 
     private val selectedTypeId = MutableStateFlow<String?>(null)
-    private val selectedFormatId = MutableStateFlow<String?>(null)
+    private val tabFormatFilters = MutableStateFlow<Map<String, String?>>(emptyMap())
+
+    val selectedFormatId: StateFlow<String?> = combine(
+        selectedTypeId,
+        tabFormatFilters
+    ) { typeId, filters ->
+        val key = typeId ?: "ALL"
+        filters[key]
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     private val _activePageIndex = MutableStateFlow(0)
     val activePageIndex: StateFlow<Int> = _activePageIndex.asStateFlow()
@@ -174,7 +182,12 @@ class DexViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val formatsForSelectedType: StateFlow<List<TypeConfig>> = selectedTypeId.flatMapLatest { typeId ->
+    val formatsForSelectedType: StateFlow<List<TypeConfig>> = combine(
+        selectedTypeId,
+        topLevelTypes
+    ) { selId, types ->
+        selId ?: types.firstOrNull()?.id
+    }.flatMapLatest { typeId ->
         if (typeId != null) repository.observeFormats(typeId) else flowOf(emptyList())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -249,7 +262,7 @@ class DexViewModel(
     private val sortedItems: Flow<List<MediaItem>> = combine(
         dbFiltered,
         tabStatusFilters,
-        selectedFormatId,
+        tabFormatFilters,
         mutableFilterState.map { it.genres to it.tags }.distinctUntilChanged(),
         advancedFilterState,
         debouncedSearchQuery,
@@ -259,7 +272,8 @@ class DexViewModel(
         val items = args[0] as List<MediaItem>
         @Suppress("UNCHECKED_CAST")
         val statusFilters = args[1] as Map<String, StatusFilter>
-        val selFormatId = args[2] as String?
+        @Suppress("UNCHECKED_CAST")
+        val formatFilters = args[2] as Map<String, String?>
         @Suppress("UNCHECKED_CAST")
         val genresAndTags = args[3] as Pair<Set<String>, Set<String>>
         val afs = args[4] as AdvancedFilterBundle
@@ -275,7 +289,8 @@ class DexViewModel(
             val expectedUserStatus = targetStatus.toUserStatus()
             if (expectedUserStatus != null && item.userStatus != expectedUserStatus) return@filter false
 
-            (selFormatId == null || item.format.equals(selFormatId, ignoreCase = true) || item.typeId.equals(selFormatId, ignoreCase = true)) &&
+            val targetFormat = formatFilters[itemTabId]
+            if (targetFormat != null && !item.matchesFormat(targetFormat)) return@filter false
             (selectedGenres.isEmpty() || item.genres.any { it.lowercase() in selectedGenres }) &&
             (selectedTags.isEmpty() || item.tags.any { it.lowercase() in selectedTags }) &&
             (afs.authorQuery.isBlank() || item.author.contains(afs.authorQuery, ignoreCase = true)) &&
@@ -368,13 +383,15 @@ class DexViewModel(
 
     fun selectTypeId(typeId: String?) {
         selectedTypeId.value = typeId
-        selectedFormatId.value = null
         val resolvedType = typeId?.let { resolveMediaType(it) }
         mutableFilterState.update { it.copy(mediaType = resolvedType, genres = emptySet(), tags = emptySet()) }
     }
 
     fun selectFormatId(formatId: String?) {
-        selectedFormatId.value = formatId
+        val currentTab = selectedTypeId.value ?: "ALL"
+        tabFormatFilters.update { current ->
+            current + (currentTab to formatId)
+        }
     }
 
     fun incrementProgress(id: String, delta: Double = 1.0, mode: String? = null, speed: Double = 1.0) {
@@ -665,7 +682,7 @@ class DexViewModel(
         val currentType = selectedTypeId.value?.let { resolveMediaType(it) }
         mutableFilterState.update { it.copy(mediaType = currentType, genres = emptySet(), tags = emptySet()) }
         tabStatusFilters.value = emptyMap()
-        selectedFormatId.value = null
+        tabFormatFilters.value = emptyMap()
         authorQuery.value = ""
         minRating.value = null
         maxRating.value = null

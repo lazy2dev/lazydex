@@ -154,7 +154,11 @@ open class AnilistSyncEngine(
         }
         val mangaFormat = when (fmt) {
             "ONE_SHOT" -> "ONE_SHOT"
-            else -> "MANGA"
+            else -> when (c) {
+                "KR" -> "MANHWA"
+                "CN", "TW" -> "MANHUA"
+                else -> "MANGA"
+            }
         }
         return Triple("MANGA", mangaFormat, c)
     }

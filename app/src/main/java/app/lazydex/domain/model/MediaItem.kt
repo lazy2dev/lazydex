@@ -97,6 +97,27 @@ data class MediaItem(
         else -> type.lowercase().replaceFirstChar { it.uppercase() }
     }
 
+    fun matchesFormat(formatId: String?): Boolean {
+        if (formatId == null) return true
+        val target = formatId.uppercase()
+        val c = countryOfOrigin?.uppercase()
+        val fmt = format.uppercase()
+        val typ = type.uppercase()
+
+        return when (target) {
+            "MANHWA" -> fmt == "MANHWA" || (typ == "MANGA" && c == "KR")
+            "MANHUA" -> fmt == "MANHUA" || (typ == "MANGA" && (c == "CN" || c == "TW"))
+            "MANGA" -> (typ == "MANGA" || fmt == "MANGA") && c != "KR" && c != "CN" && c != "TW" && fmt != "ONE_SHOT"
+            "ONE_SHOT" -> fmt == "ONE_SHOT"
+            "LIGHT_NOVEL" -> fmt == "LIGHT_NOVEL" || (typ == "NOVEL" && c != "KR" && c != "CN") || (fmt == "NOVEL" && c != "KR" && c != "CN")
+            "WEB_NOVEL" -> fmt == "WEB_NOVEL" || ((typ == "NOVEL" || fmt == "NOVEL") && (c == "KR" || c == "CN"))
+            "TV" -> fmt in listOf("TV", "TV_SHORT", "ONA")
+            "OVA" -> fmt in listOf("OVA", "SPECIAL")
+            "MOVIE" -> fmt == "MOVIE"
+            else -> fmt == target || typeId.equals(target, ignoreCase = true)
+        }
+    }
+
     constructor(
         id: String,
         mediaType: MediaType,

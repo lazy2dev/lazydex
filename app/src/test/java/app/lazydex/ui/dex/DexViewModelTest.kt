@@ -438,17 +438,81 @@ class DexViewModelTest {
     }
 
     @Test
-    fun `selectTypeId clears selectedFormatId`() = runTest(testDispatcher) {
+    fun `per-tab format filter isolation preserves independent format filter per category`() = runTest(testDispatcher) {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
         advanceUntilIdle()
 
-        viewModel.selectFormatId("LIGHT_NOVEL")
-        advanceUntilIdle()
-        assertEquals("LIGHT_NOVEL", viewModel.uiState.value.selectedFormatId)
-
+        // 1. On Manga tab, select MANHWA
         viewModel.selectTypeId("MANGA")
+        viewModel.selectFormatId("MANHWA")
+        advanceUntilIdle()
+        assertEquals("MANHWA", viewModel.uiState.value.selectedFormatId)
+
+        // 2. Switch to Anime tab: defaults to null
+        viewModel.selectTypeId("ANIME")
         advanceUntilIdle()
         assertEquals(null, viewModel.uiState.value.selectedFormatId)
+
+        // 3. Switch back to Manga tab: restores MANHWA
+        viewModel.selectTypeId("MANGA")
+        advanceUntilIdle()
+        assertEquals("MANHWA", viewModel.uiState.value.selectedFormatId)
+    }
+
+    @Test
+    fun `matchesFormat correctly handles Manhwa, Manhua and Manga`() {
+        val manhwa = MediaItem(id = "1", type = "MANGA", format = "MANGA", countryOfOrigin = "KR", title = "Solo", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L)
+        val manhua = MediaItem(id = "2", type = "MANGA", format = "MANGA", countryOfOrigin = "CN", title = "Tales", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L)
+        val manga = MediaItem(id = "3", type = "MANGA", format = "MANGA", countryOfOrigin = "JP", title = "One Piece", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L)
+        val oneShot = MediaItem(id = "4", type = "MANGA", format = "ONE_SHOT", countryOfOrigin = "JP", title = "Pilot", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L)
+
+        // MANHWA filter
+        assertTrue(manhwa.matchesFormat("MANHWA"))
+        assertFalse(manhua.matchesFormat("MANHWA"))
+        assertFalse(manga.matchesFormat("MANHWA"))
+        assertFalse(oneShot.matchesFormat("MANHWA"))
+
+        // MANHUA filter
+        assertFalse(manhwa.matchesFormat("MANHUA"))
+        assertTrue(manhua.matchesFormat("MANHUA"))
+        assertFalse(manga.matchesFormat("MANHUA"))
+        assertFalse(oneShot.matchesFormat("MANHUA"))
+
+        // MANGA filter
+        assertFalse(manhwa.matchesFormat("MANGA"))
+        assertFalse(manhua.matchesFormat("MANGA"))
+        assertTrue(manga.matchesFormat("MANGA"))
+        assertFalse(oneShot.matchesFormat("MANGA"))
+
+        // ONE_SHOT filter
+        assertFalse(manhwa.matchesFormat("ONE_SHOT"))
+        assertFalse(manhua.matchesFormat("ONE_SHOT"))
+        assertFalse(manga.matchesFormat("ONE_SHOT"))
+        assertTrue(oneShot.matchesFormat("ONE_SHOT"))
+    }
+
+    @Test
+    fun `format filter on one tab does not affect items on another tab`() = runTest(testDispatcher) {
+        val manga = MediaItem(id = "m1", type = "MANGA", format = "MANGA", countryOfOrigin = "KR", title = "Solo", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L)
+        val anime = MediaItem(id = "a1", type = "ANIME", format = "TV", title = "Frieren", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L)
+        repository.itemsFlow.value = listOf(manga, anime)
+
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.selectTypeId("MANGA")
+        viewModel.selectFormatId("MANHWA")
+        advanceUntilIdle()
+
+        // Manga items filtered to Manhwa
+        val mangaItems = DexViewModel.getItemsForType(viewModel.uiState.value.items, "MANGA")
+        assertEquals(1, mangaItems.size)
+        assertEquals("m1", mangaItems[0].id)
+
+        // Anime items NOT filtered out by Manga's MANHWA filter
+        val animeItems = DexViewModel.getItemsForType(viewModel.uiState.value.items, "ANIME")
+        assertEquals(1, animeItems.size)
+        assertEquals("a1", animeItems[0].id)
     }
 
     @Test
