@@ -54,10 +54,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import app.lazydex.data.local.LibraryDisplayMode
+import app.lazydex.data.local.ListVariant
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.MediaType
 import app.lazydex.domain.model.StatusFilter
 import app.lazydex.domain.model.UserStatus
+import app.lazydex.util.formatRelativeTime
 import app.lazydex.ui.theme.StatusCompleted
 import app.lazydex.ui.theme.StatusDropped
 import app.lazydex.ui.theme.StatusInProgress
@@ -373,6 +375,7 @@ fun MediaCard(
     onOpenProgressDialog: ((MediaItem) -> Unit)? = null,
     isSelected: Boolean = false,
     displayMode: LibraryDisplayMode? = null,
+    listVariant: ListVariant = ListVariant.COMPACT,
     isGridView: Boolean = false,
     showProgressBadge: Boolean = true,
     showStatusBadge: Boolean = true,
@@ -390,6 +393,7 @@ fun MediaCard(
         onOpenProgressDialog = onOpenProgressDialog,
         isSelected = isSelected,
         displayMode = displayMode,
+        listVariant = listVariant,
         isGridView = isGridView,
         showProgressBadge = showProgressBadge,
         showStatusBadge = showStatusBadge,
@@ -413,6 +417,7 @@ fun MediaCard(
     onOpenProgressDialog: ((MediaItem) -> Unit)? = null,
     isSelected: Boolean = false,
     displayMode: LibraryDisplayMode? = null,
+    listVariant: ListVariant = ListVariant.COMPACT,
     isGridView: Boolean = false,
     showProgressBadge: Boolean = true,
     showStatusBadge: Boolean = true,
@@ -431,267 +436,37 @@ fun MediaCard(
 
     when (effectiveMode) {
         LibraryDisplayMode.LIST -> {
-            val resolvedFormat = remember(item.typeId, item.format, item.extraData, item.mediaType, item.countryOfOrigin, formatName) {
-                resolveFormatName(
-                    typeId = item.typeId,
-                    extraFormat = item.format.ifBlank { item.getExtra("format") },
-                    mediaType = item.mediaType,
-                    customFormat = formatName,
-                    countryOfOrigin = item.countryOfOrigin,
-                )
-            }
-            val displayProgress = if (item.progress > 0.0) item.progress else item.currentProgress.toDouble()
-            val displayProgressTotal = item.progressTotal ?: item.totalItems?.toDouble()
-            val isCompleted = (item.userStatus == UserStatus.COMPLETED) ||
-                (displayProgressTotal != null && displayProgressTotal > 0 && displayProgress >= displayProgressTotal)
-            val isDropped = item.userStatus == UserStatus.DROPPED
-            val isPaused = item.userStatus == UserStatus.PAUSED
-
-            val rating = item.rating
-            val avgScore = item.averageScore
-
-            Row(
-                modifier = modifier
-                    .fillMaxWidth()
-                    .height(IntrinsicSize.Min)
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
-                    .combinedClickable(onClick = onClick, onLongClick = onLongClick),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 1. Cover Image (Elevated, 72dp wide, fills exact card height so bg never protrudes)
-                Box(
-                    modifier = Modifier
-                        .width(72.dp)
-                        .fillMaxHeight()
-                        .heightIn(min = 104.dp)
-                        .shadow(3.dp, RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = 2.dp, bottomEnd = 2.dp))
-                        .zIndex(1f)
-                ) {
-                    CoverImage(
-                        coverImagePath = item.coverImagePath,
-                        title = item.title,
-                        coverImageUrl = item.coverImageUrl,
-                        shape = RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = 2.dp, bottomEnd = 2.dp),
-                        isObscured = isAdultObscured,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                if (isSelected) alpha = 0.76f
-                            }
+            when (listVariant) {
+                ListVariant.COMPACT -> {
+                    CompactListMediaItem(
+                        item = item,
+                        onClick = onClick,
+                        modifier = modifier,
+                        onLongClick = onLongClick,
+                        isSelected = isSelected,
+                        showStatusBadge = showStatusBadge,
+                        showScoreBadge = showScoreBadge,
+                        formatName = formatName,
+                        hasSecondaryProgress = hasSecondaryProgress,
+                        isDirtyLocal = isDirtyLocal,
+                        blurAdultCovers = blurAdultCovers,
                     )
-
-                    if (isSelected) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(4.dp)
-                                .size(20.dp)
-                                .background(MaterialTheme.colorScheme.primary, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = "Selected",
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(13.dp)
-                            )
-                        }
-                    }
                 }
-
-                // 2. Emerging Card Body Surface (Flat left edge 0.dp, rounded right edge 14.dp, matches project surface)
-                Surface(
-                    shape = RoundedCornerShape(topStart = 0.dp, bottomStart = 0.dp, topEnd = 14.dp, bottomEnd = 14.dp),
-                    color = if (isSelected) {
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
-                    } else {
-                        MaterialTheme.colorScheme.surface
-                    },
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f)),
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .offset(x = (-2).dp)
-                        .zIndex(0f)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 10.dp, top = 8.dp, end = 10.dp, bottom = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Middle Column
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 88.dp),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            // Row 1: Title (Full width, zero cutoff)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = item.title,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 14.sp,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.weight(1f, fill = false)
-                                )
-                                if (isDirtyLocal) {
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.Sync,
-                                        contentDescription = "Pending sync",
-                                        tint = MaterialTheme.colorScheme.tertiary,
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                }
-                            }
-
-                            // Row 2: Format and Transparent Average Score (normal space, no dot)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                if (resolvedFormat.isNotBlank()) {
-                                    Text(
-                                        text = resolvedFormat,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-
-                                if (showScoreBadge && avgScore != null) {
-                                    val smileyColor = when {
-                                        avgScore >= 75 -> Color(0xFF22C55E) // Green
-                                        avgScore >= 60 -> Color(0xFFEAB308) // Amber
-                                        else -> Color(0xFFEF4444) // Red
-                                    }
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.SentimentSatisfied,
-                                            contentDescription = null,
-                                            tint = smileyColor,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Text(
-                                            text = "$avgScore%",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
-
-                            // Row 3: Personal Score + Status (unboxed, same font size as score) + Progress Count
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        val scoreText = if (rating != null) {
-                                            val formatted = if (rating % 1.0 == 0.0) rating.toInt().toString() else "%.1f".format(rating)
-                                            "Score: $formatted"
-                                        } else {
-                                            "Score: ?"
-                                        }
-                                        Text(
-                                            text = scoreText,
-                                            fontSize = 12.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-
-                                        if (showStatusBadge) {
-                                            val statusColor = item.userStatus.color()
-                                            Text(
-                                                text = item.userStatus.displayName,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = statusColor
-                                            )
-                                        }
-                                    }
-
-                                    val progressCountText = "${formatProgress(displayProgress)} / ${displayProgressTotal?.takeIf { it > 0 }?.let { formatProgress(it) } ?: "?"}"
-                                    Text(
-                                        text = progressCountText,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Normal,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-
-                                // Row 4: Progress Bar (Always render track if total > 0 or progress > 0)
-                                val showProgressBar = (displayProgressTotal != null && displayProgressTotal > 0) || displayProgress > 0 || isCompleted
-                                if (showProgressBar) {
-                                    val progressFraction = remember(displayProgress, displayProgressTotal, isCompleted) {
-                                        if (isCompleted) 1f
-                                        else if (displayProgressTotal != null && displayProgressTotal > 0) {
-                                            (displayProgress / displayProgressTotal).toFloat().coerceIn(0f, 1f)
-                                        } else if (displayProgress > 0) 1f
-                                        else 0f
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(3.dp)
-                                            .clip(RoundedCornerShape(1.5.dp))
-                                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                    ) {
-                                        if (progressFraction > 0f) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth(progressFraction)
-                                                    .fillMaxHeight()
-                                                    .background(if (isCompleted) StatusCompleted else MaterialTheme.colorScheme.primary)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // 3. Right Action: Only render '+' button when item is not completed
-                        if (!isCompleted && onIncrementProgress != null) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                    .combinedClickable(
-                                        onClick = { onIncrementProgress(item.id) },
-                                        onLongClick = { onOpenProgressDialog?.invoke(item) }
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = "Increment progress",
-                                    tint = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                    }
+                ListVariant.DETAILED -> {
+                    DetailedListMediaItem(
+                        item = item,
+                        onClick = onClick,
+                        modifier = modifier,
+                        onLongClick = onLongClick,
+                        onIncrementProgress = onIncrementProgress,
+                        onOpenProgressDialog = onOpenProgressDialog,
+                        isSelected = isSelected,
+                        showStatusBadge = showStatusBadge,
+                        showScoreBadge = showScoreBadge,
+                        formatName = formatName,
+                        isDirtyLocal = isDirtyLocal,
+                        blurAdultCovers = blurAdultCovers,
+                    )
                 }
             }
         }
@@ -869,18 +644,467 @@ fun MediaCard(
     }
 }
 
-private fun getRelativeTime(timestamp: Long): String {
-    if (timestamp <= 0L) return "Never"
-    val diff = System.currentTimeMillis() - timestamp
-    if (diff < 0) return "Just now"
-    val seconds = diff / 1000
-    val minutes = seconds / 60
-    val hours = minutes / 60
-    val days = hours / 24
-    return when {
-        seconds < 60 -> "Just now"
-        minutes < 60 -> "${minutes}m ago"
-        hours < 24 -> "${hours}h ago"
-        else -> "${days}d ago"
+@Composable
+private fun CompactListMediaItem(
+    item: MediaItem,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
+    isSelected: Boolean = false,
+    showStatusBadge: Boolean = true,
+    showScoreBadge: Boolean = true,
+    formatName: String? = null,
+    hasSecondaryProgress: Boolean? = null,
+    isDirtyLocal: Boolean = false,
+    blurAdultCovers: Boolean = false,
+) {
+    val isAdultObscured = item.isAdult && blurAdultCovers
+    val statusColor = item.userStatus.color()
+    val relativeTime = remember(item.lastUpdated) { formatRelativeTime(item.lastUpdated) }
+    val resolvedFormat = remember(item.typeId, item.format, item.extraData, item.mediaType, item.countryOfOrigin, formatName) {
+        resolveFormatName(
+            typeId = item.typeId,
+            extraFormat = item.format.ifBlank { item.getExtra("format") },
+            mediaType = item.mediaType,
+            customFormat = formatName,
+            countryOfOrigin = item.countryOfOrigin,
+        )
+    }
+    val resolvedHasSecondary = remember(item.typeId, item.secondaryProgress, item.secondaryProgressTotal, hasSecondaryProgress) {
+        resolveHasSecondaryProgress(
+            typeId = item.typeId,
+            secondaryProgress = item.secondaryProgress,
+            secondaryProgressTotal = item.secondaryProgressTotal,
+            hasSecondaryOverride = hasSecondaryProgress,
+        )
+    }
+    val displayProgress = if (item.progress > 0.0) item.progress else item.currentProgress.toDouble()
+    val displayProgressTotal = item.progressTotal ?: item.totalItems?.toDouble()
+    val displaySecondaryProgress = item.secondaryProgress
+    val displaySecondaryProgressTotal = item.secondaryProgressTotal
+
+    val primaryUnitPrefix = remember(item.mediaType) { resolveUnitPrefix(item.mediaType, isSecondary = false) }
+    val secondaryUnitPrefix = remember(item.mediaType) { resolveUnitPrefix(item.mediaType, isSecondary = true) }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else Color.Transparent)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(contentAlignment = Alignment.TopEnd) {
+            CoverImage(
+                coverImagePath = item.coverImagePath,
+                title = item.title,
+                coverImageUrl = item.coverImageUrl,
+                shape = RoundedCornerShape(4.dp),
+                isObscured = isAdultObscured,
+                modifier = Modifier
+                    .size(width = 54.dp, height = 78.dp)
+                    .graphicsLayer {
+                        if (isSelected) alpha = 0.76f
+                    }
+            )
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .padding(2.dp)
+                        .size(18.dp)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Selected",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 78.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Row 1: Title + Sync Status Affordance + Relative Time
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = item.title,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (isDirtyLocal) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.Sync,
+                            contentDescription = "Pending sync",
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                }
+                if (relativeTime != null) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = relativeTime,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // Row 2: Badges: Format Badge [ Manhwa ] [ In Progress ]
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (resolvedFormat.isNotBlank()) {
+                    Badge(
+                        text = resolvedFormat,
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        textColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        shape = RoundedCornerShape(4.dp),
+                    )
+                }
+                if (showStatusBadge) {
+                    Badge(
+                        text = item.userStatus.displayName,
+                        color = statusColor.copy(alpha = 0.15f),
+                        textColor = statusColor,
+                        shape = RoundedCornerShape(4.dp),
+                    )
+                }
+                val rating = item.rating
+                if (showScoreBadge && rating != null) {
+                    Badge(
+                        text = "%.1f".format(rating),
+                        color = getRatingColor(rating).copy(alpha = 0.15f),
+                        textColor = getRatingColor(rating),
+                        shape = RoundedCornerShape(4.dp),
+                    )
+                }
+            }
+
+            // Row 3: Primary Counter (Chapters/Episodes)
+            val primaryText = "$primaryUnitPrefix ${formatProgress(displayProgress)} / ${displayProgressTotal?.takeIf { it > 0 }?.let { formatProgress(it) } ?: "?"}"
+            Text(
+                text = primaryText,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(vertical = 2.dp)
+            )
+
+            // Row 4: Secondary Counter (Volumes/Seasons) - ONLY if hasSecondaryProgress == true
+            if (resolvedHasSecondary) {
+                val secondaryText = "$secondaryUnitPrefix ${formatProgress(displaySecondaryProgress)} / ${displaySecondaryProgressTotal?.takeIf { it > 0 }?.let { formatProgress(it) } ?: "?"}"
+                Text(
+                    text = secondaryText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 1.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailedListMediaItem(
+    item: MediaItem,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
+    onIncrementProgress: ((String) -> Unit)? = null,
+    onOpenProgressDialog: ((MediaItem) -> Unit)? = null,
+    isSelected: Boolean = false,
+    showStatusBadge: Boolean = true,
+    showScoreBadge: Boolean = true,
+    formatName: String? = null,
+    isDirtyLocal: Boolean = false,
+    blurAdultCovers: Boolean = false,
+) {
+    val resolvedFormat = remember(item.typeId, item.format, item.extraData, item.mediaType, item.countryOfOrigin, formatName) {
+        resolveFormatName(
+            typeId = item.typeId,
+            extraFormat = item.format.ifBlank { item.getExtra("format") },
+            mediaType = item.mediaType,
+            customFormat = formatName,
+            countryOfOrigin = item.countryOfOrigin,
+        )
+    }
+    val isAdultObscured = item.isAdult && blurAdultCovers
+    val displayProgress = if (item.progress > 0.0) item.progress else item.currentProgress.toDouble()
+    val displayProgressTotal = item.progressTotal ?: item.totalItems?.toDouble()
+    val isCompleted = (item.userStatus == UserStatus.COMPLETED) ||
+        (displayProgressTotal != null && displayProgressTotal > 0 && displayProgress >= displayProgressTotal)
+
+    val rating = item.rating
+    val avgScore = item.averageScore
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 1. Cover Image (Elevated, 72dp wide, fills exact card height so bg never protrudes)
+        Box(
+            modifier = Modifier
+                .width(72.dp)
+                .fillMaxHeight()
+                .heightIn(min = 104.dp)
+                .shadow(3.dp, RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = 2.dp, bottomEnd = 2.dp))
+                .zIndex(1f)
+        ) {
+            CoverImage(
+                coverImagePath = item.coverImagePath,
+                title = item.title,
+                coverImageUrl = item.coverImageUrl,
+                shape = RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = 2.dp, bottomEnd = 2.dp),
+                isObscured = isAdultObscured,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        if (isSelected) alpha = 0.76f
+                    }
+            )
+
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .size(20.dp)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Selected",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+            }
+        }
+
+        // 2. Emerging Card Body Surface (Flat left edge 0.dp, rounded right edge 14.dp, matches project surface)
+        Surface(
+            shape = RoundedCornerShape(topStart = 0.dp, bottomStart = 0.dp, topEnd = 14.dp, bottomEnd = 14.dp),
+            color = if (isSelected) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+            } else {
+                MaterialTheme.colorScheme.surface
+            },
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f)),
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .offset(x = (-2).dp)
+                .zIndex(0f)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 10.dp, top = 8.dp, end = 10.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Middle Column
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 88.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // Row 1: Title (Full width, zero cutoff)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = item.title,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (isDirtyLocal) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Default.Sync,
+                                contentDescription = "Pending sync",
+                                tint = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                    }
+
+                    // Row 2: Format and Transparent Average Score (normal space, no dot)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (resolvedFormat.isNotBlank()) {
+                            Text(
+                                text = resolvedFormat,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        if (showScoreBadge && avgScore != null) {
+                            val smileyColor = when {
+                                avgScore >= 75 -> Color(0xFF22C55E) // Green
+                                avgScore >= 60 -> Color(0xFFEAB308) // Amber
+                                else -> Color(0xFFEF4444) // Red
+                            }
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.SentimentSatisfied,
+                                    contentDescription = null,
+                                    tint = smileyColor,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "$avgScore%",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    // Row 3: Personal Score + Status (unboxed, same font size as score) + Progress Count
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val scoreText = if (rating != null) {
+                                    val formatted = if (rating % 1.0 == 0.0) rating.toInt().toString() else "%.1f".format(rating)
+                                    "Score: $formatted"
+                                } else {
+                                    "Score: ?"
+                                }
+                                Text(
+                                    text = scoreText,
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                if (showStatusBadge) {
+                                    val statusColor = item.userStatus.color()
+                                    Text(
+                                        text = item.userStatus.displayName,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = statusColor
+                                    )
+                                }
+                            }
+
+                            val progressCountText = "${formatProgress(displayProgress)} / ${displayProgressTotal?.takeIf { it > 0 }?.let { formatProgress(it) } ?: "?"}"
+                            Text(
+                                text = progressCountText,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        // Row 4: Progress Bar (Always render track if total > 0 or progress > 0)
+                        val showProgressBar = (displayProgressTotal != null && displayProgressTotal > 0) || displayProgress > 0 || isCompleted
+                        if (showProgressBar) {
+                            val progressFraction = remember(displayProgress, displayProgressTotal, isCompleted) {
+                                if (isCompleted) 1f
+                                else if (displayProgressTotal != null && displayProgressTotal > 0) {
+                                    (displayProgress / displayProgressTotal).toFloat().coerceIn(0f, 1f)
+                                } else if (displayProgress > 0) 1f
+                                else 0f
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(3.dp)
+                                    .clip(RoundedCornerShape(1.5.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            ) {
+                                if (progressFraction > 0f) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(progressFraction)
+                                            .fillMaxHeight()
+                                            .background(if (isCompleted) StatusCompleted else MaterialTheme.colorScheme.primary)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3. Right Action: Only render '+' button when item is not completed
+                if (!isCompleted && onIncrementProgress != null) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .combinedClickable(
+                                onClick = { onIncrementProgress(item.id) },
+                                onLongClick = { onOpenProgressDialog?.invoke(item) }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Increment progress",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+        }
     }
 }

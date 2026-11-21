@@ -239,28 +239,31 @@ fun DexScreen(
                                 }
                             )
                         } else {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
                                 Text(
                                     text = "Dex",
+                                    style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 20.sp,
-                                    color = MaterialTheme.colorScheme.onBackground
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 val activeIndex = pagerState.currentPage.coerceIn(0, tabs.lastIndex.coerceAtLeast(0))
                                 val activeTab = tabs.getOrNull(activeIndex)
                                 if (activeTab != null && tabs.size > 1) {
-                                    Text(
-                                        text = " · ",
-                                        fontWeight = FontWeight.Normal,
-                                        fontSize = 20.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                    )
-                                    Text(
-                                        text = activeTab.name,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 20.sp,
-                                        color = MaterialTheme.colorScheme.onBackground
-                                    )
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                    ) {
+                                        Text(
+                                            text = activeTab.name,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -485,7 +488,7 @@ fun DexScreen(
                                         items(
                                             items = itemsForPage,
                                             key = { it.id },
-                                            contentType = { uiState.displayMode }
+                                            contentType = { "${uiState.displayMode}_${uiState.listVariant}" }
                                         ) { item ->
                                             MediaCard(
                                                 item = item,
@@ -495,6 +498,7 @@ fun DexScreen(
                                                 onOpenProgressDialog = { mediaItem -> progressDialogItem = mediaItem },
                                                 isSelected = item.id in uiState.selectedIds,
                                                 displayMode = uiState.displayMode,
+                                                listVariant = uiState.listVariant,
                                                 showProgressBadge = uiState.showProgressBadge,
                                                 showStatusBadge = uiState.showStatusBadge,
                                                 showScoreBadge = uiState.showScoreBadge,
@@ -532,7 +536,7 @@ fun DexScreen(
                                         items(
                                             items = itemsForPage,
                                             key = { it.id },
-                                            contentType = { uiState.displayMode }
+                                            contentType = { "${uiState.displayMode}_${uiState.listVariant}" }
                                         ) { item ->
                                             MediaCard(
                                                 item = item,
@@ -542,6 +546,7 @@ fun DexScreen(
                                                 onOpenProgressDialog = { mediaItem -> progressDialogItem = mediaItem },
                                                 isSelected = item.id in uiState.selectedIds,
                                                 displayMode = uiState.displayMode,
+                                                listVariant = uiState.listVariant,
                                                 showProgressBadge = uiState.showProgressBadge,
                                                 showStatusBadge = uiState.showStatusBadge,
                                                 showScoreBadge = uiState.showScoreBadge,
@@ -587,6 +592,8 @@ fun DexScreen(
             onSelectSortDirection = { viewModel.selectSortDirection(it) },
             displayMode = uiState.displayMode,
             onSelectDisplayMode = { viewModel.setDisplayMode(it) },
+            listVariant = uiState.listVariant,
+            onSelectListVariant = viewModel::setListVariant,
             gridColumns = uiState.gridColumns,
             onSelectGridColumns = { viewModel.setGridColumns(it) },
             showProgressBadge = uiState.showProgressBadge,

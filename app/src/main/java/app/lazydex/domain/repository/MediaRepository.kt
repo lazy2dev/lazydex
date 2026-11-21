@@ -65,6 +65,7 @@ interface MediaRepository {
     suspend fun delete(id: String)
     suspend fun incrementProgress(id: String, delta: Double, mode: String? = null, speed: Double = 1.0): MediaItem? = null
     suspend fun updateRepeat(id: String, repeat: Int) {}
+    suspend fun updateMetadata(id: String, description: String?, tags: List<String>?, genres: List<String>?) {}
 
     /** Bulk operations */
     suspend fun replaceAll(items: List<MediaItem>)

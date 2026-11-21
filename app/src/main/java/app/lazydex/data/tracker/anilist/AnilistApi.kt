@@ -13,13 +13,17 @@ import app.lazydex.data.tracker.anilist.dto.MediaListCollection
 import app.lazydex.data.tracker.anilist.dto.MediaListCollectionData
 import app.lazydex.data.tracker.anilist.dto.SaveMediaListEntryData
 import app.lazydex.data.tracker.anilist.dto.SearchMediaPageData
+import app.lazydex.data.tracker.anilist.dto.SingleMediaData
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
@@ -39,6 +43,7 @@ class AnilistApi(
 ) {
     companion object {
         const val DEFAULT_BASE_URL = "https://graphql.anilist.co"
+        const val DEFAULT_PER_CHUNK = 150
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
         val defaultJson: Json = Json {
@@ -48,8 +53,8 @@ class AnilistApi(
         }
 
         const val MEDIA_LIST_COLLECTION_QUERY = """
-query (${'$'}userId: Int, ${'$'}type: MediaType, ${'$'}chunk: Int) {
-  MediaListCollection(userId: ${'$'}userId, type: ${'$'}type, chunk: ${'$'}chunk) {
+query (${'$'}userId: Int, ${'$'}type: MediaType, ${'$'}chunk: Int, ${'$'}perChunk: Int) {
+  MediaListCollection(userId: ${'$'}userId, type: ${'$'}type, chunk: ${'$'}chunk, perChunk: ${'$'}perChunk) {
     hasNextChunk
     lists {
       name
@@ -68,6 +73,7 @@ query (${'$'}userId: Int, ${'$'}type: MediaType, ${'$'}chunk: Int) {
         startedAt { year month day }
         completedAt { year month day }
         updatedAt
+        createdAt
         media {
           id
           idMal
@@ -80,11 +86,6 @@ query (${'$'}userId: Int, ${'$'}type: MediaType, ${'$'}chunk: Int) {
           chapters
           volumes
           genres
-          tags {
-            name
-            isMediaSpoiler
-          }
-          description
           startDate { year month day }
           coverImage { large extraLarge }
           bannerImage
@@ -92,6 +93,36 @@ query (${'$'}userId: Int, ${'$'}type: MediaType, ${'$'}chunk: Int) {
           title { userPreferred english romaji native }
         }
       }
+    }
+  }
+}
+"""
+
+        const val MEDIA_BATCH_METADATA_QUERY = """
+query (${'$'}ids: [Int], ${'$'}type: MediaType) {
+  Page(page: 1, perPage: 50) {
+    media(id_in: ${'$'}ids, type: ${'$'}type) {
+      id
+      description(asHtml: false)
+      genres
+      tags {
+        name
+        isMediaSpoiler
+      }
+    }
+  }
+}
+"""
+
+        const val MEDIA_DETAILS_QUERY = """
+query (${'$'}id: Int, ${'$'}type: MediaType) {
+  Media(id: ${'$'}id, type: ${'$'}type) {
+    id
+    description(asHtml: false)
+    genres
+    tags {
+      name
+      isMediaSpoiler
     }
   }
 }
@@ -181,12 +212,14 @@ query (${'$'}search: String, ${'$'}type: MediaType, ${'$'}perPage: Int) {
         userId: Int,
         type: String,
         chunk: Int = 1,
+        perChunk: Int = DEFAULT_PER_CHUNK,
         priority: TokenBucketLimiter.Priority = TokenBucketLimiter.Priority.BACKGROUND
     ): MediaListCollection {
         val variables = buildJsonObject {
             put("userId", userId)
             put("type", type)
             put("chunk", chunk)
+            put("perChunk", perChunk)
         }
 
         val responseData = execute(
@@ -202,15 +235,77 @@ query (${'$'}search: String, ${'$'}type: MediaType, ${'$'}perPage: Int) {
     /**
      * Convenience method returning deduplicated entries and [hasNextChunk] flag.
      * Custom list duplicates are removed via `distinctBy { it.media.id }`.
+     * Applies adaptive chunk shrinking: on EOF or network failure, halves perChunk (min 25) with up to 3 retries.
      */
     suspend fun getDeduplicatedEntries(
         userId: Int,
         type: String,
         chunk: Int = 1,
+        perChunk: Int = DEFAULT_PER_CHUNK,
         priority: TokenBucketLimiter.Priority = TokenBucketLimiter.Priority.BACKGROUND
     ): Pair<List<AniListMediaListEntry>, Boolean> {
-        val collection = getMediaListCollection(userId, type, chunk, priority)
-        return Pair(collection.deduplicatedEntries, collection.hasNextChunk)
+        var currentPerChunk = perChunk
+        var attempts = 0
+        while (true) {
+            try {
+                val collection = getMediaListCollection(userId, type, chunk, currentPerChunk, priority)
+                return Pair(collection.deduplicatedEntries, collection.hasNextChunk)
+            } catch (e: Exception) {
+                attempts++
+                val isRecoverable = (e is IOException || e is AniListApiException) && attempts < 3 && currentPerChunk > 25
+                if (isRecoverable) {
+                    currentPerChunk = (currentPerChunk / 2).coerceAtLeast(25)
+                    delay(500L * attempts)
+                } else {
+                    throw e
+                }
+            }
+        }
+    }
+
+    /**
+     * Batch queries metadata (synopsis, tags, genres) for up to 50 media IDs in a single request.
+     */
+    suspend fun getMediaBatchMetadata(
+        ids: List<Int>,
+        type: String,
+        priority: TokenBucketLimiter.Priority = TokenBucketLimiter.Priority.BACKGROUND
+    ): List<AniListMedia> {
+        if (ids.isEmpty()) return emptyList()
+        val aniListType = if (type.equals("ANIME", ignoreCase = true)) "ANIME" else "MANGA"
+        val variables = buildJsonObject {
+            put("ids", buildJsonArray { ids.forEach { add(JsonPrimitive(it)) } })
+            put("type", aniListType)
+        }
+        val response = execute(
+            query = MEDIA_BATCH_METADATA_QUERY,
+            variables = variables,
+            deserializer = SearchMediaPageData.serializer(),
+            priority = priority
+        )
+        return response.page?.media ?: emptyList()
+    }
+
+    /**
+     * Queries detailed metadata for a single media ID at interactive priority.
+     */
+    suspend fun getMediaDetails(
+        id: Int,
+        type: String,
+        priority: TokenBucketLimiter.Priority = TokenBucketLimiter.Priority.INTERACTIVE
+    ): AniListMedia? {
+        val aniListType = if (type.equals("ANIME", ignoreCase = true)) "ANIME" else "MANGA"
+        val variables = buildJsonObject {
+            put("id", id)
+            put("type", aniListType)
+        }
+        val response = execute(
+            query = MEDIA_DETAILS_QUERY,
+            variables = variables,
+            deserializer = SingleMediaData.serializer(),
+            priority = priority
+        )
+        return response.media
     }
 
     data class SaveMediaListEntryParams(

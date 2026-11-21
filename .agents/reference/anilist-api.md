@@ -25,8 +25,8 @@ https://anilist.co/api/v2/oauth/authorize?client_id={CLIENT_ID}&response_type=to
 ## 2. Paginated MediaListCollection Query
 
 ```graphql
-query ($userId: Int, $type: MediaType, $chunk: Int) {
-  MediaListCollection(userId: $userId, type: $type, chunk: $chunk) {
+query ($userId: Int, $type: MediaType, $chunk: Int, $perChunk: Int) {
+  MediaListCollection(userId: $userId, type: $type, chunk: $chunk, perChunk: $perChunk) {
     lists {
       name
       isCustomList
@@ -44,6 +44,7 @@ query ($userId: Int, $type: MediaType, $chunk: Int) {
         startedAt { year month day }
         completedAt { year month day }
         updatedAt
+        createdAt
         media {
           id
           title { romaji english native userPreferred }
@@ -55,6 +56,10 @@ query ($userId: Int, $type: MediaType, $chunk: Int) {
           description
           averageScore
           genres
+          tags {
+            name
+            isMediaSpoiler
+          }
           countryOfOrigin
         }
       }
@@ -64,9 +69,11 @@ query ($userId: Int, $type: MediaType, $chunk: Int) {
 }
 ```
 
-Variables: `{ "userId": 12345, "type": "MANGA", "chunk": 1, "perPage": 500 }`
+Variables: `{ "userId": 12345, "type": "MANGA", "chunk": 1, "perChunk": 150 }`
 
-- **Rate-limit Loop**: Loop while `hasNextChunk == true`, advancing `$chunk` count. Requests pass through `AnilistRateLimiter` (85 permits/min). On 429, back off for `Retry-After` seconds.
+- **Chunk Sizing**: Uses `perChunk = 150` to keep individual batch latency under ~9s and JSON payload ~300 KB, preventing timeout truncations.
+- **Client Timeouts**: Handled by dedicated `OkHttpClient` (`connectTimeout: 30s`, `readTimeout: 60s`, `writeTimeout: 30s`).
+- **Rate-limit Loop**: Loop while `hasNextChunk == true`, advancing `$chunk` count. Requests pass through `TokenBucketLimiter` (`BACKGROUND` priority, 60 permits/min). On 429, back off for `Retry-After` seconds.
 - **Null-Guard**: Filter out entries where `entry.media == null`.
 - **Deduplication**: Deduplicate entries by `distinctBy { it.id }` (MediaListEntry.id).
 

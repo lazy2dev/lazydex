@@ -45,8 +45,20 @@ enum class LibraryGroupMode {
     }
 }
 
+enum class ListVariant {
+    COMPACT,
+    DETAILED;
+
+    companion object {
+        fun fromNameOrDefault(name: String?): ListVariant {
+            return entries.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: COMPACT
+        }
+    }
+}
+
 data class DisplayPreferences(
     val displayMode: LibraryDisplayMode = LibraryDisplayMode.LIST,
+    val listVariant: ListVariant = ListVariant.COMPACT,
     val gridColumns: Int = 0,
     val showTypeTabs: Boolean = true,
     val showProgressBadge: Boolean = true,
@@ -76,6 +88,7 @@ open class ThemePreferences(private val context: Context? = null) {
         val SORT_DIRECTION_KEY = stringPreferencesKey("sort_direction")
         val PINNED_SOURCES_KEY = stringSetPreferencesKey("pinned_sources")
         val LIBRARY_GROUP_MODE_KEY = stringPreferencesKey("library_group_mode")
+        val LIST_VARIANT_KEY = stringPreferencesKey("library_list_variant")
     }
 
     private val dataStore: DataStore<Preferences>
@@ -144,6 +157,7 @@ open class ThemePreferences(private val context: Context? = null) {
             }
             DisplayPreferences(
                 displayMode = LibraryDisplayMode.LIST,
+                listVariant = ListVariant.fromNameOrDefault(preferences[LIST_VARIANT_KEY]),
                 gridColumns = preferences[GRID_COLUMNS_KEY] ?: 0,
                 showTypeTabs = preferences[SHOW_TYPE_TABS_KEY] ?: true,
                 showProgressBadge = preferences[SHOW_PROGRESS_BADGE_KEY] ?: true,
@@ -264,6 +278,12 @@ open class ThemePreferences(private val context: Context? = null) {
     open suspend fun setGroupMode(mode: LibraryGroupMode) {
         dataStore.edit { preferences ->
             preferences[LIBRARY_GROUP_MODE_KEY] = mode.name
+        }
+    }
+
+    open suspend fun setListVariant(variant: ListVariant) {
+        dataStore.edit { preferences ->
+            preferences[LIST_VARIANT_KEY] = variant.name
         }
     }
 }

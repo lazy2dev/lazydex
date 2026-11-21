@@ -40,8 +40,7 @@ data class MediaItemBackupDto(
     val lastUpdated: Long? = null,
     val dateAdded: Long? = null,
     val extraData: String? = null,
-    val isDeleted: Boolean? = null,
-    val progressIncreasedAt: Long? = null
+    val isDeleted: Boolean? = null
 )
 
 data class DeserializedBackup(
@@ -168,8 +167,7 @@ object BackupProcessor {
         lastUpdated = lastUpdated,
         dateAdded = dateAdded,
         extraData = extraData.takeIf { it.isNotBlank() && it != "{}" },
-        isDeleted = if (isDeleted) true else null,
-        progressIncreasedAt = progressIncreasedAt
+        isDeleted = if (isDeleted) true else null
     )
 
     private fun MediaItemBackupDto.toDomain(): MediaItem? {
@@ -218,8 +216,7 @@ object BackupProcessor {
             lastUpdated = safeLastUpdated,
             dateAdded = safeDateAdded,
             extraData = extraData ?: "{}",
-            isDeleted = isDeleted ?: false,
-            progressIncreasedAt = progressIncreasedAt ?: if (safeProgress > 0) safeLastUpdated.takeIf { it > 0 } ?: safeDateAdded else null
+            isDeleted = isDeleted ?: false
         ).normalize()
     }
 }

@@ -120,6 +120,7 @@ class MediaItemParityTest {
         override suspend fun restore(id: String, now: Long) {}
         override suspend fun hardDelete(id: String) {}
         override suspend fun deleteAll() {}
+        override suspend fun updateMetadata(id: String, description: String?, tags: String?, genres: String?): Int = 0
         override fun getStats(): Flow<MediaStats> = emptyFlow()
     }
 
@@ -130,6 +131,9 @@ class MediaItemParityTest {
         override suspend fun getDirtyLinks(providerId: String): List<MediaLinkEntity> = emptyList()
         override suspend fun getByProviderAndState(providerId: String, state: String): List<MediaLinkEntity> = emptyList()
         override suspend fun getByProviderId(providerId: String): List<MediaLinkEntity> = emptyList()
+        override suspend fun getByMediaIdAndProvider(mediaId: String, providerId: String): MediaLinkEntity? = null
+        override suspend fun getLinksNeedingMetadata(providerId: String, limit: Int): List<MediaLinkEntity> = emptyList()
+        override suspend fun markMetadataFetched(providerId: String, remoteIds: List<String>, timestamp: Long): Int = 0
         override suspend fun updateSyncStatusByMediaId(mediaId: String, syncStatus: String, updatedAt: Long): Int = 0
         override suspend fun upsert(link: MediaLinkEntity) {}
         override suspend fun upsertAll(links: List<MediaLinkEntity>) {}

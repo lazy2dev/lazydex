@@ -54,6 +54,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.lazydex.data.local.LibraryDisplayMode
+import app.lazydex.data.local.ListVariant
 import app.lazydex.domain.model.SortDirection
 import app.lazydex.domain.model.SortField
 import app.lazydex.domain.model.TypeConfig
@@ -86,6 +87,8 @@ fun DexSettingsSheet(
     onSelectSortDirection: (SortDirection) -> Unit,
     displayMode: LibraryDisplayMode = LibraryDisplayMode.LIST,
     onSelectDisplayMode: (LibraryDisplayMode) -> Unit = {},
+    listVariant: ListVariant = ListVariant.COMPACT,
+    onSelectListVariant: (ListVariant) -> Unit = {},
     gridColumns: Int = 0,
     onSelectGridColumns: (Int) -> Unit = {},
     showProgressBadge: Boolean = true,
@@ -172,6 +175,8 @@ fun DexSettingsSheet(
                     2 -> DisplayPage(
                         displayMode = displayMode,
                         onSelectDisplayMode = onSelectDisplayMode,
+                        listVariant = listVariant,
+                        onSelectListVariant = onSelectListVariant,
                         gridColumns = gridColumns,
                         onSelectGridColumns = onSelectGridColumns,
                         showProgressBadge = showProgressBadge,
@@ -348,6 +353,8 @@ private fun SortPage(
 private fun DisplayPage(
     displayMode: LibraryDisplayMode,
     onSelectDisplayMode: (LibraryDisplayMode) -> Unit,
+    listVariant: ListVariant = ListVariant.COMPACT,
+    onSelectListVariant: (ListVariant) -> Unit = {},
     gridColumns: Int,
     onSelectGridColumns: (Int) -> Unit,
     showProgressBadge: Boolean,
@@ -377,6 +384,21 @@ private fun DisplayPage(
                     selected = displayMode == mode,
                     onClick = { onSelectDisplayMode(mode) },
                     label = { Text(text) },
+                )
+            }
+        }
+
+        if (displayMode == LibraryDisplayMode.LIST) {
+            SettingsChipRow(title = "List style") {
+                FilterChip(
+                    selected = listVariant == ListVariant.COMPACT,
+                    onClick = { onSelectListVariant(ListVariant.COMPACT) },
+                    label = { Text("Compact") }
+                )
+                FilterChip(
+                    selected = listVariant == ListVariant.DETAILED,
+                    onClick = { onSelectListVariant(ListVariant.DETAILED) },
+                    label = { Text("Detailed") }
                 )
             }
         }

@@ -85,7 +85,11 @@ val trackerModule = module {
     single { DelayedTrackingStore(androidContext()) }
     single {
         AnilistApi(
-            okHttpClient = get(),
+            okHttpClient = get<OkHttpClient>().newBuilder()
+                .connectTimeout(Duration.ofSeconds(30))
+                .readTimeout(Duration.ofSeconds(60))
+                .writeTimeout(Duration.ofSeconds(30))
+                .build(),
             tokenStore = get(),
             limiter = get()
         )
@@ -96,7 +100,10 @@ val trackerModule = module {
             db = get(),
             mediaItemDao = get(),
             mediaLinkDao = get(),
-            tokenStore = get()
+            tokenStore = get(),
+            onSyncCompleted = {
+                app.lazydex.data.tracker.service.MediaMetadataSyncWorker.setupTask(androidContext())
+            }
         )
     } bind TrackerSyncEngine::class
     single {

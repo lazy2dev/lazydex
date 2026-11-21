@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import app.lazydex.data.cache.CoverCache
 import app.lazydex.data.local.LibraryDisplayMode
 import app.lazydex.data.local.LibraryGroupMode
+import app.lazydex.data.local.ListVariant
 import app.lazydex.data.local.ThemePreferences
 import app.lazydex.data.tracker.sync.TrackerSyncEngine
 import app.lazydex.domain.model.MediaItem
@@ -62,6 +63,7 @@ data class DexUiState(
     val perTypeCounts: Map<MediaType, Int> = emptyMap(),
     val perStatusCounts: Map<StatusFilter, Int> = emptyMap(),
     val displayMode: LibraryDisplayMode = LibraryDisplayMode.LIST,
+    val listVariant: ListVariant = ListVariant.COMPACT,
     val gridColumns: Int = 0,
     val showTypeTabs: Boolean = true,
     val showProgressBadge: Boolean = true,
@@ -339,6 +341,7 @@ class DexViewModel(
     .combine(themePreferences.displayPreferences) { state, dp ->
         state.copy(
             displayMode = dp.displayMode,
+            listVariant = dp.listVariant,
             gridColumns = dp.gridColumns,
             showTypeTabs = dp.showTypeTabs,
             showProgressBadge = dp.showProgressBadge,
@@ -428,6 +431,12 @@ class DexViewModel(
         }
     }
 
+    fun setListVariant(variant: ListVariant) {
+        viewModelScope.launch {
+            themePreferences.setListVariant(variant)
+        }
+    }
+
     fun setGridColumns(columns: Int) {
         viewModelScope.launch {
             themePreferences.setGridColumns(columns)
@@ -476,8 +485,7 @@ class DexViewModel(
                 coverImagePath = finalImagePath,
                 coverImageUrl = coverImageUrl?.trim()?.ifBlank { null },
                 lastUpdated = now,
-                dateAdded = now,
-                progressIncreasedAt = if (status == UserStatus.CURRENT) now else null
+                dateAdded = now
             )
             val added = repository.add(newItem)
             onCreated(added)
@@ -673,8 +681,8 @@ class DexViewModel(
         val comparator: Comparator<MediaItem> = when (field) {
             SortField.ALPHABETICAL -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
             SortField.TOTAL_COUNT -> compareBy { it.totalItems ?: 0 }
-            SortField.LAST_READ -> compareBy<MediaItem> { it.progressIncreasedAt != null }
-                .thenBy { it.progressIncreasedAt ?: it.dateAdded }
+            SortField.LAST_READ -> compareBy<MediaItem> { it.progress > 0 }
+                .thenBy { it.lastUpdated }
             SortField.UNREAD_COUNT -> compareBy { (it.totalItems ?: 0) - it.currentProgress }
             SortField.CURRENT_PROGRESS -> compareBy { it.currentProgress }
             SortField.DATE_ADDED -> compareBy { it.dateAdded }

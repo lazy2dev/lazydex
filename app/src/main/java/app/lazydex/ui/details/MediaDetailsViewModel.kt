@@ -183,6 +183,7 @@ class MediaDetailsViewModel(
     private var itemObservationJob: Job? = null
     private var linkObservationJob: Job? = null
     private var formatObservationJob: Job? = null
+    private var metadataFetchJob: Job? = null
 
     init {
         initialize(itemId, initialUrl, initialTitle)
@@ -299,6 +300,10 @@ class MediaDetailsViewModel(
                         anilistLastSynced = link?.lastSyncedAt,
                         suggestedTracker = suggestedTracker
                     )
+
+                    if (link != null && link.metadataFetchedAt == null && link.remoteId != null) {
+                        fetchMetadataOnDemand(targetId, link.remoteId, _uiState.value.mediaType.name)
+                    }
                 }
             }
         }
@@ -360,6 +365,30 @@ class MediaDetailsViewModel(
                 } else if (item == null) {
                     _uiState.value = _uiState.value.copy(isLoading = false)
                 }
+            }
+        }
+    }
+
+    private fun fetchMetadataOnDemand(itemId: String, remoteId: String?, type: String) {
+        if (metadataFetchJob?.isActive == true) return
+        val client = client ?: return
+        val linkDao = mediaLinkDao ?: return
+        val rId = remoteId?.toIntOrNull() ?: return
+        metadataFetchJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val aniMedia = client.getMediaDetails(
+                    id = rId,
+                    type = if (type.equals("ANIME", ignoreCase = true)) "ANIME" else "MANGA",
+                    priority = app.lazydex.data.tracker.anilist.TokenBucketLimiter.Priority.INTERACTIVE
+                )
+                if (aniMedia != null) {
+                    val cleanDesc = app.lazydex.util.TextSanitizer.sanitizeHtml(aniMedia.description)
+                    val tags = aniMedia.tags.map { it.name }
+                    repository.updateMetadata(itemId, cleanDesc.ifBlank { null }, tags, aniMedia.genres)
+                }
+                linkDao.markMetadataFetched("anilist", listOf(remoteId), System.currentTimeMillis())
+            } catch (_: Exception) {
+                // Non-blocking: background worker will retry or UI stays with existing data
             }
         }
     }
@@ -809,13 +838,10 @@ class MediaDetailsViewModel(
                     return@launch
                 }
 
-                val progressIncreased = candidateWithBanner.hasProgressIncreasedFrom(existing)
-                val newProgressIncreasedAt = if (progressIncreased) now else existing.progressIncreasedAt
                 val newLastUpdated = if (userdataChanged) now else existing.lastUpdated
 
                 candidateWithBanner.copy(
-                    lastUpdated = newLastUpdated,
-                    progressIncreasedAt = newProgressIncreasedAt
+                    lastUpdated = newLastUpdated
                 )
             } else {
                 val newItem = MediaItem(
@@ -851,8 +877,7 @@ class MediaDetailsViewModel(
                     lastUpdated = now,
                     dateAdded = now,
                     isAdult = state.isAdult,
-                    averageScore = state.averageScore,
-                    progressIncreasedAt = if (progressVal > 0 || ((state.parsedSecondaryProgress ?: 0.0) > 0.0)) now else null
+                    averageScore = state.averageScore
                 )
                 val itemWithVolume = if (state.volumesEnabled) {
                     newItem.withExtra("volumes_enabled", "true")

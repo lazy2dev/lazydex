@@ -13,6 +13,7 @@ import app.lazydex.data.tracker.anilist.TokenBucketLimiter
 import app.lazydex.data.tracker.anilist.dto.AniListFuzzyDateInput
 import app.lazydex.data.tracker.anilist.dto.AniListMediaListEntry
 import app.lazydex.domain.model.UserStatus
+import app.lazydex.util.TextSanitizer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -65,7 +66,8 @@ open class AnilistSyncEngine(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val batchSize: Int = DEFAULT_BATCH_SIZE,
     private val timeProvider: () -> Long = System::currentTimeMillis,
-    private val transactionRunner: (suspend (suspend () -> Unit) -> Unit)? = null
+    private val transactionRunner: (suspend (suspend () -> Unit) -> Unit)? = null,
+    private val onSyncCompleted: (() -> Unit)? = null
 ) : TrackerSyncEngine {
     companion object {
         const val PROVIDER_ID = "anilist"
@@ -251,6 +253,7 @@ open class AnilistSyncEngine(
             }
 
             isFullSyncComplete = true
+            onSyncCompleted?.invoke()
 
             val now = timeProvider()
             _syncProgress.value = SyncProgress(
@@ -477,17 +480,19 @@ open class AnilistSyncEngine(
                         localItem.genres
                     }
                     val incomingTags = entry.media?.tags?.map { it.name }
-                    val updatedTags = if (localItem.tags.isBlank() || localItem.tags == "[]") {
-                        if (incomingTags.isNullOrEmpty()) "[]" else Json.encodeToString(incomingTags)
-                    } else {
+                    val updatedTags = if (localItem.tags.isNotBlank() && localItem.tags != "[]") {
                         localItem.tags
+                    } else if (!incomingTags.isNullOrEmpty()) {
+                        Json.encodeToString(incomingTags)
+                    } else {
+                        localItem.tags.ifBlank { "[]" }
                     }
-                    val sanitizedDesc = sanitizeDescription(entry.media?.description)
-                    val updatedDescription = if (localItem.description.isBlank()) sanitizedDesc else localItem.description
+                    val sanitizedDesc = TextSanitizer.sanitizeHtml(entry.media?.description)
+                    val updatedDescription = localItem.description.ifBlank { sanitizedDesc }
 
-                    val updatedStartYear = localUserData.startYear ?: entry.startedAt?.year ?: entry.media?.startDate?.year
-                    val updatedStartMonth = localUserData.startMonth ?: entry.startedAt?.month ?: entry.media?.startDate?.month
-                    val updatedStartDay = localUserData.startDay ?: entry.startedAt?.day ?: entry.media?.startDate?.day
+                    val updatedStartYear = localUserData.startYear ?: entry.startedAt?.year
+                    val updatedStartMonth = localUserData.startMonth ?: entry.startedAt?.month
+                    val updatedStartDay = localUserData.startDay ?: entry.startedAt?.day
                     val updatedEndYear = localUserData.endYear ?: entry.completedAt?.year
                     val updatedEndMonth = localUserData.endMonth ?: entry.completedAt?.month
                     val updatedEndDay = localUserData.endDay ?: entry.completedAt?.day
@@ -496,6 +501,9 @@ open class AnilistSyncEngine(
                         type,
                         entry.media?.countryOfOrigin
                     )
+
+                    val remoteCreatedMs = entry.createdAt?.let { if (it > 100_000_000_000L) it else it * 1000L }
+                    val remoteUpdatedMs = entry.updatedAt?.let { if (it > 100_000_000_000L) it else it * 1000L }
 
                     val updatedMediaItem = localItem.copy(
                         type = resolvedType,
@@ -514,19 +522,15 @@ open class AnilistSyncEngine(
                         genres = updatedGenres,
                         tags = updatedTags,
                         averageScore = entry.media?.averageScore ?: localItem.averageScore,
-                        lengthUnitOverride = localItem.lengthUnitOverride
+                        lengthUnitOverride = localItem.lengthUnitOverride,
+                        createdAt = remoteCreatedMs ?: localItem.createdAt,
+                        updatedAt = maxOf(localItem.updatedAt, now)
                     )
                     mediaItemDao.upsert(updatedMediaItem)
 
-                    val remoteUpdatedMs = entry.updatedAt?.let { if (it > 100_000_000_000L) it else it * 1000L }
-                    val remoteProgressIncreased = (resolvedProgress > localUserData.progress + 1e-6) ||
-                        (!isAnime && resolvedSecondaryProgress > localUserData.secondaryProgress + 1e-6)
-                    val updatedProgressIncreasedAt = if (remoteProgressIncreased) {
-                        maxOf(localUserData.progressIncreasedAt ?: 0L, remoteUpdatedMs ?: now)
-                    } else {
-                        localUserData.progressIncreasedAt
-                    }
-                    val updatedUserDataUpdatedAt = if (remoteProgressIncreased ||
+                    val progressChanged = (resolvedProgress != localUserData.progress) ||
+                        (!isAnime && resolvedSecondaryProgress != localUserData.secondaryProgress)
+                    val updatedUserDataUpdatedAt = if (progressChanged ||
                         resolvedStatus != localUserData.userStatus ||
                         resolvedScore != localUserData.scoreRaw ||
                         resolvedNotes != localUserData.notes
@@ -550,8 +554,8 @@ open class AnilistSyncEngine(
                         endYear = updatedEndYear,
                         endMonth = updatedEndMonth,
                         endDay = updatedEndDay,
-                        updatedAt = updatedUserDataUpdatedAt,
-                        progressIncreasedAt = updatedProgressIncreasedAt
+                        createdAt = remoteCreatedMs ?: localUserData.createdAt,
+                        updatedAt = updatedUserDataUpdatedAt
                     )
                     mediaItemDao.upsertUserData(updatedUserData)
 
@@ -591,12 +595,11 @@ open class AnilistSyncEngine(
                 val genres = if (entry.media?.genres.isNullOrEmpty()) "[]" else Json.encodeToString(entry.media!!.genres)
                 val isAdult = entry.media?.isAdult ?: false
 
+                val remoteCreatedMs = entry.createdAt?.let { if (it > 100_000_000_000L) it else it * 1000L }
                 val remoteUpdatedMs = entry.updatedAt?.let { if (it > 100_000_000_000L) it else it * 1000L }
                 val fallbackFuzzyDate = fuzzyDateToMillis(entry.completedAt?.year, entry.completedAt?.month, entry.completedAt?.day)
                     ?: fuzzyDateToMillis(entry.startedAt?.year, entry.startedAt?.month, entry.startedAt?.day)
 
-                val hasProgress = progress > 0.0 || (!isAnime && secondaryProgress > 0.0)
-                val initialProgressIncreasedAt = if (hasProgress) (remoteUpdatedMs ?: fallbackFuzzyDate) else null
                 val initialUserDataUpdatedAt = remoteUpdatedMs ?: fallbackFuzzyDate ?: now
 
                 val newItem = MediaItemEntity(
@@ -611,7 +614,7 @@ open class AnilistSyncEngine(
                     coverImagePath = "",
                     coverImageUrl = coverImageUrl,
                     bannerImage = bannerImage,
-                    description = sanitizeDescription(entry.media?.description),
+                    description = TextSanitizer.sanitizeHtml(entry.media?.description),
                     author = "",
                     progressTotal = progressTotal,
                     secondaryProgressTotal = secondaryProgressTotal,
@@ -623,8 +626,8 @@ open class AnilistSyncEngine(
                     lengthUnitOverride = null,
                     playbackSpeed = 1.0,
                     averageScore = entry.media?.averageScore,
-                    createdAt = now,
-                    updatedAt = remoteUpdatedMs ?: now,
+                    createdAt = remoteCreatedMs ?: remoteUpdatedMs ?: now,
+                    updatedAt = now,
                     deletedAt = null
                 )
                 mediaItemDao.upsert(newItem)
@@ -638,14 +641,14 @@ open class AnilistSyncEngine(
                     repeat = repeat,
                     notes = notes,
                     isPrivate = isPrivate,
-                    startYear = entry.startedAt?.year ?: entry.media?.startDate?.year,
-                    startMonth = entry.startedAt?.month ?: entry.media?.startDate?.month,
-                    startDay = entry.startedAt?.day ?: entry.media?.startDate?.day,
+                    startYear = entry.startedAt?.year,
+                    startMonth = entry.startedAt?.month,
+                    startDay = entry.startedAt?.day,
                     endYear = entry.completedAt?.year,
                     endMonth = entry.completedAt?.month,
                     endDay = entry.completedAt?.day,
-                    updatedAt = initialUserDataUpdatedAt,
-                    progressIncreasedAt = initialProgressIncreasedAt
+                    createdAt = remoteCreatedMs ?: remoteUpdatedMs ?: now,
+                    updatedAt = initialUserDataUpdatedAt
                 )
                 mediaItemDao.upsertUserData(newUserData)
 
@@ -691,18 +694,6 @@ open class AnilistSyncEngine(
         return cal.timeInMillis
     }
 
-    private fun sanitizeDescription(html: String?): String {
-        if (html.isNullOrBlank()) return ""
-        return html
-            .replace(Regex("(?i)<br\\s*/?>"), "\n")
-            .replace(Regex("</?p>"), "\n")
-            .replace(Regex("<[^>]*>"), "")
-            .replace("&quot;", "\"")
-            .replace("&amp;", "&")
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&#039;", "'")
-            .trim()
-    }
+    private fun sanitizeDescription(html: String?): String = TextSanitizer.sanitizeHtml(html)
 }
 

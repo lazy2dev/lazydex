@@ -81,6 +81,7 @@ data class AniListMediaListEntry(
     val startedAt: AniListFuzzyDate? = null,
     val completedAt: AniListFuzzyDate? = null,
     val updatedAt: Long? = null,
+    val createdAt: Long? = null,
     val media: AniListMedia? = null
 ) {
     val resolvedMediaId: Int?
@@ -131,6 +132,12 @@ data class SearchMediaPageData(
 @Serializable
 data class SearchMediaPage(
     val media: List<AniListMedia> = emptyList()
+)
+
+@Serializable
+data class SingleMediaData(
+    @SerialName("Media")
+    val media: AniListMedia? = null
 )
 
 @Serializable

@@ -565,7 +565,7 @@ class ProgressMutationRulesTest {
     }
 
     @Test
-    fun `catalog-only edit does not bump progressIncreasedAt, userUpdatedAt, or mark links dirty`() = runTest {
+    fun `catalog-only edit does not bump userUpdatedAt, or mark links dirty`() = runTest {
         val testDispatcher = StandardTestDispatcher(testScheduler)
         val testScope = TestScope(testDispatcher)
 
@@ -599,8 +599,7 @@ class ProgressMutationRulesTest {
             mediaId = "catalog-test",
             userStatus = "CURRENT",
             progress = 10.0,
-            updatedAt = 1_000_000L,
-            progressIncreasedAt = 1_000_000L
+            updatedAt = 1_000_000L
         )
         itemDao.items[entity.id] = entity
         itemDao.userData[entity.id] = userData
@@ -619,7 +618,6 @@ class ProgressMutationRulesTest {
         linkDao.links[link.id] = link
 
         val loaded = repo.getById("catalog-test")!!
-        assertEquals(1_000_000L, loaded.progressIncreasedAt)
 
         // Modify catalog only (title, description)
         repo.update(loaded.copy(title = "Edited Catalog Title", description = "New Description"))
@@ -630,9 +628,8 @@ class ProgressMutationRulesTest {
         assertEquals("New Description", persistedItem.description)
         assertTrue(persistedItem.updatedAt > 1_000_000L)
 
-        // User data and history timestamp MUST remain completely unchanged
+        // User data and timestamp MUST remain completely unchanged
         assertEquals(1_000_000L, persistedUser.updatedAt)
-        assertEquals(1_000_000L, persistedUser.progressIncreasedAt)
 
         testScope.advanceUntilIdle()
         // Must NOT mark link DIRTY_LOCAL or push to remote
@@ -641,7 +638,7 @@ class ProgressMutationRulesTest {
     }
 
     @Test
-    fun `non-increasing user data edit does not bump progressIncreasedAt`() = runTest {
+    fun `user data edit bumps userUpdatedAt and progress increase is persisted`() = runTest {
         val testDispatcher = StandardTestDispatcher(testScheduler)
         val testScope = TestScope(testDispatcher)
 
@@ -675,8 +672,7 @@ class ProgressMutationRulesTest {
             userStatus = "CURRENT",
             progress = 10.0,
             notes = "Old note",
-            updatedAt = 1_000_000L,
-            progressIncreasedAt = 1_000_000L
+            updatedAt = 1_000_000L
         )
         itemDao.items[entity.id] = entity
         itemDao.userData[entity.id] = userData
@@ -688,14 +684,12 @@ class ProgressMutationRulesTest {
         val persistedUser = itemDao.userData["userdata-test"]!!
         assertEquals("Updated note only", persistedUser.notes)
         assertTrue(persistedUser.updatedAt!! > 1_000_000L)
-        // progressIncreasedAt MUST NOT be bumped
-        assertEquals(1_000_000L, persistedUser.progressIncreasedAt)
 
-        // Strict progress increase DOES bump progressIncreasedAt
+        // Strict progress increase updates progress and userUpdatedAt
         repo.update(loaded.copy(currentProgress = 11, progress = 11.0))
         val bumpedUser = itemDao.userData["userdata-test"]!!
         assertEquals(11.0, bumpedUser.progress, 0.001)
-        assertTrue(bumpedUser.progressIncreasedAt!! > 1_000_000L)
+        assertTrue(bumpedUser.updatedAt!! > 1_000_000L)
     }
 
     // --- Fakes ---
@@ -777,7 +771,6 @@ class ProgressMutationRulesTest {
                 createdAt = e.createdAt,
                 catalogUpdatedAt = e.updatedAt,
                 userUpdatedAt = u?.updatedAt,
-                progressIncreasedAt = u?.progressIncreasedAt,
                 deletedAt = e.deletedAt
             )
         }
@@ -790,6 +783,15 @@ class ProgressMutationRulesTest {
         override suspend fun restore(id: String, now: Long) {}
         override suspend fun hardDelete(id: String) { items.remove(id); userData.remove(id) }
         override suspend fun deleteAll() { items.clear(); userData.clear() }
+        override suspend fun updateMetadata(id: String, description: String?, tags: String?, genres: String?): Int {
+            val existing = items[id] ?: return 0
+            items[id] = existing.copy(
+                description = if (!description.isNullOrEmpty()) description else existing.description,
+                tags = if (!tags.isNullOrEmpty() && tags != "[]") tags else existing.tags,
+                genres = if (!genres.isNullOrEmpty() && genres != "[]") genres else existing.genres
+            )
+            return 1
+        }
         override fun getStats(): Flow<MediaStats> = emptyFlow()
     }
 
@@ -807,6 +809,18 @@ class ProgressMutationRulesTest {
             links.values.filter { it.providerId == providerId && it.state == state }
         override suspend fun getByProviderId(providerId: String): List<MediaLinkEntity> =
             links.values.filter { it.providerId == providerId }
+        override suspend fun getByMediaIdAndProvider(mediaId: String, providerId: String): MediaLinkEntity? =
+            links.values.find { it.mediaId == mediaId && it.providerId == providerId }
+        override suspend fun getLinksNeedingMetadata(providerId: String, limit: Int): List<MediaLinkEntity> =
+            links.values.filter { it.providerId == providerId && it.state == "LINKED" && it.metadataFetchedAt == null }.take(limit)
+        override suspend fun markMetadataFetched(providerId: String, remoteIds: List<String>, timestamp: Long): Int {
+            var count = 0
+            links.values.filter { it.providerId == providerId && it.remoteId in remoteIds }.forEach {
+                links[it.id] = it.copy(metadataFetchedAt = timestamp, updatedAt = timestamp)
+                count++
+            }
+            return count
+        }
         override suspend fun updateSyncStatusByMediaId(mediaId: String, syncStatus: String, updatedAt: Long): Int {
             var count = 0
             links.values.filter { it.mediaId == mediaId && it.state == "LINKED" }.forEach {

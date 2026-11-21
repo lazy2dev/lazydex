@@ -108,6 +108,7 @@ class AnilistApiTest {
             assertEquals("5001", variables?.get("userId")?.jsonPrimitive?.content)
             assertEquals("MANGA", variables?.get("type")?.jsonPrimitive?.content)
             assertEquals("1", variables?.get("chunk")?.jsonPrimitive?.content)
+            assertEquals("150", variables?.get("perChunk")?.jsonPrimitive?.content)
 
             createResponse(
                 code = 200,
@@ -618,6 +619,163 @@ class AnilistApiTest {
 
         val viewer = client.getCurrentUser()
         assertEquals(100, viewer.id)
+    }
+
+    @Test
+    fun `getMediaBatchMetadata sends ids and type and parses response`() = runTest {
+        val limiter = TokenBucketLimiter(timeProvider = { testScheduler.currentTime })
+        val client = AnilistApi(
+            okHttpClient = fakeHttpClient,
+            tokenStore = tokenStore,
+            limiter = limiter,
+            ioDispatcher = StandardTestDispatcher(testScheduler)
+        )
+
+        responseHandler = { _, body ->
+            val jsonBody = Json.parseToJsonElement(body).jsonObject
+            val vars = jsonBody["variables"]?.jsonObject
+            assertNotNull(vars)
+            assertEquals("MANGA", vars?.get("type")?.jsonPrimitive?.content)
+
+            createResponse(
+                code = 200,
+                body = """
+                    {
+                      "data": {
+                        "Page": {
+                          "media": [
+                            {
+                              "id": 101,
+                              "description": "Awesome manga synopsis",
+                              "genres": ["Action", "Adventure"],
+                              "tags": [
+                                { "name": "Monsters", "isMediaSpoiler": false },
+                                { "name": "Magic", "isMediaSpoiler": false }
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    }
+                """.trimIndent()
+            )
+        }
+
+        val result = client.getMediaBatchMetadata(listOf(101), "MANGA")
+        assertEquals(1, result.size)
+        assertEquals(101, result[0].id)
+        assertEquals("Awesome manga synopsis", result[0].description)
+        assertEquals(listOf("Action", "Adventure"), result[0].genres)
+        assertEquals(2, result[0].tags.size)
+        assertEquals("Monsters", result[0].tags[0].name)
+    }
+
+    @Test
+    fun `getMediaDetails sends id and type and parses response`() = runTest {
+        val limiter = TokenBucketLimiter(timeProvider = { testScheduler.currentTime })
+        val client = AnilistApi(
+            okHttpClient = fakeHttpClient,
+            tokenStore = tokenStore,
+            limiter = limiter,
+            ioDispatcher = StandardTestDispatcher(testScheduler)
+        )
+
+        responseHandler = { _, body ->
+            val jsonBody = Json.parseToJsonElement(body).jsonObject
+            val vars = jsonBody["variables"]?.jsonObject
+            assertEquals("202", vars?.get("id")?.jsonPrimitive?.content)
+            assertEquals("ANIME", vars?.get("type")?.jsonPrimitive?.content)
+
+            createResponse(
+                code = 200,
+                body = """
+                    {
+                      "data": {
+                        "Media": {
+                          "id": 202,
+                          "description": "Anime description",
+                          "genres": ["Sci-Fi"],
+                          "tags": [{ "name": "Space", "isMediaSpoiler": false }]
+                        }
+                      }
+                    }
+                """.trimIndent()
+            )
+        }
+
+        val result = client.getMediaDetails(202, "ANIME")
+        assertNotNull(result)
+        assertEquals(202, result?.id)
+        assertEquals("Anime description", result?.description)
+        assertEquals("Space", result?.tags?.get(0)?.name)
+    }
+
+    @Test
+    fun `adaptive chunk shrinking halves perChunk on IOException and succeeds`() = runTest {
+        val limiter = TokenBucketLimiter(timeProvider = { testScheduler.currentTime })
+        val client = AnilistApi(
+            okHttpClient = fakeHttpClient,
+            tokenStore = tokenStore,
+            limiter = limiter,
+            ioDispatcher = StandardTestDispatcher(testScheduler)
+        )
+
+        var callCount = 0
+        responseHandler = { _, body ->
+            callCount++
+            val jsonBody = Json.parseToJsonElement(body).jsonObject
+            val vars = jsonBody["variables"]?.jsonObject
+            val perChunk = vars?.get("perChunk")?.jsonPrimitive?.content?.toIntOrNull()
+
+            if (callCount == 1) {
+                assertEquals(150, perChunk)
+                // Simulate EOF/network truncation error
+                throw IOException("Failed to parse AniList GraphQL response: Expected end of the object '}', but had 'EOF' instead at path: $.data.MediaListCollection.lists[0].entries[4]")
+            } else {
+                assertEquals(75, perChunk)
+                createResponse(
+                    code = 200,
+                    body = """
+                        {
+                          "data": {
+                            "MediaListCollection": {
+                              "hasNextChunk": false,
+                              "lists": [
+                                {
+                                  "name": "Reading",
+                                  "isCustomList": false,
+                                  "entries": [
+                                    {
+                                      "id": 1,
+                                      "mediaId": 10,
+                                      "status": "CURRENT",
+                                      "media": {
+                                        "id": 10,
+                                        "title": { "userPreferred": "Recovered Entry" }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          }
+                        }
+                    """.trimIndent()
+                )
+            }
+        }
+
+        val (entries, hasNext) = client.getDeduplicatedEntries(
+            userId = 1234,
+            type = "MANGA",
+            chunk = 1,
+            perChunk = 150
+        )
+
+        assertEquals(2, callCount)
+        assertEquals(1, entries.size)
+        assertEquals("Recovered Entry", entries[0].media?.title?.userPreferred)
+        assertFalse(hasNext)
     }
 
     private class FakeSharedPreferences : SharedPreferences {

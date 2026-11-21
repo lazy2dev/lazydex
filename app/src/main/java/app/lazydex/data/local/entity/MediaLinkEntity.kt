@@ -34,6 +34,7 @@ data class MediaLinkEntity(
     @ColumnInfo(defaultValue = "LINKED") val state: String = "LINKED",
     @ColumnInfo(defaultValue = "SYNCED") val syncStatus: String = "SYNCED",
     val lastSyncedAt: Long? = null,
+    val metadataFetchedAt: Long? = null,
     @ColumnInfo(defaultValue = "{}") val syncedSnapshot: String = "{}",
     val createdAt: Long,
     val updatedAt: Long

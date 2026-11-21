@@ -49,8 +49,7 @@ data class MediaItem(
     val isAdult: Boolean = false,
     val repeat: Int = 0,
     val durationMinutes: Int? = null,
-    val averageScore: Int? = null,
-    val progressIncreasedAt: Long? = null
+    val averageScore: Int? = null
 ) {
     val typeId: String get() = when {
         format.equals("MANHWA", ignoreCase = true) || (type.equals("MANGA", ignoreCase = true) && countryOfOrigin.equals("KR", ignoreCase = true)) -> "typ_manhwa"
@@ -124,8 +123,7 @@ data class MediaItem(
         isAdult: Boolean = false,
         repeat: Int = 0,
         durationMinutes: Int? = null,
-        averageScore: Int? = null,
-        progressIncreasedAt: Long? = null
+        averageScore: Int? = null
     ) : this(
         id = id,
         type = when (mediaType) {
@@ -171,8 +169,7 @@ data class MediaItem(
         isAdult = isAdult,
         repeat = repeat,
         durationMinutes = durationMinutes,
-        averageScore = averageScore,
-        progressIncreasedAt = progressIncreasedAt
+        averageScore = averageScore
     )
 
     constructor(
@@ -209,7 +206,6 @@ data class MediaItem(
         isDeleted: Boolean = deletedAt != null,
         isAdult: Boolean = false,
         averageScore: Int? = null,
-        progressIncreasedAt: Long? = null,
         mediaType: MediaType = resolveMediaType(typeId)
     ) : this(
         id = id,
@@ -268,8 +264,7 @@ data class MediaItem(
         deletedAt = deletedAt,
         isDeleted = isDeleted,
         isAdult = isAdult,
-        averageScore = averageScore,
-        progressIncreasedAt = progressIncreasedAt
+        averageScore = averageScore
     )
 
     val extraMap: Map<String, String> by lazy(LazyThreadSafetyMode.NONE) {
@@ -360,8 +355,7 @@ data class MediaItem(
             author = author.trim(),
             description = description.trim(),
             startDate = startDate?.takeIf { it > 0 },
-            endDate = endDate?.takeIf { it > 0 },
-            progressIncreasedAt = progressIncreasedAt
+            endDate = endDate?.takeIf { it > 0 }
         )
     }
 

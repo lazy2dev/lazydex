@@ -367,15 +367,9 @@ class MediaRepositoryImpl(
     override suspend fun add(item: MediaItem): MediaItem = withContext(Dispatchers.IO) {
         val normalized = item.normalize()
         val now = System.currentTimeMillis()
-        val hasInitialProgress = normalized.progress > 0.0 ||
-            (normalized.hasSecondaryProgress && normalized.secondaryProgress > 0.0)
-        val initialProgressIncreasedAt = normalized.progressIncreasedAt
-            ?: if (hasInitialProgress) normalized.dateAdded else null
-
         val mediaEntity = normalized.toEntity()
         val userEntity = normalized.toUserDataEntity(
-            updatedAtOverride = now,
-            progressIncreasedAtOverride = initialProgressIncreasedAt
+            updatedAtOverride = now
         )
 
         runInTransaction {
@@ -394,7 +388,7 @@ class MediaRepositoryImpl(
             }
         }
 
-        normalized.copy(progressIncreasedAt = initialProgressIncreasedAt)
+        normalized
     }
 
     override suspend fun update(item: MediaItem) = withContext(Dispatchers.IO) {
@@ -407,14 +401,11 @@ class MediaRepositoryImpl(
 
         if (currentDomain == null) {
             val now = System.currentTimeMillis()
-            val initialProgressIncreasedAt = normalized.progressIncreasedAt
-                ?: if (normalized.progress > 0.0 || (normalized.hasSecondaryProgress && normalized.secondaryProgress > 0.0)) now else null
             runInTransaction {
                 dao.upsert(normalized.toEntity().copy(updatedAt = now))
                 dao.upsertUserData(
                     normalized.toUserDataEntity(
-                        updatedAtOverride = now,
-                        progressIncreasedAtOverride = initialProgressIncreasedAt
+                        updatedAtOverride = now
                     )
                 )
             }
@@ -423,7 +414,6 @@ class MediaRepositoryImpl(
 
         val userdataChanged = normalized.hasUserdataChangedFrom(currentDomain)
         val itemDataChanged = normalized.hasItemDataChangedFrom(currentDomain)
-        val progressIncreased = normalized.hasProgressIncreasedFrom(currentDomain)
 
         if (!userdataChanged && !itemDataChanged) {
             return@withContext
@@ -440,10 +430,8 @@ class MediaRepositoryImpl(
             }
 
             if (userdataChanged) {
-                val newProgressIncreasedAt = if (progressIncreased) now else currentDomain.progressIncreasedAt
                 val updatedUserData = normalized.toUserDataEntity(
                     updatedAtOverride = now,
-                    progressIncreasedAtOverride = newProgressIncreasedAt,
                     existing = currentUserData
                 )
                 dao.upsertUserData(updatedUserData)
@@ -515,7 +503,6 @@ class MediaRepositoryImpl(
                     val updated = currentDomain.copy(userStatus = targetStatus)
                     val updatedUserData = updated.toUserDataEntity(
                         updatedAtOverride = now,
-                        progressIncreasedAtOverride = currentDomain.progressIncreasedAt,
                         existing = currentUserData
                     )
                     dao.upsertUserData(updatedUserData)
@@ -614,8 +601,7 @@ class MediaRepositoryImpl(
                 endYear = activeView.endYear,
                 endMonth = activeView.endMonth,
                 endDay = activeView.endDay,
-                updatedAt = activeView.userUpdatedAt,
-                progressIncreasedAt = activeView.progressIncreasedAt
+                updatedAt = activeView.userUpdatedAt
             )
             val now = System.currentTimeMillis()
 
@@ -646,15 +632,11 @@ class MediaRepositoryImpl(
                 return@runInTransaction activeView.toDomain()
             }
 
-            val progressIncreased = clampedProgress > existingUser.progress + 1e-6
-            val newProgressIncreasedAt = if (progressIncreased) now else existingUser.progressIncreasedAt
-
             val updatedUser = existingUser.copy(
                 progress = clampedProgress,
                 userStatus = newStatus,
                 repeat = newRepeat,
-                updatedAt = now,
-                progressIncreasedAt = newProgressIncreasedAt
+                updatedAt = now
             )
             dao.upsertUserData(updatedUser)
 
@@ -762,16 +744,28 @@ class MediaRepositoryImpl(
         }
     }
 
+    override suspend fun updateMetadata(
+        id: String,
+        description: String?,
+        tags: List<String>?,
+        genres: List<String>?
+    ) = withContext(Dispatchers.IO) {
+        dao.updateMetadata(
+            id = id,
+            description = description,
+            tags = tags?.let { converters.fromList(it) },
+            genres = genres?.let { converters.fromList(it) }
+        )
+        Unit
+    }
+
     override suspend fun replaceAll(items: List<MediaItem>) = withContext(Dispatchers.IO) {
         runInTransaction {
             val normalizedItems = items.map { it.normalize() }
             dao.replaceAllWithUserData(
                 normalizedItems.map { it.toEntity() },
                 normalizedItems.map {
-                    val hasInitial = it.progress > 0.0 || (it.hasSecondaryProgress && it.secondaryProgress > 0.0)
-                    it.toUserDataEntity(
-                        progressIncreasedAtOverride = it.progressIncreasedAt ?: if (hasInitial) it.lastUpdated.takeIf { ts -> ts > 0L } ?: it.dateAdded else null
-                    )
+                    it.toUserDataEntity()
                 }
             )
         }
@@ -854,8 +848,7 @@ class MediaRepositoryImpl(
             isAdult = isAdult,
             repeat = repeat,
             durationMinutes = durationMinutes,
-            averageScore = averageScore,
-            progressIncreasedAt = progressIncreasedAt
+            averageScore = averageScore
         )
     }
 
@@ -902,8 +895,7 @@ class MediaRepositoryImpl(
             isAdult = isAdult,
             repeat = userData?.repeat ?: 0,
             durationMinutes = durationMinutes,
-            averageScore = averageScore,
-            progressIncreasedAt = userData?.progressIncreasedAt
+            averageScore = averageScore
         )
     }
 
@@ -942,7 +934,6 @@ class MediaRepositoryImpl(
 
     private fun MediaItem.toUserDataEntity(
         updatedAtOverride: Long? = null,
-        progressIncreasedAtOverride: Long? = null,
         existing: UserDataEntity? = null
     ): UserDataEntity {
         val rawScore = rating?.let { kotlin.math.round(it * 20.0).toInt().coerceIn(0, 100) }
@@ -963,8 +954,8 @@ class MediaRepositoryImpl(
             endYear = eYear,
             endMonth = eMonth,
             endDay = eDay,
-            updatedAt = updatedAtOverride ?: lastUpdated,
-            progressIncreasedAt = progressIncreasedAtOverride ?: progressIncreasedAt
+            createdAt = existing?.createdAt ?: dateAdded,
+            updatedAt = updatedAtOverride ?: lastUpdated
         )
     }
 

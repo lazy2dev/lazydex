@@ -18,7 +18,7 @@ interface MediaItemDao {
     @Query("SELECT * FROM active_media_items ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<ActiveMediaItemView>>
 
-    @Query("SELECT * FROM active_media_items WHERE progressIncreasedAt IS NOT NULL ORDER BY progressIncreasedAt DESC")
+    @Query("SELECT * FROM active_media_items WHERE progress > 0 ORDER BY userUpdatedAt DESC")
     fun observeHistory(): Flow<List<ActiveMediaItemView>>
 
     @Query("SELECT * FROM active_media_items WHERE type = :type ORDER BY createdAt DESC")
@@ -88,8 +88,7 @@ interface MediaItemDao {
     @Query("""
         UPDATE user_data
         SET progress = MAX(0.0, MIN(progress + :delta, COALESCE((SELECT progressTotal FROM media_items WHERE id = :id), progress + :delta))),
-            updatedAt = :now,
-            progressIncreasedAt = CASE WHEN :delta > 0 THEN :now ELSE progressIncreasedAt END
+            updatedAt = :now
         WHERE mediaId = :id AND EXISTS(SELECT 1 FROM media_items WHERE id = :id AND deletedAt IS NULL)
     """)
     suspend fun atomicIncrementProgress(id: String, delta: Double, now: Long): Int
@@ -99,6 +98,15 @@ interface MediaItemDao {
 
     @Query("UPDATE media_items SET deletedAt = NULL, updatedAt = :now WHERE id = :id")
     suspend fun restore(id: String, now: Long)
+
+    @Query("""
+        UPDATE media_items
+        SET description = CASE WHEN :description IS NOT NULL AND :description != '' THEN :description ELSE description END,
+            tags = CASE WHEN :tags IS NOT NULL AND :tags != '[]' AND :tags != '' THEN :tags ELSE tags END,
+            genres = CASE WHEN :genres IS NOT NULL AND :genres != '[]' AND :genres != '' THEN :genres ELSE genres END
+        WHERE id = :id
+    """)
+    suspend fun updateMetadata(id: String, description: String?, tags: String?, genres: String?): Int
 
     @Query("DELETE FROM media_items WHERE id = :id")
     suspend fun hardDelete(id: String)

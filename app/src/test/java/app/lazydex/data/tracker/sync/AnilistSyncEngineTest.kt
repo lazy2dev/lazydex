@@ -1175,6 +1175,88 @@ class AnilistSyncEngineTest {
     }
 
     @Test
+    fun `stage 1 re-sync does not overwrite already enriched tags and description`() = runTest(testDispatcher) {
+        val existingMedia = MediaItemEntity(
+            id = "media-enriched-123",
+            type = "MANGA",
+            format = "MANGA",
+            title = "Enriched Title",
+            description = "Preserved Enriched Synopsis",
+            tags = "[\"PreservedTag\"]",
+            genres = "[\"Action\"]",
+            createdAt = 1000L,
+            updatedAt = 1000L
+        )
+        fakeMediaItemDao.items[existingMedia.id] = existingMedia
+        fakeMediaItemDao.userData[existingMedia.id] = UserDataEntity(
+            mediaId = existingMedia.id,
+            userStatus = "CURRENT",
+            progress = 10.0,
+            updatedAt = 1000L
+        )
+        val existingLink = MediaLinkEntity(
+            id = "link-enriched-123",
+            mediaId = existingMedia.id,
+            kind = "TRACKER",
+            providerId = "anilist",
+            remoteId = "8899",
+            remoteMediaListId = "7766",
+            url = "https://anilist.co/manga/8899",
+            state = "LINKED",
+            createdAt = 1000L,
+            updatedAt = 1000L,
+            metadataFetchedAt = 1000L
+        )
+        fakeMediaLinkDao.links[existingLink.id] = existingLink
+
+        // Lean remote response with NO tags and NO description
+        val leanRemoteJson = """
+        {
+          "data": {
+            "MediaListCollection": {
+              "hasNextChunk": false,
+              "lists": [
+                {
+                  "name": "Reading",
+                  "isCustomList": false,
+                  "status": "CURRENT",
+                  "entries": [
+                    {
+                      "id": 7766,
+                      "mediaId": 8899,
+                      "status": "CURRENT",
+                      "progress": 15,
+                      "media": {
+                        "id": 8899,
+                        "format": "MANGA",
+                        "title": { "userPreferred": "Enriched Title" }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+        """.trimIndent()
+
+        responseHandler = { _, body ->
+            if (body.contains("\"type\":\"MANGA\"")) {
+                createResponse(200, leanRemoteJson)
+            } else {
+                createResponse(200, """{"data":{"MediaListCollection":{"hasNextChunk":false,"lists":[]}}}""")
+            }
+        }
+
+        val result = engine.syncAll()
+        assertTrue(result is SyncResult.Success)
+
+        val updatedItem = fakeMediaItemDao.items[existingMedia.id]!!
+        assertEquals("Preserved Enriched Synopsis", updatedItem.description)
+        assertEquals("[\"PreservedTag\"]", updatedItem.tags)
+    }
+
+    @Test
     fun `pushDirtyItem for Anime omits progressVolumes even if secondaryProgress is set`() = runTest(testDispatcher) {
         val animeItem = MediaItemEntity(
             id = "anime-push-test",
@@ -1414,7 +1496,7 @@ class AnilistSyncEngineTest {
     }
 
     @Test
-    fun `re-syncing AniList item with unchanged progress preserves local progressIncreasedAt`() = runTest(testDispatcher) {
+    fun `re-syncing AniList item with unchanged progress preserves local createdAt and does not mutate userUpdatedAt unnecessarily`() = runTest(testDispatcher) {
         val mangaItem = MediaItemEntity(
             id = "resync-history-test",
             type = "MANGA",
@@ -1424,13 +1506,13 @@ class AnilistSyncEngineTest {
             updatedAt = 1_000_000L
         )
         fakeMediaItemDao.items[mangaItem.id] = mangaItem
-        val originalHistoryTimestamp = 1_650_000_000_000L
+        val originalCreatedTimestamp = 1_650_000_000_000L
         fakeMediaItemDao.userData[mangaItem.id] = UserDataEntity(
             mediaId = mangaItem.id,
             userStatus = "CURRENT",
             progress = 50.0,
-            updatedAt = 1_000_000L,
-            progressIncreasedAt = originalHistoryTimestamp
+            createdAt = originalCreatedTimestamp,
+            updatedAt = 1_000_000L
         )
 
         val link = MediaLinkEntity(
@@ -1489,8 +1571,7 @@ class AnilistSyncEngineTest {
 
         val userDataAfterSync = fakeMediaItemDao.userData[mangaItem.id]!!
         assertEquals(50.0, userDataAfterSync.progress, 0.001)
-        // History timestamp must be completely preserved - not updated to remoteUpdatedMs or now
-        assertEquals(originalHistoryTimestamp, userDataAfterSync.progressIncreasedAt)
+        assertEquals(originalCreatedTimestamp, userDataAfterSync.createdAt)
     }
 
     @Test
@@ -1573,7 +1654,6 @@ class AnilistSyncEngineTest {
                 createdAt = e.createdAt,
                 catalogUpdatedAt = e.updatedAt,
                 userUpdatedAt = u?.updatedAt,
-                progressIncreasedAt = u?.progressIncreasedAt,
                 deletedAt = e.deletedAt
             )
         }
@@ -1586,6 +1666,15 @@ class AnilistSyncEngineTest {
         override suspend fun restore(id: String, now: Long) {}
         override suspend fun hardDelete(id: String) { items.remove(id); userData.remove(id) }
         override suspend fun deleteAll() { items.clear(); userData.clear() }
+        override suspend fun updateMetadata(id: String, description: String?, tags: String?, genres: String?): Int {
+            val existing = items[id] ?: return 0
+            items[id] = existing.copy(
+                description = if (!description.isNullOrEmpty()) description else existing.description,
+                tags = if (!tags.isNullOrEmpty() && tags != "[]") tags else existing.tags,
+                genres = if (!genres.isNullOrEmpty() && genres != "[]") genres else existing.genres
+            )
+            return 1
+        }
         override fun getStats(): Flow<MediaStats> = emptyFlow()
     }
 
@@ -1603,6 +1692,18 @@ class AnilistSyncEngineTest {
             links.values.filter { it.providerId == providerId && it.state == state }
         override suspend fun getByProviderId(providerId: String): List<MediaLinkEntity> =
             links.values.filter { it.providerId == providerId }
+        override suspend fun getByMediaIdAndProvider(mediaId: String, providerId: String): MediaLinkEntity? =
+            links.values.find { it.mediaId == mediaId && it.providerId == providerId }
+        override suspend fun getLinksNeedingMetadata(providerId: String, limit: Int): List<MediaLinkEntity> =
+            links.values.filter { it.providerId == providerId && it.state == "LINKED" && it.metadataFetchedAt == null }.take(limit)
+        override suspend fun markMetadataFetched(providerId: String, remoteIds: List<String>, timestamp: Long): Int {
+            var updated = 0
+            links.values.filter { it.providerId == providerId && it.remoteId in remoteIds }.forEach {
+                links[it.id] = it.copy(metadataFetchedAt = timestamp, updatedAt = timestamp)
+                updated++
+            }
+            return updated
+        }
         override suspend fun updateSyncStatusByMediaId(mediaId: String, syncStatus: String, updatedAt: Long): Int {
             var updated = 0
             links.values.filter { it.mediaId == mediaId && it.state == "LINKED" }.forEach {

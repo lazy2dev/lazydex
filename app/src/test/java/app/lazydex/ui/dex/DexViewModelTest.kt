@@ -2,6 +2,7 @@ package app.lazydex.ui.dex
 
 import app.lazydex.data.local.DisplayPreferences
 import app.lazydex.data.local.LibraryGroupMode
+import app.lazydex.data.local.ListVariant
 import app.lazydex.data.local.ThemePreferences
 import app.lazydex.domain.model.TypeConfig
 import app.lazydex.domain.model.MediaType
@@ -56,6 +57,10 @@ class DexViewModelTest {
 
         override suspend fun setGroupMode(mode: LibraryGroupMode) {
             displayPrefsFlow.value = displayPrefsFlow.value.copy(groupMode = mode)
+        }
+
+        override suspend fun setListVariant(variant: ListVariant) {
+            displayPrefsFlow.value = displayPrefsFlow.value.copy(listVariant = variant)
         }
     }
 
@@ -366,6 +371,35 @@ class DexViewModelTest {
         viewModel.setGroupMode(LibraryGroupMode.BY_STATUS)
         advanceUntilIdle()
         assertEquals(LibraryGroupMode.BY_STATUS, viewModel.uiState.value.groupMode)
+    }
+
+    @Test
+    fun `setListVariant updates preferences and uiState`() = runTest(testDispatcher) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(ListVariant.COMPACT, viewModel.uiState.value.listVariant)
+
+        viewModel.setListVariant(ListVariant.DETAILED)
+        advanceUntilIdle()
+        assertEquals(ListVariant.DETAILED, viewModel.uiState.value.listVariant)
+    }
+
+    @Test
+    fun `ListVariant fromNameOrDefault resolves correctly with fallback`() {
+        assertEquals(ListVariant.COMPACT, ListVariant.fromNameOrDefault("COMPACT"))
+        assertEquals(ListVariant.COMPACT, ListVariant.fromNameOrDefault("compact"))
+        assertEquals(ListVariant.DETAILED, ListVariant.fromNameOrDefault("DETAILED"))
+        assertEquals(ListVariant.DETAILED, ListVariant.fromNameOrDefault("detailed"))
+        assertEquals(ListVariant.COMPACT, ListVariant.fromNameOrDefault(null))
+        assertEquals(ListVariant.COMPACT, ListVariant.fromNameOrDefault(""))
+        assertEquals(ListVariant.COMPACT, ListVariant.fromNameOrDefault("INVALID_VARIANT"))
+    }
+
+    @Test
+    fun `DisplayPreferences defaults listVariant to COMPACT`() {
+        val prefs = DisplayPreferences()
+        assertEquals(ListVariant.COMPACT, prefs.listVariant)
     }
 
     @Test

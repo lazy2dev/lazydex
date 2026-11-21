@@ -13,8 +13,8 @@ android {
         applicationId = "app.lazydex"
         minSdk = 26
         targetSdk = 35
-        versionCode = 63
-        versionName = "0.21.24"
+        versionCode = 64
+        versionName = "0.21.25"
     }
 
     buildTypes {
@@ -92,6 +92,7 @@ dependencies {
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
+  testImplementation(libs.androidx.work.testing)
   testImplementation("org.xerial:sqlite-jdbc:3.41.2.2")
 
   // Instrumented tests: jUnit rules and runners

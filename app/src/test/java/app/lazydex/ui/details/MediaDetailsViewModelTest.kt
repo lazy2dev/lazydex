@@ -43,7 +43,7 @@ class MediaDetailsViewModelTest {
         val itemFlows = mutableMapOf<String, kotlinx.coroutines.flow.MutableSharedFlow<MediaItem?>>()
 
         override fun observeAll(): Flow<List<MediaItem>> = flowOf(items)
-        override fun observeHistory(): Flow<List<MediaItem>> = flowOf(items.filter { it.progressIncreasedAt != null }.sortedByDescending { it.progressIncreasedAt })
+        override fun observeHistory(): Flow<List<MediaItem>> = flowOf(items.filter { it.progress > 0 }.sortedByDescending { it.lastUpdated })
         override fun observeByType(mediaType: MediaType): Flow<List<MediaItem>> = flowOf(items.filter { it.mediaType == mediaType })
         override fun observeFiltered(mediaType: MediaType?, statusFilter: StatusFilter): Flow<List<MediaItem>> = flowOf(items)
         override fun observeById(id: String): Flow<MediaItem?> {
@@ -128,6 +128,20 @@ class MediaDetailsViewModelTest {
             links.filter { it.providerId == providerId && it.state == state }
         override suspend fun getByProviderId(providerId: String): List<MediaLinkEntity> =
             links.filter { it.providerId == providerId }
+        override suspend fun getByMediaIdAndProvider(mediaId: String, providerId: String): MediaLinkEntity? =
+            links.find { it.mediaId == mediaId && it.providerId == providerId }
+        override suspend fun getLinksNeedingMetadata(providerId: String, limit: Int): List<MediaLinkEntity> =
+            links.filter { it.providerId == providerId && it.state == "LINKED" && it.metadataFetchedAt == null }.take(limit)
+        override suspend fun markMetadataFetched(providerId: String, remoteIds: List<String>, timestamp: Long): Int {
+            var updated = 0
+            links.forEachIndexed { idx, link ->
+                if (link.providerId == providerId && link.remoteId in remoteIds) {
+                    links[idx] = link.copy(metadataFetchedAt = timestamp, updatedAt = timestamp)
+                    updated++
+                }
+            }
+            return updated
+        }
         override suspend fun updateSyncStatusByMediaId(mediaId: String, syncStatus: String, updatedAt: Long): Int = 0
         override suspend fun upsert(link: MediaLinkEntity) {
             val idx = links.indexOfFirst { it.id == link.id }

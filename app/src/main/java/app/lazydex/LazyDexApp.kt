@@ -37,6 +37,10 @@ class LazyDexApp : Application(), SingletonImageLoader.Factory {
         if (delayedStore.getItems().isNotEmpty()) {
             app.lazydex.data.tracker.service.DelayedTrackingUpdateJob.setupTask(this)
         }
+        val tokenStore = koinApp.koin.get<app.lazydex.data.tracker.anilist.AnilistTokenStore>()
+        if (tokenStore.isLoggedIn) {
+            app.lazydex.data.tracker.service.MediaMetadataSyncWorker.setupTask(this)
+        }
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {

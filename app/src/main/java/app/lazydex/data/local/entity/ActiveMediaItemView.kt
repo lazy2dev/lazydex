@@ -42,10 +42,9 @@ import androidx.room.DatabaseView
             m.lengthUnitOverride,
             m.playbackSpeed,
             m.averageScore,
-            m.createdAt,
+            COALESCE(u.createdAt, m.createdAt) AS createdAt,
             m.updatedAt AS catalogUpdatedAt,
             u.updatedAt AS userUpdatedAt,
-            u.progressIncreasedAt,
             m.deletedAt
         FROM media_items m
         LEFT JOIN user_data u ON u.mediaId = m.id
@@ -92,7 +91,6 @@ data class ActiveMediaItemView(
     val createdAt: Long,
     val catalogUpdatedAt: Long,
     val userUpdatedAt: Long?,
-    val progressIncreasedAt: Long?,
     val deletedAt: Long?
 ) {
     val updatedAt: Long get() = userUpdatedAt ?: catalogUpdatedAt

@@ -17,7 +17,6 @@ import androidx.room.PrimaryKey
         )
     ],
     indices = [
-        Index(value = ["progressIncreasedAt"]),
         Index(value = ["userStatus"])
     ]
 )
@@ -37,5 +36,5 @@ data class UserDataEntity(
     val endMonth: Int? = null,
     val endDay: Int? = null,
     val updatedAt: Long? = null,
-    val progressIncreasedAt: Long? = null
+    val createdAt: Long? = null
 )
