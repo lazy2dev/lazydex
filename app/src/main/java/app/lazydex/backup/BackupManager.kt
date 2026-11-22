@@ -45,16 +45,15 @@ object BackupManager {
 
                 if (includeCovers) {
                     items.forEach { item ->
-                        if (item.coverImagePath.isNotEmpty()) {
-                            val coverFile = File(item.coverImagePath)
-                            if (coverFile.exists()) {
-                                val coverEntry = ZipEntry("covers/${item.id}")
-                                zos.putNextEntry(coverEntry)
-                                FileInputStream(coverFile).use { fis ->
-                                    fis.copyTo(zos)
-                                }
-                                zos.closeEntry()
+                        val coverFile = if (item.coverImagePath.isNotBlank()) File(item.coverImagePath) else File(localCoversDir, item.id)
+                        val fileToExport = if (coverFile.exists()) coverFile else File(localCoversDir, item.id)
+                        if (fileToExport.exists()) {
+                            val coverEntry = ZipEntry("covers/${item.id}")
+                            zos.putNextEntry(coverEntry)
+                            FileInputStream(fileToExport).use { fis ->
+                                fis.copyTo(zos)
                             }
+                            zos.closeEntry()
                         }
                     }
                 }
@@ -97,10 +96,12 @@ object BackupManager {
                     } else if (entry.name.startsWith("covers/")) {
                         val coverId = entry.name.removePrefix("covers/")
                         if (coverId.isNotEmpty()) {
-                            val coverFile = File(tempCoversDir, coverId)
-                            coverFile.parentFile?.mkdirs()
-                            FileOutputStream(coverFile).use { fos ->
-                                zis.copyTo(fos)
+                            val coverFile = File(tempCoversDir, File(coverId).name)
+                            if (coverFile.canonicalPath.startsWith(tempCoversDir.canonicalPath)) {
+                                coverFile.parentFile?.mkdirs()
+                                FileOutputStream(coverFile).use { fos ->
+                                    zis.copyTo(fos)
+                                }
                             }
                         }
                     }

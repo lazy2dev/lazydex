@@ -364,6 +364,10 @@ class MediaRepositoryImpl(
         dao.getAll().map { it.toDomain() }
     }
 
+    override suspend fun getLinkedMediaIds(providerId: String): Set<String> = withContext(Dispatchers.IO) {
+        linkDao.getByProviderId(providerId).map { it.mediaId }.toSet()
+    }
+
     override suspend fun add(item: MediaItem): MediaItem = withContext(Dispatchers.IO) {
         val normalized = item.normalize()
         val now = System.currentTimeMillis()

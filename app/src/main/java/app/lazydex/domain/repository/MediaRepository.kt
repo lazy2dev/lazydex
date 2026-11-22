@@ -58,6 +58,7 @@ interface MediaRepository {
     /** One-shot reads */
     suspend fun getById(id: String): MediaItem?
     suspend fun getAll(): List<MediaItem>
+    suspend fun getLinkedMediaIds(providerId: String): Set<String> = emptySet()
 
     /** Writes */
     suspend fun add(item: MediaItem): MediaItem

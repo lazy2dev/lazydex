@@ -50,6 +50,12 @@ data class TrackingSettingsUiState(
     val autoSyncProgressFromTrackers: Boolean = true
 )
 
+data class BackupExportOptions(
+    val includeCovers: Boolean = true,
+    val excludeAniList: Boolean = false,
+    val selectedTypes: Set<String> = emptySet()
+)
+
 data class SettingsUiState(
     val themeMode: String = "DARK",
     val themePreset: ThemePreset = ThemePreset.DEFAULT,
@@ -281,7 +287,7 @@ class SettingsViewModel(
         _uiState.value = _uiState.value.copy(showExportCoversDialog = show)
     }
 
-    fun exportBackup(context: Context, uri: Uri, includeCovers: Boolean) {
+    fun exportBackup(context: Context, uri: Uri, options: BackupExportOptions = BackupExportOptions()) {
         _uiState.value = _uiState.value.copy(
             isExporting = true,
             errorMsg = null,
@@ -290,12 +296,26 @@ class SettingsViewModel(
         )
         viewModelScope.launch {
             try {
-                val items = repository.getAll()
-                BackupManager.export(context, uri, items, includeCovers, localCoversDir)
+                var items = repository.getAll()
+                if (options.selectedTypes.isNotEmpty()) {
+                    items = items.filter {
+                        it.type.uppercase() in options.selectedTypes || it.format.uppercase() in options.selectedTypes
+                    }
+                }
+                if (options.excludeAniList) {
+                    val linkedIds = repository.getLinkedMediaIds("anilist")
+                    items = items.filter { item ->
+                        !linkedIds.contains(item.id) &&
+                        item.anilistId == null &&
+                        item.sourceUrl?.contains("anilist.co", ignoreCase = true) != true &&
+                        item.coverImageUrl?.contains("anilist.co", ignoreCase = true) != true
+                    }
+                }
+                BackupManager.export(context, uri, items, options.includeCovers, localCoversDir)
                 refreshStorageMetrics()
                 _uiState.value = _uiState.value.copy(
                     isExporting = false,
-                    successMsg = "Backup exported successfully"
+                    successMsg = "Backup exported successfully (${items.size} items)"
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -304,6 +324,10 @@ class SettingsViewModel(
                 )
             }
         }
+    }
+
+    fun exportBackup(context: Context, uri: Uri, includeCovers: Boolean) {
+        exportBackup(context, uri, BackupExportOptions(includeCovers = includeCovers))
     }
 
     fun importBackup(context: Context, uri: Uri) {
@@ -346,7 +370,9 @@ class SettingsViewModel(
 
                     val finalItems = mergeResult.mergedItems.map { mergedItem ->
                         val matchedImported = imported.items.firstOrNull {
-                            it.id == mergedItem.id || (it.sourceUrl != null && it.sourceUrl == mergedItem.sourceUrl)
+                            it.id == mergedItem.id ||
+                            (it.sourceUrl != null && it.sourceUrl == mergedItem.sourceUrl) ||
+                            (it.title.trim().equals(mergedItem.title.trim(), ignoreCase = true) && it.type.equals(mergedItem.type, ignoreCase = true))
                         }
                         if (matchedImported != null && mergeResult.coverIdsToRestore.contains(matchedImported.id)) {
                             val srcFile = File(imported.tempCoversDir, matchedImported.id)
@@ -356,7 +382,11 @@ class SettingsViewModel(
                                 return@map mergedItem.copy(coverImagePath = destFile.absolutePath)
                             }
                         }
-                        mergedItem
+                        if (mergedItem.coverImagePath.isNotBlank() && !File(mergedItem.coverImagePath).exists()) {
+                            mergedItem.copy(coverImagePath = "")
+                        } else {
+                            mergedItem
+                        }
                     }
 
                     repository.replaceAll(finalItems)
@@ -402,7 +432,7 @@ class SettingsViewModel(
                             srcFile.copyTo(destFile, overwrite = true)
                             item.copy(coverImagePath = destFile.absolutePath)
                         } else {
-                            item
+                            item.copy(coverImagePath = if (File(item.coverImagePath).exists()) item.coverImagePath else "")
                         }
                     }
 

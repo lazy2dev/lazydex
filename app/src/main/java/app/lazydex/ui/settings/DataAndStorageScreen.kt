@@ -6,6 +6,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +28,9 @@ import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -45,6 +49,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,15 +74,25 @@ fun DataAndStorageScreen(
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
-    var includeCoversExport by remember { mutableStateOf(false) }
-    var showRestoringProgressBanner by remember { mutableStateOf(true) }
+    var exportIncludeCovers by rememberSaveable { mutableStateOf(true) }
+    var exportExcludeAniList by rememberSaveable { mutableStateOf(false) }
+    var exportSelectedTypes by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
+    var showRestoringProgressBanner by rememberSaveable { mutableStateOf(true) }
 
     // Launcher for exporting database (SAF CreateDocument)
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
         onResult = { uri ->
             if (uri != null) {
-                viewModel.exportBackup(context, uri, includeCoversExport)
+                viewModel.exportBackup(
+                    context = context,
+                    uri = uri,
+                    options = BackupExportOptions(
+                        includeCovers = exportIncludeCovers,
+                        excludeAniList = exportExcludeAniList,
+                        selectedTypes = exportSelectedTypes.toSet()
+                    )
+                )
             }
         }
     )
@@ -257,36 +272,122 @@ fun DataAndStorageScreen(
         }
     }
 
-    // Export Covers Dialog
+    // Export Options Dialog
     if (state.showExportCoversDialog) {
+        val availableTypes = listOf("NOVEL", "MANGA", "ANIME", "GAME", "MOVIE", "TV")
         AlertDialog(
             onDismissRequest = { viewModel.showExportCoversDialog(false) },
-            title = { Text("Export Options") },
-            text = { Text("Do you want to package local cover images in your backup? Including covers increases backup file size.") },
+            title = { Text("Backup Options") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        text = "Filter Media Types:",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = exportSelectedTypes.isEmpty(),
+                            onClick = { exportSelectedTypes = emptyList() },
+                            label = { Text("All") }
+                        )
+                        availableTypes.forEach { type ->
+                            val isSelected = exportSelectedTypes.contains(type)
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    exportSelectedTypes = if (isSelected) {
+                                        exportSelectedTypes - type
+                                    } else {
+                                        exportSelectedTypes + type
+                                    }
+                                },
+                                label = { Text(type.lowercase().replaceFirstChar { it.uppercase() }) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { exportExcludeAniList = !exportExcludeAniList },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = exportExcludeAniList,
+                            onCheckedChange = { exportExcludeAniList = it }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Exclude AniList synced items",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "Keeps only pure local media (e.g. novels)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { exportIncludeCovers = !exportIncludeCovers },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = exportIncludeCovers,
+                            onCheckedChange = { exportIncludeCovers = it }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Include local cover images",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "Packages covers into backup file",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        includeCoversExport = true
+                        viewModel.showExportCoversDialog(false)
                         exportLauncher.launch("backup_${System.currentTimeMillis()}.lazydex")
                     }
                 ) {
-                    Text("Metadata + Covers")
+                    Text("Export", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = {
-                        includeCoversExport = false
-                        exportLauncher.launch("backup_${System.currentTimeMillis()}.lazydex")
-                    }
-                ) {
-                    Text("Metadata Only")
+                TextButton(onClick = { viewModel.showExportCoversDialog(false) }) {
+                    Text("Cancel")
                 }
             }
         )
     }
 
-    // Komikku-style backup restore dialog
+    // Restore Dialog
     state.importedBackup?.let { backup ->
         AlertDialog(
             onDismissRequest = { viewModel.cancelImport() },
@@ -304,16 +405,33 @@ fun DataAndStorageScreen(
                 )
             },
             text = {
-                Text(
-                    text = "Restore ${backup.items.size} media items and covers? Existing items will be merged with latest progress.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Column {
+                    Text(
+                        text = "Found ${backup.items.size} media items in backup.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "• Clean Overwrite: Completely replaces current library with this backup.\n• Merge: Combines backup with current library, protecting newer progress.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             },
             confirmButton = {
-                TextButton(
-                    onClick = { viewModel.restoreBackup() }
-                ) {
-                    Text("Restore", fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = { viewModel.executeOverwrite() },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Clean Overwrite", fontWeight = FontWeight.Bold)
+                    }
+                    TextButton(
+                        onClick = { viewModel.restoreBackup() }
+                    ) {
+                        Text("Merge", fontWeight = FontWeight.SemiBold)
+                    }
                 }
             },
             dismissButton = {

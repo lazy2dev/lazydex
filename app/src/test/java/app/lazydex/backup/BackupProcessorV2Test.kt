@@ -6,6 +6,7 @@ import app.lazydex.domain.model.UserStatus
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BackupProcessorV2Test {
@@ -164,5 +165,223 @@ class BackupProcessorV2Test {
         assertEquals(230, first.currentProgress)
         assertEquals(UserStatus.DROPPED, first.userStatus)
         assertEquals(1.0, first.rating ?: 0.0, 0.01)
+    }
+
+    @Test
+    fun deserialize_futureSchemaVersion_succeedsWithoutError() = runTest {
+        val futureJson = """
+            {
+                "schemaVersion": 99,
+                "futureGlobalSetting": "enabled",
+                "items": [
+                    {
+                        "id": "future-item-1",
+                        "type": "NOVEL",
+                        "format": "WEB_NOVEL",
+                        "title": "Future Cultivator",
+                        "currentProgress": 15,
+                        "userStatus": "CURRENT",
+                        "futureUnknownField": 12345
+                    }
+                ]
+            }
+        """.trimIndent()
+
+        val deserialized = BackupProcessor.deserialize(futureJson)
+        assertEquals(99, deserialized.schemaVersion)
+        assertEquals(1, deserialized.items.size)
+        assertEquals("Future Cultivator", deserialized.items[0].title)
+    }
+
+    @Test
+    fun deserialize_missingSchemaVersion_defaultsGracefully() = runTest {
+        val jsonNoVersion = """
+            {
+                "items": [
+                    {
+                        "id": "legacy-item-1",
+                        "category": "NOVEL",
+                        "categoryId": "typ_novel_cn",
+                        "title": "Legacy Novel",
+                        "currentProgress": 10,
+                        "userStatus": "READING"
+                    }
+                ]
+            }
+        """.trimIndent()
+
+        val deserialized = BackupProcessor.deserialize(jsonNoVersion)
+        assertEquals(3, deserialized.schemaVersion)
+        assertEquals(1, deserialized.items.size)
+        val item = deserialized.items[0]
+        assertEquals("Legacy Novel", item.title)
+        assertEquals("NOVEL", item.type)
+        assertEquals("WEB_NOVEL", item.format)
+        assertEquals("CN", item.countryOfOrigin)
+        assertEquals(UserStatus.CURRENT, item.userStatus)
+    }
+
+    @Test
+    fun serializeAndDeserialize_preservesAllModernFieldsLosslessly() = runTest {
+        val modernItem = MediaItem(
+            id = "modern-1",
+            type = "NOVEL",
+            format = "LIGHT_NOVEL",
+            countryOfOrigin = "JP",
+            title = "Overlord",
+            alternativeTitles = listOf("Overlord Romaji", "Overlord English"),
+            coverImagePath = "/covers/modern-1",
+            coverImageUrl = "https://example.com/cover.jpg",
+            currentProgress = 14,
+            totalItems = 18,
+            progress = 14.5,
+            progressTotal = 18.0,
+            secondaryProgress = 2.0,
+            secondaryProgressTotal = 4.0,
+            userStatus = UserStatus.CURRENT,
+            rating = 4.5,
+            notes = "Sasuga Ainz-sama",
+            genres = listOf("Fantasy", "Isekai"),
+            tags = listOf("Anti-Hero", "OP MC"),
+            author = "Kugane Maruyama",
+            description = "A salaryman in a skeletal body",
+            startDate = 1500000000000L,
+            endDate = null,
+            lastUpdated = 1700000000000L,
+            dateAdded = 1500000000000L,
+            extraData = """{"banner_image":"https://example.com/banner.jpg"}""",
+            isDeleted = false,
+            isAdult = true,
+            repeat = 3,
+            durationMinutes = 120,
+            avgChapterLength = 4000,
+            lengthUnitOverride = "WORDS",
+            playbackSpeed = 1.25,
+            averageScore = 88
+        )
+
+        val serialized = BackupProcessor.serialize(listOf(modernItem))
+        val deserialized = BackupProcessor.deserialize(serialized)
+
+        assertEquals(1, deserialized.items.size)
+        val item = deserialized.items[0]
+
+        assertEquals("modern-1", item.id)
+        assertEquals("Overlord", item.title)
+        assertEquals(14.5, item.progress, 0.001)
+        assertEquals(18.0, item.progressTotal ?: 0.0, 0.001)
+        assertEquals(2.0, item.secondaryProgress, 0.001)
+        assertEquals(4.0, item.secondaryProgressTotal ?: 0.0, 0.001)
+        assertEquals(3, item.repeat)
+        assertEquals(true, item.isAdult)
+        assertEquals(88, item.averageScore)
+        assertEquals(120, item.durationMinutes)
+        assertEquals(4000, item.avgChapterLength)
+        assertEquals("WORDS", item.lengthUnitOverride)
+        assertEquals(1.25, item.playbackSpeed, 0.001)
+        assertEquals("https://example.com/banner.jpg", item.getExtra("banner_image"))
+    }
+
+    @Test
+    fun merge_matchesByTitleAndTypeWhenIdDiffers() = runTest {
+        val local = MediaItem(
+            id = "local-uuid-1",
+            type = "NOVEL",
+            format = "WEB_NOVEL",
+            title = "A Will Eternal",
+            currentProgress = 200,
+            userStatus = UserStatus.CURRENT,
+            lastUpdated = 1600000000000L,
+            dateAdded = 1500000000000L
+        )
+
+        val importedWithDifferentId = MediaItem(
+            id = "new-uuid-2",
+            type = "NOVEL",
+            format = "WEB_NOVEL",
+            title = "  a will eternal  ", // Different casing & whitespace
+            currentProgress = 250,
+            userStatus = UserStatus.CURRENT,
+            lastUpdated = 1700000000000L,
+            dateAdded = 1500000000000L
+        )
+
+        val result = BackupProcessor.merge(listOf(local), listOf(importedWithDifferentId), 3)
+
+        // Must deduplicate by Title + Type!
+        assertEquals(1, result.mergedItems.size)
+        assertEquals("local-uuid-1", result.mergedItems[0].id)
+        assertEquals(250, result.mergedItems[0].currentProgress)
+    }
+
+    @Test
+    fun merge_deduplicatesIntraBatchItemsWithSameUrlOrTitle() = runTest {
+        val imported1 = MediaItem(
+            id = "batch-1",
+            type = "NOVEL",
+            format = "WEB_NOVEL",
+            title = "Lord of the Mysteries",
+            sourceUrl = "https://novelbin.me/novel-book/lord-of-the-mysteries",
+            currentProgress = 500,
+            userStatus = UserStatus.CURRENT,
+            lastUpdated = 1600000000000L,
+            dateAdded = 1500000000000L
+        )
+        val imported2 = MediaItem(
+            id = "batch-2",
+            type = "NOVEL",
+            format = "WEB_NOVEL",
+            title = "Lord of the Mysteries",
+            sourceUrl = "https://novelbin.me/novel-book/lord-of-the-mysteries",
+            currentProgress = 600,
+            userStatus = UserStatus.CURRENT,
+            lastUpdated = 1700000000000L,
+            dateAdded = 1500000000000L
+        )
+
+        val result = BackupProcessor.merge(emptyList(), listOf(imported1, imported2), 3)
+        assertEquals(1, result.mergedItems.size)
+        assertEquals(600, result.mergedItems[0].currentProgress)
+    }
+
+    @Test
+    fun deserialize_populatesAltTitlesFromRomajiAndEnglishWhenAlternativeTitlesEmpty() = runTest {
+        val json = """
+        {
+            "schemaVersion": 3,
+            "items": [
+                {
+                    "title": "Frieren",
+                    "type": "ANIME",
+                    "alternativeTitles": [],
+                    "titleRomaji": "Sousou no Frieren",
+                    "titleEnglish": "Frieren: Beyond Journey's End",
+                    "titleNative": "葬送のフリーレン"
+                }
+            ]
+        }
+        """.trimIndent()
+
+        val deserialized = BackupProcessor.deserialize(json)
+        assertEquals(1, deserialized.items.size)
+        val item = deserialized.items[0]
+        assertEquals(listOf("Sousou no Frieren", "Frieren: Beyond Journey's End", "葬送のフリーレン"), item.alternativeTitles)
+    }
+
+    @Test
+    fun deserializeCleanNovelBackup_parsesAll315NovelsLosslessly() = runTest {
+        val cleanBackupFile = java.io.File("C:/Users/lazyman/Downloads/lazydex_novels_clean.lazydex")
+        if (!cleanBackupFile.exists()) return@runTest
+
+        var jsonText = ""
+        java.util.zip.ZipFile(cleanBackupFile).use { zip ->
+            val entry = zip.getEntry("backup.json")
+            jsonText = zip.getInputStream(entry).bufferedReader().readText()
+        }
+
+        val deserialized = BackupProcessor.deserialize(jsonText)
+        assertEquals(315, deserialized.items.size)
+        assertTrue(deserialized.items.all { it.type == "NOVEL" })
+        assertTrue(deserialized.items.all { it.title.isNotBlank() })
     }
 }
