@@ -1,6 +1,5 @@
 package app.lazydex.data.repository
 
-import android.content.SharedPreferences
 import app.lazydex.data.local.dao.ActivityDao
 import app.lazydex.data.local.dao.AppSettingDao
 import app.lazydex.data.local.dao.MediaItemDao
@@ -17,6 +16,7 @@ import app.lazydex.data.tracker.anilist.AnilistApi
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.anilist.TokenBucketLimiter
 import app.lazydex.data.tracker.sync.AnilistSyncEngine
+import app.lazydex.data.tracker.sync.AnilistSyncEngineTest
 import app.lazydex.domain.model.ActivityDatePoint
 import app.lazydex.domain.model.MediaItem
 import app.lazydex.domain.model.MediaStats
@@ -354,7 +354,75 @@ class ProgressMutationRulesTest {
     }
 
     @Test
-    fun `autoUpdateOnMarkRead NEVER suppresses push when completed`() = runTest {
+    fun `autoUpdateOnMarkRead NEVER and ASK suppress push when completed via incrementProgress`() = runTest {
+        for (option in listOf("NEVER", "ASK")) {
+            val testDispatcher = StandardTestDispatcher(testScheduler)
+            val testScope = TestScope(testDispatcher)
+
+            val itemDao = FakeMediaItemDao()
+            val linkDao = FakeMediaLinkDao()
+            val activityDao = FakeActivityDao()
+            val settingDao = FakeAppSettingDao()
+            val syncEngine = FakeSyncEngine()
+            syncEngine.store.autoUpdateOnMarkRead = option
+
+            val repo = MediaRepositoryImpl(
+                db = null,
+                dao = itemDao,
+                linkDao = linkDao,
+                activityDao = activityDao,
+                settingDao = settingDao,
+                localCoversDir = File(""),
+                syncEngine = syncEngine,
+                tokenStore = syncEngine.store,
+                syncScope = testScope
+            )
+
+            val localItem = MediaItemEntity(
+                id = "media-$option",
+                type = "MANGA",
+                format = "MANGA",
+                title = "Berserk",
+                progressTotal = 376.0,
+                createdAt = 1_000_000L,
+                updatedAt = 1_000_000L
+            )
+            itemDao.items[localItem.id] = localItem
+            itemDao.userData[localItem.id] = UserDataEntity(
+                mediaId = localItem.id,
+                userStatus = "CURRENT",
+                progress = 375.0,
+                updatedAt = 1_000_000L
+            )
+
+            val link = MediaLinkEntity(
+                id = "link-$option",
+                mediaId = localItem.id,
+                kind = "TRACKER",
+                providerId = "anilist",
+                remoteId = "30002",
+                remoteMediaListId = "777",
+                url = "https://anilist.co/manga/30002",
+                state = "LINKED",
+                syncStatus = "SYNCED",
+                createdAt = 1_000_000L,
+                updatedAt = 1_000_000L
+            )
+            linkDao.links[link.id] = link
+
+            repo.incrementProgress(localItem.id, 1.0)
+
+            val updatedDb = itemDao.getActiveById(localItem.id)!!
+            assertEquals("COMPLETED", updatedDb.userStatus)
+            assertEquals("DIRTY_LOCAL", linkDao.links[link.id]!!.syncStatus)
+
+            testScope.advanceUntilIdle()
+            assertTrue("Push should be suppressed when autoUpdateOnMarkRead is $option", syncEngine.pushedMediaIds.isEmpty())
+        }
+    }
+
+    @Test
+    fun `autoUpdateOnMarkRead NEVER suppresses push on update and updateStatus when marking COMPLETED`() = runTest {
         val testDispatcher = StandardTestDispatcher(testScheduler)
         val testScope = TestScope(testDispatcher)
 
@@ -363,8 +431,7 @@ class ProgressMutationRulesTest {
         val activityDao = FakeActivityDao()
         val settingDao = FakeAppSettingDao()
         val syncEngine = FakeSyncEngine()
-
-        settingDao.settings["tracker.autoUpdateOnMarkRead"] = "NEVER"
+        syncEngine.store.autoUpdateOnMarkRead = "NEVER"
 
         val repo = MediaRepositoryImpl(
             db = null,
@@ -374,48 +441,121 @@ class ProgressMutationRulesTest {
             settingDao = settingDao,
             localCoversDir = File(""),
             syncEngine = syncEngine,
+            tokenStore = syncEngine.store,
+            syncScope = testScope
+        )
+
+        val item1 = MediaItemEntity(
+            id = "m-upd",
+            type = "ANIME",
+            format = "TV",
+            title = "Frieren",
+            progressTotal = 28.0,
+            createdAt = 1_000_000L,
+            updatedAt = 1_000_000L
+        )
+        val item2 = MediaItemEntity(
+            id = "m-batch",
+            type = "MANGA",
+            format = "MANGA",
+            title = "Vagabond",
+            progressTotal = 327.0,
+            createdAt = 1_000_000L,
+            updatedAt = 1_000_000L
+        )
+        itemDao.items[item1.id] = item1
+        itemDao.items[item2.id] = item2
+        itemDao.userData[item1.id] = UserDataEntity(mediaId = item1.id, userStatus = "CURRENT", progress = 27.0, updatedAt = 1_000_000L)
+        itemDao.userData[item2.id] = UserDataEntity(mediaId = item2.id, userStatus = "CURRENT", progress = 300.0, updatedAt = 1_000_000L)
+
+        linkDao.links["l1"] = MediaLinkEntity(
+            id = "l1", mediaId = item1.id, kind = "TRACKER", providerId = "anilist",
+            remoteId = "154587", url = "https://anilist.co/anime/154587", state = "LINKED", syncStatus = "SYNCED",
+            createdAt = 1_000_000L, updatedAt = 1_000_000L
+        )
+        linkDao.links["l2"] = MediaLinkEntity(
+            id = "l2", mediaId = item2.id, kind = "TRACKER", providerId = "anilist",
+            remoteId = "30656", url = "https://anilist.co/manga/30656", state = "LINKED", syncStatus = "SYNCED",
+            createdAt = 1_000_000L, updatedAt = 1_000_000L
+        )
+
+        repo.update(
+            MediaItem(
+                id = item1.id, type = "ANIME", format = "TV", title = "Frieren",
+                userStatus = UserStatus.COMPLETED, progress = 28.0, progressTotal = 28.0,
+                currentProgress = 28, totalItems = 28, lastUpdated = 2_000_000L, dateAdded = 1_000_000L
+            )
+        )
+        repo.updateStatus(listOf(item2.id, "missing-id"), UserStatus.COMPLETED)
+
+        assertEquals("COMPLETED", itemDao.getActiveById(item1.id)!!.userStatus)
+        assertEquals("COMPLETED", itemDao.getActiveById(item2.id)!!.userStatus)
+        assertEquals("DIRTY_LOCAL", linkDao.links["l1"]!!.syncStatus)
+        assertEquals("DIRTY_LOCAL", linkDao.links["l2"]!!.syncStatus)
+
+        testScope.advanceUntilIdle()
+        assertTrue(syncEngine.pushedMediaIds.isEmpty())
+    }
+
+    @Test
+    fun `autoUpdateAfterReading false suppresses automatic push while keeping DIRTY_LOCAL`() = runTest {
+        val testDispatcher = StandardTestDispatcher(testScheduler)
+        val testScope = TestScope(testDispatcher)
+
+        val itemDao = FakeMediaItemDao()
+        val linkDao = FakeMediaLinkDao()
+        val activityDao = FakeActivityDao()
+        val settingDao = FakeAppSettingDao()
+        val syncEngine = FakeSyncEngine()
+        syncEngine.store.autoUpdateAfterReading = false
+
+        val repo = MediaRepositoryImpl(
+            db = null,
+            dao = itemDao,
+            linkDao = linkDao,
+            activityDao = activityDao,
+            settingDao = settingDao,
+            localCoversDir = File(""),
+            syncEngine = syncEngine,
+            tokenStore = syncEngine.store,
             syncScope = testScope
         )
 
         val localItem = MediaItemEntity(
-            id = "media-never",
+            id = "m-no-auto",
             type = "MANGA",
             format = "MANGA",
-            title = "Berserk",
-            progressTotal = 376.0,
+            title = "Kingdom",
+            progressTotal = 800.0,
             createdAt = 1_000_000L,
             updatedAt = 1_000_000L
         )
         itemDao.items[localItem.id] = localItem
         itemDao.userData[localItem.id] = UserDataEntity(
-            mediaId = "media-never",
+            mediaId = localItem.id,
             userStatus = "CURRENT",
-            progress = 375.0,
+            progress = 100.0,
             updatedAt = 1_000_000L
         )
-
-        val link = MediaLinkEntity(
-            id = "link-never",
-            mediaId = "media-never",
+        linkDao.links["l-no-auto"] = MediaLinkEntity(
+            id = "l-no-auto",
+            mediaId = localItem.id,
             kind = "TRACKER",
             providerId = "anilist",
-            remoteId = "30002",
-            remoteMediaListId = "777",
-            url = "https://anilist.co/manga/30002",
+            remoteId = "12076",
+            url = "https://anilist.co/manga/12076",
             state = "LINKED",
             syncStatus = "SYNCED",
             createdAt = 1_000_000L,
             updatedAt = 1_000_000L
         )
-        linkDao.links[link.id] = link
 
-        repo.incrementProgress("media-never", 1.0)
-
-        val updatedDb = itemDao.getActiveById("media-never")!!
-        assertEquals("COMPLETED", updatedDb.userStatus)
+        val updated = repo.incrementProgress(localItem.id, 1.0)
+        assertEquals(101.0, updated!!.progress, 0.001)
+        assertEquals("DIRTY_LOCAL", linkDao.links["l-no-auto"]!!.syncStatus)
 
         testScope.advanceUntilIdle()
-        assertTrue("Push should be suppressed when autoUpdateOnMarkRead is NEVER", syncEngine.pushedMediaIds.isEmpty())
+        assertTrue(syncEngine.pushedMediaIds.isEmpty())
     }
 
     @Test
@@ -834,7 +974,7 @@ class ProgressMutationRulesTest {
     // --- Fakes ---
 
     class FakeSyncEngine(
-        val sharedPrefs: FakeSharedPreferences = FakeSharedPreferences(),
+        val sharedPrefs: AnilistSyncEngineTest.FakeSharedPreferences = AnilistSyncEngineTest.FakeSharedPreferences(),
         val store: AnilistTokenStore = AnilistTokenStore(sharedPrefs)
     ) : AnilistSyncEngine(
         client = AnilistApi(OkHttpClient(), store, TokenBucketLimiter()),
@@ -1003,21 +1143,5 @@ class ProgressMutationRulesTest {
         override suspend fun get(key: String): String? = settings[key]
         override suspend fun set(setting: AppSettingEntity) { settings[setting.key] = setting.value }
         override suspend fun getAll(): List<AppSettingEntity> = emptyList()
-    }
-
-    class FakeSharedPreferences : SharedPreferences {
-        private val data = mutableMapOf<String, Any?>()
-        override fun getAll(): MutableMap<String, *> = data
-        override fun getString(key: String, defValue: String?): String? = data[key] as? String ?: defValue
-        override fun getStringSet(key: String, defValues: MutableSet<String>?): MutableSet<String>? =
-            @Suppress("UNCHECKED_CAST") (data[key] as? MutableSet<String> ?: defValues)
-        override fun getInt(key: String, defValue: Int): Int = data[key] as? Int ?: defValue
-        override fun getLong(key: String, defValue: Long): Long = data[key] as? Long ?: defValue
-        override fun getFloat(key: String, defValue: Float): Float = data[key] as? Float ?: defValue
-        override fun getBoolean(key: String, defValue: Boolean): Boolean = data[key] as? Boolean ?: defValue
-        override fun contains(key: String): Boolean = data.containsKey(key)
-        override fun edit(): SharedPreferences.Editor = error("Not supported in test fake")
-        override fun registerOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) {}
-        override fun unregisterOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) {}
     }
 }

@@ -1262,5 +1262,40 @@ class MediaDetailsViewModelTest {
         val saved = repo.items.single()
         assertEquals(50, saved.averageScore)
     }
+
+    @Test
+    fun save_existingItem_doesNotTriggerDuplicatePushFromViewModel() = runTest {
+        val repo = FakeRepository()
+        val existing = MediaItem(
+            id = "existing-no-dup-push",
+            mediaType = MediaType.MANGA,
+            title = "Dandadan",
+            currentProgress = 50,
+            totalItems = 100,
+            userStatus = UserStatus.CURRENT,
+            lastUpdated = 100L,
+            dateAdded = 100L
+        )
+        repo.items.add(existing)
+
+        val prefs = AnilistSyncEngineTest.FakeSharedPreferences()
+        val tokenStore = AnilistTokenStore(prefs).apply {
+            accessToken = "mock_token"
+            autoUpdateAfterReading = true
+            autoUpdateOnMarkRead = "NEVER"
+        }
+        val syncEngine = TestSyncEngine()
+
+        val vm = createViewModel(
+            repository = repo,
+            syncEngine = syncEngine,
+            tokenStore = tokenStore
+        )
+        vm.initialize("existing-no-dup-push", null)
+        vm.updateUserStatus(UserStatus.COMPLETED)
+        vm.save()
+
+        assertNull(syncEngine.pushedMediaId)
+    }
 }
 

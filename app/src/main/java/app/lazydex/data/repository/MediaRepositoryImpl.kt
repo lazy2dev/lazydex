@@ -362,6 +362,25 @@ class MediaRepositoryImpl(
         linkDao.getByProviderId(providerId).map { it.mediaId }.toSet()
     }
 
+    private fun shouldAutoPush(
+        isCompleted: Boolean,
+        isCompletionTransition: Boolean = isCompleted
+    ): Boolean {
+        val store = tokenStore ?: return true
+        if (isCompleted && isCompletionTransition && store.autoUpdateOnMarkRead != "ALWAYS") {
+            return false
+        }
+        return store.autoUpdateAfterReading
+    }
+
+    private fun launchPush(mediaId: String) {
+        syncEngine?.let { engine ->
+            syncScope.launch {
+                runCatching { engine.pushDirtyItem(mediaId) }
+            }
+        }
+    }
+
     override suspend fun add(item: MediaItem): MediaItem = withContext(Dispatchers.IO) {
         val normalized = item.normalize()
         val now = System.currentTimeMillis()
@@ -375,15 +394,8 @@ class MediaRepositoryImpl(
             dao.upsertUserData(userEntity)
         }
 
-        val autoUpdateOnMarkRead = settingDao.get("tracker.autoUpdateOnMarkRead") ?: "ALWAYS"
-        val skipPush = normalized.userStatus == UserStatus.COMPLETED && autoUpdateOnMarkRead == "NEVER"
-
-        if (!skipPush) {
-            syncEngine?.let { engine ->
-                syncScope.launch {
-                    runCatching { engine.pushDirtyItem(item.id) }
-                }
-            }
+        if (shouldAutoPush(isCompleted = normalized.userStatus == UserStatus.COMPLETED)) {
+            launchPush(item.id)
         }
 
         normalized
@@ -394,8 +406,6 @@ class MediaRepositoryImpl(
         val existingActive = dao.getActiveById(item.id)
         val currentDomain = existingActive?.toDomain()
         val currentUserData = dao.getUserData(item.id)
-
-        val autoUpdateOnMarkRead = settingDao.get("tracker.autoUpdateOnMarkRead") ?: "ALWAYS"
 
         if (currentDomain == null) {
             val now = System.currentTimeMillis()
@@ -466,15 +476,12 @@ class MediaRepositoryImpl(
             }
         }
 
-        if (userdataChanged) {
-            val skipStatusPush = statusChanged && normalized.userStatus == UserStatus.COMPLETED && autoUpdateOnMarkRead == "NEVER"
-            if (!skipStatusPush) {
-                syncEngine?.let { engine ->
-                    syncScope.launch {
-                        runCatching { engine.pushDirtyItem(item.id) }
-                    }
-                }
-            }
+        if (userdataChanged && shouldAutoPush(
+                isCompleted = normalized.userStatus == UserStatus.COMPLETED,
+                isCompletionTransition = statusChanged && normalized.userStatus == UserStatus.COMPLETED
+            )
+        ) {
+            launchPush(item.id)
         }
     }
 
@@ -487,7 +494,7 @@ class MediaRepositoryImpl(
         withContext(Dispatchers.IO) {
             if (ids.isEmpty()) return@withContext
             val now = System.currentTimeMillis()
-            val delayedStore = context?.let { app.lazydex.data.tracker.service.DelayedTrackingStore(it) }
+            val dirtyLinkedIds = mutableListOf<String>()
 
             runInTransaction {
                 ids.forEach { id ->
@@ -504,7 +511,10 @@ class MediaRepositoryImpl(
                         existing = currentUserData
                     )
                     dao.upsertUserData(updatedUserData)
-                    linkDao.updateSyncStatusByMediaId(id, "DIRTY_LOCAL", now)
+                    val dirtyRows = linkDao.updateSyncStatusByMediaId(id, "DIRTY_LOCAL", now)
+                    if (dirtyRows > 0) {
+                        dirtyLinkedIds.add(id)
+                    }
 
                     activityDao.upsert(
                         ActivityEntity(
@@ -517,20 +527,19 @@ class MediaRepositoryImpl(
                             timestamp = now
                         )
                     )
-
-                    delayedStore?.addStatus(id, targetStatus.name)
                 }
             }
 
-            context?.let { ctx ->
-                DelayedTrackingUpdateJob.setupTask(ctx)
-            }
-
-            syncEngine?.let { engine ->
-                syncScope.launch {
-                    ids.forEach { id ->
-                        runCatching { engine.pushDirtyItem(id) }
-                    }
+            if (dirtyLinkedIds.isNotEmpty() && shouldAutoPush(isCompleted = status == UserStatus.COMPLETED)) {
+                val delayedStore = context?.let { app.lazydex.data.tracker.service.DelayedTrackingStore(it) }
+                dirtyLinkedIds.forEach { id ->
+                    delayedStore?.addStatus(id, status.name)
+                }
+                context?.let { ctx ->
+                    DelayedTrackingUpdateJob.setupTask(ctx)
+                }
+                dirtyLinkedIds.forEach { id ->
+                    launchPush(id)
                 }
             }
         }
@@ -548,16 +557,16 @@ class MediaRepositoryImpl(
                 val updatedUser = existingUser.copy(repeat = safeRepeat, updatedAt = now)
                 dao.upsertUserData(updatedUser)
                 val dirtyRows = linkDao.updateSyncStatusByMediaId(id, "DIRTY_LOCAL", now)
-                if (dirtyRows > 0) {
+                if (dirtyRows > 0 && shouldAutoPush(
+                        isCompleted = existingUser.userStatus == "COMPLETED",
+                        isCompletionTransition = false
+                    )
+                ) {
                     shouldPush = true
                 }
             }
             if (shouldPush) {
-                syncEngine?.let { engine ->
-                    syncScope.launch {
-                        runCatching { engine.pushDirtyItem(id) }
-                    }
-                }
+                launchPush(id)
             }
         }
     }
@@ -640,12 +649,10 @@ class MediaRepositoryImpl(
 
             val dirtyRows = linkDao.updateSyncStatusByMediaId(id, "DIRTY_LOCAL", now)
             if (dirtyRows > 0) {
-                shouldPush = true
-            }
-
-            val autoUpdateOnMarkRead = settingDao.get("tracker.autoUpdateOnMarkRead") ?: "ALWAYS"
-            if (newStatus == "COMPLETED" && autoUpdateOnMarkRead == "NEVER") {
-                shouldPush = false
+                shouldPush = shouldAutoPush(
+                    isCompleted = newStatus == "COMPLETED",
+                    isCompletionTransition = newStatus == "COMPLETED" && existingUser.userStatus != "COMPLETED"
+                )
             }
 
             if (abs(delta) > 1e-6) {
@@ -680,11 +687,7 @@ class MediaRepositoryImpl(
         }
 
         if (shouldPush) {
-            syncEngine?.let { engine ->
-                syncScope.launch {
-                    runCatching { engine.pushDirtyItem(id) }
-                }
-            }
+            launchPush(id)
         }
 
         updatedDomain

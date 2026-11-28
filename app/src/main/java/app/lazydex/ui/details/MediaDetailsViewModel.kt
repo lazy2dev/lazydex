@@ -910,12 +910,6 @@ class MediaDetailsViewModel(
                 }
                 if (wasNew && tokenStore?.isLoggedIn == true && tokenStore.trackOnAdd && savedItem.title.isNotBlank()) {
                     autoTrackMedia(savedItem.id, savedItem.title, savedItem.mediaType)
-                } else if (!wasNew && tokenStore?.isLoggedIn == true && tokenStore.autoUpdateAfterReading) {
-                    syncEngine?.let { engine ->
-                        viewModelScope.launch {
-                            runCatching { engine.pushDirtyItem(savedItem.id) }
-                        }
-                    }
                 }
             } catch (e: DuplicateUrlException) {
                 _uiState.value = _uiState.value.copy(
