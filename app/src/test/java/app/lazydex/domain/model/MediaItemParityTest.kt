@@ -113,6 +113,7 @@ class MediaItemParityTest {
         override suspend fun upsert(item: MediaItemEntity) {}
         override suspend fun upsertAll(items: List<MediaItemEntity>) {}
         override suspend fun getUserData(mediaId: String): UserDataEntity? = null
+        override suspend fun getAllUserData(): List<UserDataEntity> = emptyList()
         override suspend fun upsertUserData(userData: UserDataEntity) {}
         override suspend fun upsertUserDataAll(items: List<UserDataEntity>) {}
         override suspend fun atomicIncrementProgress(id: String, delta: Double, now: Long): Int = 0

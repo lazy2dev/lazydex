@@ -357,6 +357,11 @@ class SettingsViewModel(
         _uiState.value = _uiState.value.copy(importedBackup = null)
     }
 
+    @androidx.annotation.VisibleForTesting
+    internal fun setImportedBackupForTest(imported: ImportedBackup?) {
+        _uiState.value = _uiState.value.copy(importedBackup = imported)
+    }
+
     fun restoreBackup() {
         val imported = _uiState.value.importedBackup ?: return
         _uiState.value = _uiState.value.copy(isImporting = true)
@@ -389,7 +394,7 @@ class SettingsViewModel(
                         }
                     }
 
-                    repository.replaceAll(finalItems)
+                    repository.upsertAll(finalItems)
                 }
                 refreshStorageMetrics()
 

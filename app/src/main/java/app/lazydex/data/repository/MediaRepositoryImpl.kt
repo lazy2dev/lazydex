@@ -769,6 +769,29 @@ class MediaRepositoryImpl(
         }
     }
 
+    override suspend fun upsertAll(items: List<MediaItem>) = withContext(Dispatchers.IO) {
+        if (items.isEmpty()) return@withContext
+        val now = System.currentTimeMillis()
+        runInTransaction {
+            val normalizedItems = items.map { it.normalize() }
+            val existingUserData = dao.getAllUserData().associateBy { it.mediaId }
+            val dirtyMediaIds = mutableListOf<String>()
+            val userEntities = normalizedItems.map { item ->
+                val existing = existingUserData[item.id]
+                val updated = item.toUserDataEntity(existing = existing)
+                if (existing != null && updated.copy(updatedAt = existing.updatedAt) != existing) {
+                    dirtyMediaIds.add(item.id)
+                }
+                updated
+            }
+            dao.upsertAll(normalizedItems.map { it.toEntity() })
+            dao.upsertUserDataAll(userEntities)
+            dirtyMediaIds.forEach { mediaId ->
+                linkDao.updateSyncStatusByMediaId(mediaId, "DIRTY_LOCAL", now)
+            }
+        }
+    }
+
     private fun mediaTypeToDbType(mediaType: MediaType): String = when (mediaType) {
         MediaType.NOVEL -> "NOVEL"
         MediaType.MANGA -> "MANGA"

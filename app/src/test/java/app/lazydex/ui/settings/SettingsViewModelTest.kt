@@ -1,6 +1,7 @@
 package app.lazydex.ui.settings
 
 import android.content.SharedPreferences
+import app.lazydex.backup.ImportedBackup
 import app.lazydex.data.local.DisplayPreferences
 import app.lazydex.data.tracker.anilist.AnilistTokenStore
 import app.lazydex.data.tracker.sync.SyncProgress
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -47,6 +49,9 @@ class SettingsViewModelTest {
     private class FakeRepository(
         val items: MutableList<MediaItem> = mutableListOf()
     ) : MediaRepository {
+        var replaceAllCalls = 0
+        var upsertAllCalls = 0
+
         override fun observeAll(): Flow<List<MediaItem>> = flowOf(items)
         override fun observeHistory(): Flow<List<MediaItem>> = flowOf(items)
         override fun observeByType(mediaType: MediaType): Flow<List<MediaItem>> = flowOf(items.filter { it.mediaType == mediaType })
@@ -73,8 +78,13 @@ class SettingsViewModelTest {
             items.removeIf { it.id == id }
         }
         override suspend fun replaceAll(items: List<MediaItem>) {
+            replaceAllCalls++
             this.items.clear()
             this.items.addAll(items)
+        }
+        override suspend fun upsertAll(items: List<MediaItem>) {
+            upsertAllCalls++
+            items.forEach { update(it) }
         }
     }
 
@@ -523,6 +533,104 @@ class SettingsViewModelTest {
         assertEquals("Fetching MANGA chunk 1...", trackingState.syncMessage)
 
         collectJob.cancel()
+    }
+
+    @Test
+    fun testRestoreBackupMergeUsesUpsertAllAndPreservesExistingItems() = runTest {
+        val existingCover = File(tempCoversDir, "local-1").apply { writeText("Local Cover") }
+        val localItem = MediaItem(
+            id = "local-1",
+            type = "NOVEL",
+            format = "WEB_NOVEL",
+            title = "Local Novel",
+            coverImagePath = existingCover.absolutePath,
+            currentProgress = 12,
+            userStatus = app.lazydex.domain.model.UserStatus.CURRENT,
+            lastUpdated = 1000L,
+            dateAdded = 1000L
+        )
+        val repo = FakeRepository(mutableListOf(localItem))
+        val prefs = FakeThemePreferences()
+        val viewModel = SettingsViewModel(repo, prefs, tempCoversDir, tempCacheDir, testDispatcher)
+
+        val tempImportCoversDir = Files.createTempDirectory("lazydex_import_covers").toFile()
+        File(tempImportCoversDir, "imported-2").writeText("Imported Cover")
+
+        val importedItem = MediaItem(
+            id = "imported-2",
+            type = "MANGA",
+            format = "MANGA",
+            title = "Imported Manga",
+            currentProgress = 25,
+            userStatus = app.lazydex.domain.model.UserStatus.CURRENT,
+            lastUpdated = 2000L,
+            dateAdded = 2000L
+        )
+        viewModel.setImportedBackupForTest(
+            ImportedBackup(
+                schemaVersion = 3,
+                items = listOf(importedItem),
+                tempCoversDir = tempImportCoversDir
+            )
+        )
+
+        viewModel.restoreBackup()
+        withContext(Dispatchers.Default) {
+            val deadline = System.currentTimeMillis() + 5000L
+            while ((viewModel.uiState.value.isImporting || tempImportCoversDir.exists()) && System.currentTimeMillis() < deadline) {
+                kotlinx.coroutines.delay(10)
+            }
+        }
+
+        assertEquals(1, repo.upsertAllCalls)
+        assertEquals(0, repo.replaceAllCalls)
+        assertEquals(2, repo.items.size)
+        assertTrue(existingCover.exists())
+        assertTrue(File(tempCoversDir, "imported-2").exists())
+        assertFalse(tempImportCoversDir.exists())
+    }
+
+    @Test
+    fun testExecuteOverwriteUsesReplaceAll() = runTest {
+        val localItem = MediaItem(
+            id = "local-1",
+            type = "NOVEL",
+            format = "WEB_NOVEL",
+            title = "Local Novel",
+            currentProgress = 12,
+            userStatus = app.lazydex.domain.model.UserStatus.CURRENT,
+            lastUpdated = 1000L,
+            dateAdded = 1000L
+        )
+        val repo = FakeRepository(mutableListOf(localItem))
+        val prefs = FakeThemePreferences()
+        val viewModel = SettingsViewModel(repo, prefs, tempCoversDir, tempCacheDir, testDispatcher)
+
+        val tempImportCoversDir = Files.createTempDirectory("lazydex_overwrite_covers").toFile()
+        val importedItem = MediaItem(
+            id = "imported-2",
+            type = "MANGA",
+            format = "MANGA",
+            title = "Imported Manga",
+            currentProgress = 25,
+            userStatus = app.lazydex.domain.model.UserStatus.CURRENT,
+            lastUpdated = 2000L,
+            dateAdded = 2000L
+        )
+        viewModel.setImportedBackupForTest(
+            ImportedBackup(
+                schemaVersion = 3,
+                items = listOf(importedItem),
+                tempCoversDir = tempImportCoversDir
+            )
+        )
+
+        viewModel.executeOverwrite()
+
+        assertEquals(1, repo.replaceAllCalls)
+        assertEquals(0, repo.upsertAllCalls)
+        assertEquals(1, repo.items.size)
+        assertEquals("imported-2", repo.items[0].id)
     }
 
     private class FakeSyncEngine : TrackerSyncEngine {

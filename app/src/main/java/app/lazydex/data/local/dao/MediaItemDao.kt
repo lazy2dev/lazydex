@@ -79,6 +79,9 @@ interface MediaItemDao {
     @Query("SELECT * FROM user_data WHERE mediaId = :mediaId")
     suspend fun getUserData(mediaId: String): UserDataEntity?
 
+    @Query("SELECT * FROM user_data")
+    suspend fun getAllUserData(): List<UserDataEntity>
+
     @Upsert
     suspend fun upsertUserData(userData: UserDataEntity)
 

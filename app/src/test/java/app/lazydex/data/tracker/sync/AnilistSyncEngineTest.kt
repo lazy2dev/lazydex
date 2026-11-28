@@ -1610,6 +1610,7 @@ class AnilistSyncEngineTest {
         override fun observeById(id: String): Flow<ActiveMediaItemView?> = emptyFlow()
         override suspend fun getById(id: String): MediaItemEntity? = items[id]
         override suspend fun getUserData(mediaId: String): UserDataEntity? = userData[mediaId]
+        override suspend fun getAllUserData(): List<UserDataEntity> = userData.values.toList()
         override suspend fun upsertUserData(userData: UserDataEntity) { this.userData[userData.mediaId] = userData }
         override suspend fun upsertUserDataAll(items: List<UserDataEntity>) { items.forEach { this.userData[it.mediaId] = it } }
         override suspend fun getActiveById(id: String): ActiveMediaItemView? = items[id]?.let { e ->

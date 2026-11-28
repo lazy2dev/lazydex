@@ -692,6 +692,145 @@ class ProgressMutationRulesTest {
         assertTrue(bumpedUser.updatedAt!! > 1_000_000L)
     }
 
+    @Test
+    fun `upsertAll preserves existing links activity isPrivate createdAt and flags dirty only when userData changed`() = runTest {
+        val itemDao = FakeMediaItemDao()
+        val linkDao = FakeMediaLinkDao()
+        val activityDao = FakeActivityDao()
+        val settingDao = FakeAppSettingDao()
+        val repo = MediaRepositoryImpl(
+            dao = itemDao,
+            linkDao = linkDao,
+            activityDao = activityDao,
+            settingDao = settingDao,
+            localCoversDir = File("build/tmp/test_covers")
+        )
+
+        val changedEntity = MediaItemEntity(
+            id = "m-changed",
+            type = "MANGA",
+            format = "MANGA",
+            title = "Changed Manga",
+            createdAt = 100_000L,
+            updatedAt = 200_000L
+        )
+        val changedUserData = UserDataEntity(
+            mediaId = "m-changed",
+            userStatus = "CURRENT",
+            progress = 10.0,
+            isPrivate = true,
+            createdAt = 111_000L,
+            updatedAt = 200_000L
+        )
+        val unchangedEntity = MediaItemEntity(
+            id = "m-unchanged",
+            type = "NOVEL",
+            format = "WEB_NOVEL",
+            title = "Unchanged Novel",
+            createdAt = 100_000L,
+            updatedAt = 200_000L
+        )
+        val unchangedUserData = UserDataEntity(
+            mediaId = "m-unchanged",
+            userStatus = "CURRENT",
+            progress = 5.0,
+            isPrivate = false,
+            createdAt = 122_000L,
+            updatedAt = 200_000L
+        )
+        itemDao.items["m-changed"] = changedEntity
+        itemDao.userData["m-changed"] = changedUserData
+        itemDao.items["m-unchanged"] = unchangedEntity
+        itemDao.userData["m-unchanged"] = unchangedUserData
+
+        linkDao.links["link-1"] = MediaLinkEntity(
+            id = "link-1",
+            mediaId = "m-changed",
+            kind = "TRACKER",
+            providerId = "anilist",
+            remoteId = "1001",
+            url = null,
+            state = "LINKED",
+            syncStatus = "SYNCED",
+            createdAt = 100_000L,
+            updatedAt = 200_000L
+        )
+        linkDao.links["link-2"] = MediaLinkEntity(
+            id = "link-2",
+            mediaId = "m-unchanged",
+            kind = "TRACKER",
+            providerId = "anilist",
+            remoteId = "1002",
+            url = null,
+            state = "LINKED",
+            syncStatus = "SYNCED",
+            createdAt = 100_000L,
+            updatedAt = 200_000L
+        )
+        activityDao.activities.add(
+            ActivityEntity(
+                id = "act-1",
+                mediaId = "m-changed",
+                type = "PROGRESS_UPDATE",
+                oldValue = "0.0",
+                newValue = "10.0",
+                delta = 10.0,
+                timestamp = 200_000L
+            )
+        )
+
+        val mergedItems = listOf(
+            MediaItem(
+                id = "m-changed",
+                type = "MANGA",
+                format = "MANGA",
+                title = "Changed Manga",
+                currentProgress = 25,
+                progress = 25.0,
+                userStatus = UserStatus.CURRENT,
+                lastUpdated = 300_000L,
+                dateAdded = 100_000L
+            ),
+            MediaItem(
+                id = "m-unchanged",
+                type = "NOVEL",
+                format = "WEB_NOVEL",
+                title = "Unchanged Novel",
+                currentProgress = 5,
+                progress = 5.0,
+                userStatus = UserStatus.CURRENT,
+                lastUpdated = 200_000L,
+                dateAdded = 100_000L
+            ),
+            MediaItem(
+                id = "m-added",
+                type = "ANIME",
+                format = "TV",
+                title = "Added Anime",
+                currentProgress = 3,
+                progress = 3.0,
+                userStatus = UserStatus.CURRENT,
+                lastUpdated = 300_000L,
+                dateAdded = 300_000L
+            )
+        )
+
+        repo.upsertAll(mergedItems)
+
+        assertEquals(0, itemDao.deleteAllCalls)
+        assertEquals(3, itemDao.items.size)
+        assertEquals(1, activityDao.activities.size)
+        assertEquals(2, linkDao.links.size)
+
+        val persistedChangedUser = itemDao.userData["m-changed"]!!
+        assertEquals(25.0, persistedChangedUser.progress, 0.001)
+        assertTrue("isPrivate must be preserved", persistedChangedUser.isPrivate)
+        assertEquals(111_000L, persistedChangedUser.createdAt)
+
+        assertEquals("DIRTY_LOCAL", linkDao.links["link-1"]!!.syncStatus)
+        assertEquals("SYNCED", linkDao.links["link-2"]!!.syncStatus)
+    }
+
     // --- Fakes ---
 
     class FakeSyncEngine(
@@ -715,6 +854,7 @@ class ProgressMutationRulesTest {
     class FakeMediaItemDao : MediaItemDao {
         val items = mutableMapOf<String, MediaItemEntity>()
         val userData = mutableMapOf<String, UserDataEntity>()
+        var deleteAllCalls = 0
 
         override fun observeAll(): Flow<List<ActiveMediaItemView>> = emptyFlow()
         override fun observeHistory(): Flow<List<ActiveMediaItemView>> = emptyFlow()
@@ -727,6 +867,7 @@ class ProgressMutationRulesTest {
         override fun observeById(id: String): Flow<ActiveMediaItemView?> = emptyFlow()
         override suspend fun getById(id: String): MediaItemEntity? = items[id]
         override suspend fun getUserData(mediaId: String): UserDataEntity? = userData[mediaId]
+        override suspend fun getAllUserData(): List<UserDataEntity> = userData.values.toList()
         override suspend fun upsertUserData(userData: UserDataEntity) { this.userData[userData.mediaId] = userData }
         override suspend fun upsertUserDataAll(items: List<UserDataEntity>) { items.forEach { this.userData[it.mediaId] = it } }
         override suspend fun getActiveById(id: String): ActiveMediaItemView? = items[id]?.let { e ->
@@ -782,7 +923,7 @@ class ProgressMutationRulesTest {
         override suspend fun softDelete(id: String, now: Long) {}
         override suspend fun restore(id: String, now: Long) {}
         override suspend fun hardDelete(id: String) { items.remove(id); userData.remove(id) }
-        override suspend fun deleteAll() { items.clear(); userData.clear() }
+        override suspend fun deleteAll() { deleteAllCalls++; items.clear(); userData.clear() }
         override suspend fun updateMetadata(id: String, description: String?, tags: String?, genres: String?): Int {
             val existing = items[id] ?: return 0
             items[id] = existing.copy(

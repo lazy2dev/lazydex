@@ -70,6 +70,9 @@ interface MediaRepository {
 
     /** Bulk operations */
     suspend fun replaceAll(items: List<MediaItem>)
+    suspend fun upsertAll(items: List<MediaItem>) {
+        items.forEach { update(it) }
+    }
     suspend fun updateStatus(ids: Collection<String>, status: UserStatus) {}
     suspend fun deleteItems(ids: Collection<String>) {}
 }
