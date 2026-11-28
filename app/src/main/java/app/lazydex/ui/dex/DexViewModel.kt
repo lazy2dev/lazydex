@@ -146,6 +146,8 @@ class DexViewModel(
         .distinctUntilChanged()
         .flowOn(defaultDispatcher)
 
+    private fun tabKey(typeId: String?): String = typeId?.let { resolveMediaType(it).name } ?: "ALL"
+
     private val selectedTypeId = MutableStateFlow<String?>(null)
     private val tabFormatFilters = MutableStateFlow<Map<String, String?>>(emptyMap())
 
@@ -153,8 +155,7 @@ class DexViewModel(
         selectedTypeId,
         tabFormatFilters
     ) { typeId, filters ->
-        val key = typeId ?: "ALL"
-        filters[key]
+        filters[tabKey(typeId)]
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     private val _activePageIndex = MutableStateFlow(0)
@@ -205,8 +206,7 @@ class DexViewModel(
         selectedTypeId,
         tabStatusFilters
     ) { typeId, filters ->
-        val key = typeId ?: "ALL"
-        filters[key] ?: StatusFilter.ALL
+        filters[tabKey(typeId)] ?: StatusFilter.ALL
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StatusFilter.ALL)
 
     private val availableGenres = selectedType.flatMapLatest { type ->
@@ -277,11 +277,11 @@ class DexViewModel(
         val q = search?.trim()
         val filtered = items.filter { item ->
             val itemTabId = item.mediaType.name.uppercase()
-            val targetStatus = statusFilters[itemTabId] ?: StatusFilter.ALL
+            val targetStatus = statusFilters[itemTabId] ?: statusFilters["ALL"] ?: StatusFilter.ALL
             val expectedUserStatus = targetStatus.toUserStatus()
             if (expectedUserStatus != null && item.userStatus != expectedUserStatus) return@filter false
 
-            val targetFormat = formatFilters[itemTabId]
+            val targetFormat = formatFilters[itemTabId] ?: formatFilters["ALL"]
             if (targetFormat != null && !item.matchesFormat(targetFormat)) return@filter false
             (selectedGenres.isEmpty() || item.genres.any { it.lowercase() in selectedGenres }) &&
             (selectedTags.isEmpty() || item.tags.any { it.lowercase() in selectedTags }) &&
@@ -377,10 +377,18 @@ class DexViewModel(
         selectedTypeId.value = typeId
         val resolvedType = typeId?.let { resolveMediaType(it) }
         mutableFilterState.update { it.copy(mediaType = resolvedType, genres = emptySet(), tags = emptySet()) }
+        if (typeId != null) {
+            if ("ALL" in tabStatusFilters.value) {
+                tabStatusFilters.update { it - "ALL" }
+            }
+            if ("ALL" in tabFormatFilters.value) {
+                tabFormatFilters.update { it - "ALL" }
+            }
+        }
     }
 
     fun selectFormatId(formatId: String?) {
-        val currentTab = selectedTypeId.value ?: "ALL"
+        val currentTab = tabKey(selectedTypeId.value)
         tabFormatFilters.update { current ->
             current + (currentTab to formatId)
         }
@@ -536,7 +544,7 @@ class DexViewModel(
     }
 
     fun selectStatus(status: StatusFilter) {
-        val currentTab = selectedTypeId.value ?: "ALL"
+        val currentTab = tabKey(selectedTypeId.value)
         tabStatusFilters.update { current ->
             val existing = current[currentTab] ?: StatusFilter.ALL
             val newStatus = if (existing == status) StatusFilter.ALL else status

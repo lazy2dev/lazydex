@@ -353,15 +353,18 @@ class DexViewModelTest {
         advanceUntilIdle()
 
         assertEquals(StatusFilter.ALL, viewModel.uiState.value.selectedStatus)
+        assertEquals(3, viewModel.uiState.value.items.size)
 
         viewModel.selectStatus(StatusFilter.CURRENT)
         advanceUntilIdle()
         assertEquals(StatusFilter.CURRENT, viewModel.uiState.value.selectedStatus)
+        assertEquals(listOf("1"), viewModel.uiState.value.items.map { it.id })
 
         // Clicking same status again toggles back to ALL
         viewModel.selectStatus(StatusFilter.CURRENT)
         advanceUntilIdle()
         assertEquals(StatusFilter.ALL, viewModel.uiState.value.selectedStatus)
+        assertEquals(3, viewModel.uiState.value.items.size)
     }
 
     @Test
@@ -600,6 +603,14 @@ class DexViewModelTest {
         viewModel.selectStatus(StatusFilter.CURRENT)
         advanceUntilIdle()
         assertEquals(StatusFilter.CURRENT, viewModel.uiState.value.selectedStatus)
+        assertEquals(
+            listOf("m2"),
+            DexViewModel.getItemsForType(viewModel.uiState.value.items, "MANGA").map { it.id }
+        )
+        assertEquals(
+            setOf("a1", "a2"),
+            DexViewModel.getItemsForType(viewModel.uiState.value.items, "ANIME").map { it.id }.toSet()
+        )
 
         // 2. Switch to Anime tab: should default to ALL (not CURRENT)
         viewModel.selectTypeId("ANIME")
@@ -617,6 +628,7 @@ class DexViewModelTest {
         val testItem = MediaItem(
             id = "m1",
             type = "MANGA",
+            format = "MANGA",
             title = "Test Manga",
             author = "Oda",
             genres = listOf("Action"),
@@ -625,7 +637,20 @@ class DexViewModelTest {
             lastUpdated = 1L,
             dateAdded = 1L
         )
-        repository.itemsFlow.value = listOf(testItem)
+        val otherItem = MediaItem(
+            id = "m2",
+            type = "MANGA",
+            format = "MANHWA",
+            countryOfOrigin = "KR",
+            title = "Other Manhwa",
+            author = "Chugong",
+            genres = listOf("Fantasy"),
+            tags = listOf("Dungeons"),
+            userStatus = UserStatus.PLANNING,
+            lastUpdated = 2L,
+            dateAdded = 2L
+        )
+        repository.itemsFlow.value = listOf(testItem, otherItem)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
         advanceUntilIdle()
 
@@ -641,6 +666,7 @@ class DexViewModelTest {
         assertEquals("Oda", viewModel.uiState.value.authorQuery)
         assertTrue(viewModel.uiState.value.selectedGenres.contains("action"))
         assertTrue(viewModel.uiState.value.selectedTags.contains("pirates"))
+        assertTrue(viewModel.uiState.value.items.isEmpty())
 
         viewModel.clearFilters()
         advanceUntilIdle()
@@ -653,6 +679,73 @@ class DexViewModelTest {
         assertNull(viewModel.uiState.value.maxRating)
         assertNull(viewModel.uiState.value.dateRangeStart)
         assertNull(viewModel.uiState.value.dateRangeEnd)
+        assertEquals(2, viewModel.uiState.value.items.size)
+    }
+
+    @Test
+    fun `selectFormatId when selectedTypeId is null filters items by format`() = runTest(testDispatcher) {
+        val manhwa = MediaItem(id = "m1", type = "MANGA", format = "MANHWA", countryOfOrigin = "KR", title = "Solo", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L)
+        val manga = MediaItem(id = "m2", type = "MANGA", format = "MANGA", countryOfOrigin = "JP", title = "One Piece", userStatus = UserStatus.CURRENT, lastUpdated = 2L, dateAdded = 2L)
+        repository.itemsFlow.value = listOf(manhwa, manga)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.selectFormatId("MANHWA")
+        advanceUntilIdle()
+
+        assertEquals("MANHWA", viewModel.uiState.value.selectedFormatId)
+        assertEquals(listOf("m1"), viewModel.uiState.value.items.map { it.id })
+    }
+
+    @Test
+    fun `selectType and typ_ prefix share filter state and filter items`() = runTest(testDispatcher) {
+        val manhwa = MediaItem(id = "m1", type = "MANGA", format = "MANHWA", countryOfOrigin = "KR", title = "Solo", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L)
+        val manga = MediaItem(id = "m2", type = "MANGA", format = "MANGA", countryOfOrigin = "JP", title = "One Piece", userStatus = UserStatus.PLANNING, lastUpdated = 2L, dateAdded = 2L)
+        val anime = MediaItem(id = "a1", type = "ANIME", format = "TV", title = "Frieren", userStatus = UserStatus.PLANNING, lastUpdated = 3L, dateAdded = 3L)
+        repository.itemsFlow.value = listOf(manhwa, manga, anime)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.selectType(MediaType.MANGA)
+        viewModel.selectStatus(StatusFilter.CURRENT)
+        viewModel.selectFormatId("MANHWA")
+        advanceUntilIdle()
+
+        assertEquals(StatusFilter.CURRENT, viewModel.uiState.value.selectedStatus)
+        assertEquals("MANHWA", viewModel.uiState.value.selectedFormatId)
+        assertEquals(
+            listOf("m1"),
+            DexViewModel.getItemsForType(viewModel.uiState.value.items, "MANGA").map { it.id }
+        )
+
+        // Switching to canonical "MANGA" ID retains same filters
+        viewModel.selectTypeId("MANGA")
+        advanceUntilIdle()
+        assertEquals(StatusFilter.CURRENT, viewModel.uiState.value.selectedStatus)
+        assertEquals("MANHWA", viewModel.uiState.value.selectedFormatId)
+        assertEquals(
+            listOf("a1"),
+            DexViewModel.getItemsForType(viewModel.uiState.value.items, "ANIME").map { it.id }
+        )
+    }
+
+    @Test
+    fun `selecting specific tab clears ALL fallback filter so UI and items stay in sync`() = runTest(testDispatcher) {
+        val mangaCurr = MediaItem(id = "m1", type = "MANGA", title = "Manga Curr", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L)
+        val mangaPlan = MediaItem(id = "m2", type = "MANGA", title = "Manga Plan", userStatus = UserStatus.PLANNING, lastUpdated = 2L, dateAdded = 2L)
+        repository.itemsFlow.value = listOf(mangaCurr, mangaPlan)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.selectStatus(StatusFilter.CURRENT)
+        advanceUntilIdle()
+        assertEquals(StatusFilter.CURRENT, viewModel.uiState.value.selectedStatus)
+        assertEquals(listOf("m1"), viewModel.uiState.value.items.map { it.id })
+
+        viewModel.selectTypeId("MANGA")
+        advanceUntilIdle()
+        assertEquals(StatusFilter.ALL, viewModel.uiState.value.selectedStatus)
+        assertEquals(setOf("m1", "m2"), viewModel.uiState.value.items.map { it.id }.toSet())
     }
 }
 
