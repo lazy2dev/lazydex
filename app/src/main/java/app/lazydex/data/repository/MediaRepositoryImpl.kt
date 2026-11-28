@@ -127,15 +127,9 @@ class MediaRepositoryImpl(
 
     override fun observeTypeCounts(): Flow<Map<MediaType, Int>> = dao.observeTypeCounts()
         .map { list ->
-            val counts = list.associate { count ->
-                val mediaType = when (count.type.uppercase()) {
-                    "MANGA" -> MediaType.MANGA
-                    "ANIME" -> MediaType.ANIME
-                    "GAME" -> MediaType.GAME
-                    else -> MediaType.NOVEL
-                }
-                mediaType to count.count
-            }
+            val counts = list
+                .groupingBy { resolveMediaType(it.type) }
+                .fold(0) { acc, tc -> acc + tc.count }
             MediaType.entries.associateWith { counts[it] ?: 0 }
         }
         .flowOn(Dispatchers.IO)

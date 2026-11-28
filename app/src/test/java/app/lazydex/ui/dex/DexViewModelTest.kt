@@ -87,6 +87,8 @@ class DexViewModelTest {
                 TypeConfig(id = "NOVEL", name = "Novel"),
                 TypeConfig(id = "MANGA", name = "Manga"),
                 TypeConfig(id = "ANIME", name = "Anime"),
+                TypeConfig(id = "MOVIE", name = "Movie"),
+                TypeConfig(id = "TV", name = "TV"),
                 TypeConfig(id = "GAME", name = "Game")
             )
         )
@@ -555,6 +557,30 @@ class DexViewModelTest {
 
         val types = viewModel.uiState.value.topLevelTypes
         assertTrue(types.isEmpty())
+    }
+
+    @Test
+    fun `topLevelTypes keeps MOVIE tab and excludes NOVEL for movie-only library`() = runTest(testDispatcher) {
+        repository.itemsFlow.value = listOf(
+            MediaItem(id = "mv1", type = "MOVIE", title = "Spirited Away", userStatus = UserStatus.COMPLETED, lastUpdated = 1L, dateAdded = 1L)
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        val types = viewModel.uiState.value.topLevelTypes
+        assertEquals(listOf("MOVIE"), types.map { it.id })
+    }
+
+    @Test
+    fun `topLevelTypes keeps TV tab and excludes NOVEL for tv-only library`() = runTest(testDispatcher) {
+        repository.itemsFlow.value = listOf(
+            MediaItem(id = "tv1", type = "TV", title = "Severance", userStatus = UserStatus.CURRENT, lastUpdated = 1L, dateAdded = 1L)
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        val types = viewModel.uiState.value.topLevelTypes
+        assertEquals(listOf("TV"), types.map { it.id })
     }
 
     @Test

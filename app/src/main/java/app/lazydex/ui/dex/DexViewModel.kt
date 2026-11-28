@@ -171,15 +171,7 @@ class DexViewModel(
         repository.observeTopLevelTypes(),
         typeCounts
     ) { types, counts ->
-        types.filter { type ->
-            val mediaType = when (type.id.uppercase()) {
-                "MANGA" -> MediaType.MANGA
-                "ANIME" -> MediaType.ANIME
-                "GAME" -> MediaType.GAME
-                else -> MediaType.NOVEL
-            }
-            (counts[mediaType] ?: 0) > 0
-        }
+        types.filter { (counts[resolveMediaType(it.id)] ?: 0) > 0 }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val formatsForSelectedType: StateFlow<List<TypeConfig>> = combine(
